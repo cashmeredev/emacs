@@ -2,7 +2,7 @@
 #+startup: content
 
 
-#+begin_src emacs-lisp :tangle ~/emacs.d/early-init.el
+#+begin_src emacs-lisp
 
 ;;; config.el --- Emacs-Kick --- A feature rich Emacs config for (neo)vi(m)mers -*- lexical-binding: t; -*-
 ;; (setenv "LSP_USE_PLISTS" "true")
@@ -805,7 +805,9 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 :straight ( eglot-booster :type git :host nil :repo "https://github.com/jdtsmith/eglot-booster")
 :after eglot
 :config (eglot-booster-mode))
-#+end_src** consult-eglot integration
+#+end_src
+
+** consult-eglot integration
 
 #+begin_src emacs-lisp
 (use-package consult-eglot
@@ -1036,7 +1038,9 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
     :straight t
     :ensure t
     :config)
-#+end_src* envrc
+#+end_src
+
+* envrc
 
 #+begin_src emacs-lisp
 (use-package envrc
@@ -1526,7 +1530,8 @@ mode-line-buffer-identification
         "^\\*clojure-lsp::stderr\\*$"
         "^\\*ts-ls\\*$"
         "^\\*ts-ls::stderr\\*$"))
-#+end_src* bufler
+#+end_src
+* bufler
 
 #+begin_src emacs-lisp
   (use-package bufler

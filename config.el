@@ -336,59 +336,59 @@
   :straight nil
   :ensure nil)
 
-  (use-package org
-      :straight nil
-      :ensure nil     
-      :defer t
-    :config
-    (custom-set-faces
-     '(org-document-title ((t (:height 1.6))))
-     '(outline-1          ((t (:height 1.25))))
-     '(outline-2          ((t (:height 1.2))))
-     '(outline-3          ((t (:height 1.2))))
-     '(outline-4          ((t (:height 1.2))))
-     '(outline-5          ((t (:height 1.2))))
-     '(outline-6          ((t (:height 1.2))))
-     '(outline-7          ((t (:height 1.2))))
-     '(outline-8          ((t (:height 1.2))))
-     '(outline-9          ((t (:height 1.2)))))
-    (org-indent-mode -1)
-    (setq org-startup-folded 'content)
-    (setq org-adapt-indentation t
-          org-hide-leading-stars t
-          org-pretty-entities t
-          org-ellipsis "  ")
-    (setq org-src-fontify-natively t
-          org-src-tab-acts-natively t
-          org-edit-src-content-indentation 0)
-    (setq org-log-done                       t
-          org-auto-align-tags                t
-          org-tags-column                    -80
-          org-fold-catch-invisible-edits     'show-and-error
-          org-special-ctrl-a/e               t
-          org-insert-heading-respect-content t)
+(use-package org
+    :straight nil
+    :ensure nil     
+    :defer t
+  :config
+  (custom-set-faces
+   '(org-document-title ((t (:height 1.6))))
+   '(outline-1          ((t (:height 1.25))))
+   '(outline-2          ((t (:height 1.2))))
+   '(outline-3          ((t (:height 1.2))))
+   '(outline-4          ((t (:height 1.2))))
+   '(outline-5          ((t (:height 1.2))))
+   '(outline-6          ((t (:height 1.2))))
+   '(outline-7          ((t (:height 1.2))))
+   '(outline-8          ((t (:height 1.2))))
+   '(outline-9          ((t (:height 1.2)))))
+  (org-indent-mode -1)
+  (setq org-startup-folded 'content)
+  (setq org-adapt-indentation t
+        org-hide-leading-stars t
+        org-pretty-entities t
+        org-ellipsis "  ")
+  (setq org-src-fontify-natively t
+        org-src-tab-acts-natively t
+        org-edit-src-content-indentation 0)
+  (setq org-log-done                       t
+        org-auto-align-tags                t
+        org-tags-column                    -80
+        org-fold-catch-invisible-edits     'show-and-error
+        org-special-ctrl-a/e               t
+        org-insert-heading-respect-content t)
 
-  ;; (my-local-leader
-  ;;   )
-     
-    (add-hook 'org-mode-hook 'variable-pitch-mode)
-    (add-to-list 'font-lock-extra-managed-props 'display)
-    (font-lock-add-keywords 'org-mode
-                            `(("^.*?\( \)\(:[[:alnum:]_@#%:]+:\)$"
-                               (1 `(face nil
-                                         display (space :align-to (- right ,(org-string-width (match-string 2)) 3)))
-                                  prepend))) t)
-    (setq org-blank-before-new-entry '((heading . nil)
-                                       (plain-list-item . nil))))
+;; (my-local-leader
+;;   )
+   
+  (add-hook 'org-mode-hook 'variable-pitch-mode)
+  (add-to-list 'font-lock-extra-managed-props 'display)
+  (font-lock-add-keywords 'org-mode
+                          `(("^.*?\( \)\(:[[:alnum:]_@#%:]+:\)$"
+                             (1 `(face nil
+                                       display (space :align-to (- right ,(org-string-width (match-string 2)) 3)))
+                                prepend))) t)
+  (setq org-blank-before-new-entry '((heading . nil)
+                                     (plain-list-item . nil))))
 
-;; (use-package org-appear
-;;   :commands (org-appear-mode)
-;;   :hook     (org-mode . org-appear-mode)
-;;   :config
-;;   (setq org-hide-emphasis-markers t)  ;; Must be activated for org-appear to work
-;;   (setq org-appear-autoemphasis   t   ;; Show bold, italics, verbatim, etc.
-;;         org-appear-autolinks      t   ;; Show links
-;;         org-appear-autosubmarkers t)) ;; Show sub- and superscripts
+(use-package org-appear
+  :commands (org-appear-mode)
+  :hook     (org-mode . org-appear-mode)
+  :config
+  (setq org-hide-emphasis-markers t)  ;; Must be activated for org-appear to work
+  (setq org-appear-autoemphasis   t   ;; Show bold, italics, verbatim, etc.
+        org-appear-autolinks      t   ;; Show links
+        org-appear-autosubmarkers t)) ;; Show sub- and superscripts
 
 (setq org-agenda-start-on-weekday nil
       org-agenda-block-separator  nil
@@ -426,10 +426,10 @@
 
 
 (use-package denote
-  :ensure t
-  :hook (dired-mode . denote-dired-mode)
-  :config
-  (setq denote-rename-buffer-mode 1
+     :ensure t
+     :hook (dired-mode . denote-dired-mode)
+     :config
+     (setq denote-rename-buffer-mode 1
 denote-directory (expand-file-name "~/org/")))
 
 (use-package denote-agenda
@@ -965,15 +965,15 @@ undo-outer-limit 120000000)           ;; Outer limit for undo entries.
 (provide 'init)
 ;;; init.el ends here
 
-;; (use-package org-modern
-;;   :ensure t
-;;   :straight t)
-;; (with-eval-after-load 'org (global-org-modern-mode))
+;;  (use-package org-modern
+;;    :ensure t
+;;    :straight t)
+;;  (with-eval-after-load 'org (global-org-modern-mode))
 ;;
-;; (setq org-modern-star 'fold)
-;; (setq org-modern-fold-stars '(("◉" . "○")))
-;; (setq org-modern-star 'replace)
-;; (setq org-modern-replace-stars "◉○◉○◉")
+;;  (setq org-modern-star 'fold)
+;;  (setq org-modern-fold-stars '(("◉" . "○")))
+;;  (setq org-modern-star 'replace)
+;;  (setq org-modern-replace-stars "◉○◉○◉")
 
 (require 'battery)
 (require 'nerd-icons)
@@ -1148,7 +1148,7 @@ mode-line-buffer-identification
 ;; (whitespace-mode 1)
 ;; or globally
 ;; (global-whitespace-mode 1)
-;; (add-hook 'prog-mode 'whitespace-mode) ;; ⚠️ DEAKTIVIERT - verursacht Whitespace-Anzeige
+;; (add-hook 'prog-mode 'whitespace-mode) ;; ⚠️ KOMPLETT DEAKTIVIERT - verursacht org-mode Probleme
 
 (defvar cashmere/font-height 170)
 
