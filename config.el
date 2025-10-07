@@ -1,4 +1,5 @@
 ;;; config.el --- Emacs-Kick --- A feature rich Emacs config for (neo)vi(m)mers -*- lexical-binding: t; -*-
+;; (setenv "LSP_USE_PLISTS" "true")
 (setq gc-cons-threshold #x40000000)
 
 (setq read-process-output-max (* 1024 1024 4))
@@ -300,15 +301,15 @@
     :init
     (global-eldoc-mode))
 
-(use-package flymake
-:straight nil
-    :ensure nil          ;; This is built-in, no need to fetch it.
-    :defer t
-    :hook (prog-mode . flymake-mode)
-    :custom
-    (flymake-margin-indicators-string
-    '((error "!»" compilation-error) (warning "»" compilation-warning)
-	(note "»" compilation-info))))
+;; (use-package flymake
+;;   :straight nil
+;;     ;; :ensure nil          ;; This is built-in, no need to fetch it.
+;;     ;; :defer t
+;;     ;; :hook (prog-mode . flymake-mode)
+;;     :custom
+;;     (flymake-margin-indicators-string
+;;     '((error "!»" compilation-error) (warning "»" compilation-warning)
+;; 	(note "»" compilation-info))))
 
 (use-package org
     :straight nil
@@ -462,14 +463,14 @@
   :straight t
   :defer t
   :custom
-  (corfu-auto nil)                        ;; Only completes when hitting TAB
-  ;; (corfu-auto-delay 0)                ;; Delay before popup (enable if corfu-auto is t)
+  (corfu-auto t)                        ;; Only completes when hitting TAB
+  (corfu-auto-delay 0.08)                ;; Delay before popup (enable if corfu-auto is t)
   (corfu-auto-prefix 1)                  ;; Trigger completion after typing 1 character
   (corfu-quit-no-match t)                ;; Quit popup if no match
   (corfu-scroll-margin 5)                ;; Margin when scrolling completions
   (corfu-max-width 50)                   ;; Maximum width of completion popup
   (corfu-min-width 50)                   ;; Minimum width of completion popup
-  (corfu-popupinfo-delay 0.5)            ;; Delay before showing documentation popup
+  (corfu-popupinfo-delay 0.12)            ;; Delay before showing documentation popup
   :config
   (if ek-use-nerd-fonts
     (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
@@ -544,158 +545,162 @@
     :defer t
     :after (:all corfu))
 
-(use-package lsp-mode
-    :ensure t
-    :straight t
-    :defer t
-    :hook (;; Replace XXX-mode with concrete major mode (e.g. python-mode)
-	    (lsp-mode . lsp-enable-which-key-integration)  ;; Integrate with Which Key
-	    ((js-mode                                      ;; Enable LSP for JavaScript
-	    tsx-ts-mode                                  ;; Enable LSP for TSX
-	    typescript-ts-base-mode                      ;; Enable LSP for TypeScript
-	    css-mode                                     ;; Enable LSP for CSS
-	    go-ts-mode                                   ;; Enable LSP for Go
-	    js-ts-mode                                   ;; Enable LSP for JavaScript (TS mode)
-	    prisma-mode                                  ;; Enable LSP for Prisma
-	    python-base-mode                             ;; Enable LSP for Python
-	    ruby-base-mode                               ;; Enable LSP for Ruby
-	    rust-ts-mode                                 ;; Enable LSP for Rust
-		nix-mode
-	    web-mode) . lsp-deferred))                   ;; Enable LSP for Web (HTML)
-    :commands lsp
-    :custom
-    (lsp-keymap-prefix "C-c l")                           ;; Set the prefix for LSP commands.
-    (lsp-inlay-hint-enable nil)                           ;; Usage of inlay hints.
-    (lsp-completion-provider :none)                       ;; Disable the default completion provider.
-    (lsp-session-file (locate-user-emacs-file ".lsp-session")) ;; Specify session file location.
-    (lsp-log-io nil)                                      ;; Disable IO logging for speed.
-    (lsp-idle-delay 0.5)                                  ;; Set the delay for LSP to 0 (debouncing).
-    (lsp-keep-workspace-alive nil)                        ;; Disable keeping the workspace alive.
-    ;; Core settings
-    (lsp-enable-xref t)                                   ;; Enable cross-references.
-    (lsp-auto-configure t)                                ;; Automatically configure LSP.
-    (lsp-enable-links nil)                                ;; Disable links.
-    (lsp-eldoc-enable-hover nil)                            ;; Enable ElDoc hover.
-	(lsp-modeline-diagnostics-enable nil)
-	(lsp-signature-auto-activate nil)
-	(lsp-signature-render-documentation nil)
-    (lsp-enable-file-watchers nil)                        ;; Disable file watchers.
-    (lsp-enable-folding nil)                              ;; Disable folding.
-    (lsp-enable-imenu t)                                  ;; Enable Imenu support.
-    (lsp-enable-indentation nil)                          ;; Disable indentation.
-    (lsp-enable-on-type-formatting nil)                   ;; Disable on-type formatting.
-    (lsp-enable-suggest-server-download t)                ;; Enable server download suggestion.
-    (lsp-enable-symbol-highlighting nil)                    ;; Enable symbol highlighting.
-    (lsp-enable-text-document-color t)                    ;; Enable text document color.
-    ;; Modeline settings
-    (lsp-modeline-code-actions-enable nil)                ;; Keep modeline clean.
-    (lsp-modeline-diagnostics-enable nil)                 ;; Use `flymake' instead.
-    (lsp-modeline-workspace-status-enable t)              ;; Display "LSP" in the modeline when enabled.
-    (lsp-signature-doc-lines nil)                           ;; Limit echo area to one line.
-    (lsp-eldoc-render-all t)                              ;; Render all ElDoc messages.
-    ;; Completion settings
-    (lsp-completion-enable t)                             ;; Enable completion.
-    (lsp-completion-enable-additional-text-edit t)        ;; Enable additional text edits for completions.
-    (lsp-enable-snippet nil)                              ;; Disable snippets
-    (lsp-completion-show-kind t)                          ;; Show kind in completions.
-    ;; Lens settings
-    (lsp-lens-enable t)                                   ;; Enable lens support.
-    ;; Headerline settings
-    (lsp-headerline-breadcrumb-enable-symbol-numbers nil)   ;; Enable symbol numbers in the headerline.
-    (lsp-headerline-arrow "▶")                            ;; Set arrow for headerline.
-    (lsp-headerline-breadcrumb-enable-diagnostics nil)    ;; Disable diagnostics in headerline.
-    (lsp-headerline-breadcrumb-icons-enable nil)          ;; Disable icons in breadcrumb.
-    ;; Semantic settings
-    (lsp-semantic-tokens-enable nil))                     ;; Disable semantic tokens.
+;; (use-package lsp-mode
+;;   :defer t
+;;   :init (setq lsp-use-plists t)
+;;   :hook ((rust-mode             . lsp)
+;;          (nix-mode              . lsp)
+;;          (lsp-mode              . lsp-enable-which-key-integration)
+;;          (typescript-mode       . lsp)
+;;          (tsx-ts-mode           . lsp)
+;;          (typescript-ts-mode    . lsp)
+;;          (web-mode              . lsp))
+;;   :bind (:map lsp-mode-map
+;;               ("M-<return>" . lsp-execute-code-action)
+;;               ("C-M-."      . lsp-find-references)
+;;               ("C-c r"      . lsp-rename))
+;;   :config
+;;   ;; (setq lsp-diagnostics-provider :flycheck
+;;   ;;       lsp-completion-provider  :none)       ;; I use corfu
+;;   ;; Disable visual features
+;;   (setq lsp-headerline-breadcrumb-enable nil  ;; No breadcrumbs
+;;         lsp-lens-enable                  nil  ;; No lenses
+;; 
+;;         ;; Enable code actions in the mode line
+;;         lsp-modeline-code-actions-enable t
+;;         lsp-modeline-code-action-fallback-icon "✦"
+;; 
+;;         ;; Limit raising of the echo area to show docs
+;;         lsp-signature-doc-lines 3)
+;;   (setq lsp-file-watch-threshold  1500)
+;;   (setq lsp-format-buffer-on-save nil)
+;; 
+;;   (with-eval-after-load 'lsp-modeline
+;;     (set-face-attribute 'lsp-modeline-code-actions-preferred-face nil
+;;                         :inherit font-lock-comment-face)
+;;     (set-face-attribute 'lsp-modeline-code-actions-face nil
+;;                         :inherit font-lock-comment-face)))
 
+(defun lsp-booster--advice-json-parse (old-fn &rest args)
+  "Try to parse bytecode instead of json."
+  (or
+   (when (equal (following-char) ?#)
+     (let ((bytecode (read (current-buffer))))
+       (when (byte-code-function-p bytecode)
+         (funcall bytecode))))
+   (apply old-fn args)))
+(advice-add (if (progn (require 'json)
+                       (fboundp 'json-parse-buffer))
+                'json-parse-buffer
+              'json-read)
+            :around
+            #'lsp-booster--advice-json-parse)
 
-        ;;; LSP Additional Servers
-        ;; You can extend `lsp-mode' by integrating additional language servers for specific
-        ;; technologies. For example, `lsp-tailwindcss' provides support for Tailwind CSS
-        ;; classes within your HTML files. By using various LSP packages, you can connect
-        ;; multiple LSP servers simultaneously, enhancing your coding experience across
-        ;; different languages and frameworks.
-        (use-package lsp-tailwindcss
-          :ensure t
-          :straight t
-          :defer t
-          :config
-          (add-to-list 'lsp-language-id-configuration '(".*\\.erb$" . "html")) ;; Associate ERB files with HTML.
-          :init
-          (setq lsp-tailwindcss-add-on-mode t))
+(defun lsp-booster--advice-final-command (old-fn cmd &optional test?)
+  "Prepend emacs-lsp-booster command to lsp CMD."
+  (let ((orig-result (funcall old-fn cmd test?)))
+    (if (and (not test?)                             ;; for check lsp-server-present?
+             (not (file-remote-p default-directory)) ;; see lsp-resolve-final-command, it would add extra shell wrapper
+             lsp-use-plists
+             (not (functionp 'json-rpc-connection))  ;; native json-rpc
+             (executable-find "emacs-lsp-booster"))
+        (progn
+          (when-let ((command-from-exec-path (executable-find (car orig-result))))  ;; resolve command from exec-path (in case not found in $PATH)
+            (setcar orig-result command-from-exec-path))
+          (message "Using emacs-lsp-booster for %s!" orig-result)
+          (cons "emacs-lsp-booster" orig-result))
+      orig-result)))
+(advice-add 'lsp-resolve-final-command :around #'lsp-booster--advice-final-command)
 
+(use-package rust-mode
+  :ensure t
+  :mode "\\.rs\\'")
 
+(use-package eglot
+  :hook ((rust-mode . eglot-ensure)
+         (nix-mode  . eglot-ensure)
+         (eglot-managed-mode . (lambda () (eldoc-mode -1))))
+  :bind (:map eglot-mode-map
+              ("M-<return>" . eglot-code-actions)
+              ("C-M-."      . xref-find-references)
+              ("C-c r"      . eglot-rename))
+  :config
+  (setq eldoc-echo-area-use-multiline-p nil)
+  (add-to-list 'eglot-server-programs '(nix-mode . ("nixd"))))
 
-
+(use-package eglot-booster
+	:straight ( eglot-booster :type git :host nil :repo "https://github.com/jdtsmith/eglot-booster")
+	:after eglot
+	:config (eglot-booster-mode))
 
 (use-package eldoc-box
-    :ensure t
-    :straight t
-    :defer t)
+  :ensure t
+  :straight t
+  :defer t)
 
 (use-package diff-hl
-    :defer t
-    :straight t
-    :ensure t
-    :hook
-    (find-file . (lambda ()
-		    (global-diff-hl-mode)           ;; Enable Diff-HL mode for all files.
-		    (diff-hl-flydiff-mode)          ;; Automatically refresh diffs.
-		    (diff-hl-margin-mode)))         ;; Show diff indicators in the margin.
-    :custom
-    (diff-hl-side 'left)                           ;; Set the side for diff indicators.
-    (diff-hl-margin-symbols-alist '((insert . "┃") ;; Customize symbols for each change type.
-				    (delete . "-")
-				    (change . "┃")
-				    (unknown . "┆")
-				    (ignored . "i"))))
+  :defer t
+  :straight t
+  :ensure t
+  :hook
+  (find-file . (lambda ()
+				 (global-diff-hl-mode)           ;; Enable Diff-HL mode for all files.
+				 (diff-hl-flydiff-mode)          ;; Automatically refresh diffs.
+				 (diff-hl-margin-mode)))         ;; Show diff indicators in the margin.
+  :custom
+  (diff-hl-side 'left)                           ;; Set the side for diff indicators.
+  (diff-hl-margin-symbols-alist '((insert . "┃") ;; Customize symbols for each change type.
+								  (delete . "-")
+								  (change . "┃")
+								  (unknown . "┆")
+								  (ignored . "i"))))
 
 (use-package magit
-    :ensure t
-    :straight t
-    :config
-    (if ek-use-nerd-fonts   ;; Check if nerd fonts are being used
-	    (setopt magit-format-file-function #'magit-format-file-nerd-icons)) ;; Turns on magit nerd-icons
-    :defer t)
+  :ensure t
+  :straight t
+  :config
+  (if ek-use-nerd-fonts   ;; Check if nerd fonts are being used
+	  (setopt magit-format-file-function #'magit-format-file-nerd-icons)) ;; Turns on magit nerd-icons
+  :defer t)
 
 (use-package indent-guide
-    :defer t
-    :straight t
-    :ensure t
-    :hook
-    (prog-mode . indent-guide-mode)  ;; Activate indent-guide in programming modes.
-    :config
-    (setq indent-guide-char "│"))    ;; Set the character used for the indent guide.
+  :defer t
+  :straight t
+  :ensure t
+  :hook
+  (prog-mode . indent-guide-mode)  ;; Activate indent-guide in programming modes.
+  :config
+  (setq indent-guide-char "│"))    ;; Set the character used for the indent guide.
 
 (use-package add-node-modules-path
-    :ensure t
-    :straight t
-    :defer t
-    :custom
-    ;; Makes sure you are using the local bin for your
-    ;; node project. Local eslint, typescript server...
-    (eval-after-load 'typescript-ts-mode
+  :ensure t
+  :straight t
+  :defer t
+  :custom
+  ;; Makes sure you are using the local bin for your
+  ;; node project. Local eslint, typescript server...
+  (eval-after-load 'typescript-ts-mode
     '(add-hook 'typescript-ts-mode-hook #'add-node-modules-path))
-    (eval-after-load 'tsx-ts-mode
+  (eval-after-load 'tsx-ts-mode
     '(add-hook 'tsx-ts-mode-hook #'add-node-modules-path))
-    (eval-after-load 'typescriptreact-mode
+  (eval-after-load 'typescriptreact-mode
     '(add-hook 'typescriptreact-mode-hook #'add-node-modules-path))
-    (eval-after-load 'js-mode
+  (eval-after-load 'js-mode
     '(add-hook 'js-mode-hook #'add-node-modules-path)))
 
 (use-package general
-    :straight t
-    :ensure t
-    :demand t
-    :config
-    (general-evil-setup)
+  :straight t
+  :ensure t
+  :demand t
+  :config
+  (general-evil-setup)
 
-    (general-create-definer my-leader
+  (general-create-definer my-leader
     :states '(normal visual)
     :keymaps 'override
     :prefix "SPC")
 
-    (general-create-definer my-local-leader
+  (general-create-definer my-local-leader
     :states '(normal visual)
     :keymaps 'override
     :prefix ","))
@@ -756,60 +761,60 @@
         avy-style 'at-full
         avy-keys '(?a ?s ?d ?f ?g ?h ?j ?k ?l ?q ?w ?e ?r ?t ?y ?u ?i ?o ?p)))
 
-;; (defun avy-action-exchange (pt)
-;;   "Exchange sexp at PT with the one at point."
-;;   (set-mark pt)
-;;   (transpose-sexps 0))
+(defun avy-action-exchange (pt)
+  "Exchange sexp at PT with the one at point."
+  (set-mark pt)
+  (transpose-sexps 0))
 
-;; (add-to-list 'avy-dispatch-alist '(?e . avy-action-exchange))
+(add-to-list 'avy-dispatch-alist '(?e . avy-action-exchange))
 
 (use-package evil-collection
-    :defer t
-    :straight t
-    :ensure t
-    :custom
-    (evil-collection-want-find-usages-bindings t)
-    ;; Hook to initialize `evil-collection' when `evil-mode' is activated.
-    :hook
-    (evil-mode . evil-collection-init))
+  :defer t
+  :straight t
+  :ensure t
+  :custom
+  (evil-collection-want-find-usages-bindings t)
+  ;; Hook to initialize `evil-collection' when `evil-mode' is activated.
+  :hook
+  (evil-mode . evil-collection-init))
 
 
 (use-package evil-surround
-    :ensure t
-    :straight t
-    :after evil-collection
-    :config
-    (global-evil-surround-mode 1))
+  :ensure t
+  :straight t
+  :after evil-collection
+  :config
+  (global-evil-surround-mode 1))
 
 
 
 (use-package evil-matchit
-    :ensure t
-    :straight t
-    :after evil-collection
-    :config
-    (global-evil-matchit-mode 1))
+  :ensure t
+  :straight t
+  :after evil-collection
+  :config
+  (global-evil-matchit-mode 1))
 
 (use-package undo-tree
-    :defer t
-    :ensure t
-    :straight t
-    :hook
-    (after-init . global-undo-tree-mode)
-    :init
-    (setq undo-tree-visualizer-timestamps t
-	undo-tree-visualizer-diff t
-	;; Increase undo limits to avoid losing history due to Emacs' garbage collection.
-	;; These values can be adjusted based on your needs.
-	;; 10X bump of the undo limits to avoid issues with premature
-	;; Emacs GC which truncates the undo history very aggressively.
-	undo-limit 800000                     ;; Limit for undo entries.
-	undo-strong-limit 12000000            ;; Strong limit for undo entries.
-	undo-outer-limit 120000000)           ;; Outer limit for undo entries.
-    :config
-    ;; Set the directory where `undo-tree' will save its history files.
-    ;; This keeps undo history across sessions, stored in a cache directory.
-    (setq undo-tree-history-directory-alist '(("." . "~/.emacs.d/.cache/undo"))))
+  :defer t
+  :ensure t
+  :straight t
+  :hook
+  (after-init . global-undo-tree-mode)
+  :init
+  (setq undo-tree-visualizer-timestamps t
+		undo-tree-visualizer-diff t
+		;; Increase undo limits to avoid losing history due to Emacs' garbage collection.
+		;; These values can be adjusted based on your needs.
+		;; 10X bump of the undo limits to avoid issues with premature
+		;; Emacs GC which truncates the undo history very aggressively.
+		undo-limit 800000                     ;; Limit for undo entries.
+		undo-strong-limit 12000000            ;; Strong limit for undo entries.
+		undo-outer-limit 120000000)           ;; Outer limit for undo entries.
+  :config
+  ;; Set the directory where `undo-tree' will save its history files.
+  ;; This keeps undo history across sessions, stored in a cache directory.
+  (setq undo-tree-history-directory-alist '(("." . "~/.emacs.d/.cache/undo"))))
 
 (use-package rainbow-delimiters
   :defer t
@@ -819,33 +824,36 @@
   (prog-mode . rainbow-delimiters-mode))
 
 (use-package dotenv-mode
-    :defer t
-    :straight t
-    :ensure t
-    :config)
+  :defer t
+  :straight t
+  :ensure t
+  :config)
+
+(use-package envrc
+  :hook (after-init . envrc-global-mode))
 
 (use-package pulsar
-    :defer t
-    :straight t
-    :ensure t
-    :hook
-    (after-init . pulsar-global-mode)
-    :config
-    (setq pulsar-pulse t)
-    (setq pulsar-delay 0.025)
-    (setq pulsar-iterations 10)
-    (setq pulsar-face 'evil-ex-lazy-highlight)
+  :defer t
+  :straight t
+  :ensure t
+  :hook
+  (after-init . pulsar-global-mode)
+  :config
+  (setq pulsar-pulse t)
+  (setq pulsar-delay 0.025)
+  (setq pulsar-iterations 10)
+  (setq pulsar-face 'evil-ex-lazy-highlight)
 
-    (add-to-list 'pulsar-pulse-functions 'evil-scroll-down)
-    (add-to-list 'pulsar-pulse-functions 'flymake-goto-next-error)
-    (add-to-list 'pulsar-pulse-functions 'flymake-goto-prev-error)
-    (add-to-list 'pulsar-pulse-functions 'evil-yank)
-    (add-to-list 'pulsar-pulse-functions 'evil-yank-line)
-    (add-to-list 'pulsar-pulse-functions 'evil-delete)
-    (add-to-list 'pulsar-pulse-functions 'evil-delete-line)
-    (add-to-list 'pulsar-pulse-functions 'evil-jump-item)
-    (add-to-list 'pulsar-pulse-functions 'diff-hl-next-hunk)
-    (add-to-list 'pulsar-pulse-functions 'diff-hl-previous-hunk))
+  (add-to-list 'pulsar-pulse-functions 'evil-scroll-down)
+  (add-to-list 'pulsar-pulse-functions 'flymake-goto-next-error)
+  (add-to-list 'pulsar-pulse-functions 'flymake-goto-prev-error)
+  (add-to-list 'pulsar-pulse-functions 'evil-yank)
+  (add-to-list 'pulsar-pulse-functions 'evil-yank-line)
+  (add-to-list 'pulsar-pulse-functions 'evil-delete)
+  (add-to-list 'pulsar-pulse-functions 'evil-delete-line)
+  (add-to-list 'pulsar-pulse-functions 'evil-jump-item)
+  (add-to-list 'pulsar-pulse-functions 'diff-hl-next-hunk)
+  (add-to-list 'pulsar-pulse-functions 'diff-hl-previous-hunk))
 
 ;;; DOOM MODELINE
 ;; The `doom-modeline' package provides a sleek, modern mode-line that is visually appealing
@@ -898,31 +906,31 @@
 ;; enhance the visual appearance of various modes and packages, making it easier to
 ;; distinguish between different file types and functionalities.
 (use-package nerd-icons
-    :if ek-use-nerd-fonts                   ;; Load the package only if the user has configured to use nerd fonts.
-    :ensure t                               ;; Ensure the package is installed.
-    :straight t
-    :defer t)                               ;; Load the package only when needed to improve startup time.
+  :if ek-use-nerd-fonts                   ;; Load the package only if the user has configured to use nerd fonts.
+  :ensure t                               ;; Ensure the package is installed.
+  :straight t
+  :defer t)                               ;; Load the package only when needed to improve startup time.
 
  ;;; NERD ICONS Dired
- ;; The `nerd-icons-dired' package integrates nerd icons into the Dired mode,
- ;; providing visual icons for files and directories. This enhances the Dired
- ;; interface by making it easier to identify file types at a glance.
- (use-package nerd-icons-dired
-   :if ek-use-nerd-fonts                   ;; Load the package only if the user has configured to use nerd fonts.
-   :ensure t                               ;; Ensure the package is installed.
-   :straight t
-   :defer t                                ;; Load the package only when needed to improve startup time.
-   :hook
-   (dired-mode . nerd-icons-dired-mode))
+;; The `nerd-icons-dired' package integrates nerd icons into the Dired mode,
+;; providing visual icons for files and directories. This enhances the Dired
+;; interface by making it easier to identify file types at a glance.
+(use-package nerd-icons-dired
+  :if ek-use-nerd-fonts                   ;; Load the package only if the user has configured to use nerd fonts.
+  :ensure t                               ;; Ensure the package is installed.
+  :straight t
+  :defer t                                ;; Load the package only when needed to improve startup time.
+  :hook
+  (dired-mode . nerd-icons-dired-mode))
 
- (use-package nerd-icons-completion
-   :if ek-use-nerd-fonts                   ;; Load the package only if the user has configured to use nerd fonts.
-   :ensure t                               ;; Ensure the package is installed.
-   :straight t
-   :after (:all nerd-icons marginalia)     ;; Load after `nerd-icons' and `marginalia' to ensure proper integration.
-   :config
-   (nerd-icons-completion-mode)            ;; Activate nerd icons for completion interfaces.
-   (add-hook 'marginalia-mode-hook #'nerd-icons-completion-marginalia-setup)) ;; Setup icons in the marginalia mode for enhanced completion display.
+(use-package nerd-icons-completion
+  :if ek-use-nerd-fonts                   ;; Load the package only if the user has configured to use nerd fonts.
+  :ensure t                               ;; Ensure the package is installed.
+  :straight t
+  :after (:all nerd-icons marginalia)     ;; Load after `nerd-icons' and `marginalia' to ensure proper integration.
+  :config
+  (nerd-icons-completion-mode)            ;; Activate nerd icons for completion interfaces.
+  (add-hook 'marginalia-mode-hook #'nerd-icons-completion-marginalia-setup)) ;; Setup icons in the marginalia mode for enhanced completion display.
 
 ;;; CATPPUCCIN THEME
 ;; The `catppuccin-theme' package provides a visually pleasing color theme
@@ -969,8 +977,8 @@
 ;;; init.el ends here
 
 (use-package org-modern
-    :ensure t
-    :straight t)
+  :ensure t
+  :straight t)
 (with-eval-after-load 'org (global-org-modern-mode))
 
 (setq org-modern-star 'fold)
@@ -1153,7 +1161,7 @@
 ;; (global-whitespace-mode 1)
 (add-hook 'prog-mode 'whitespace-mode)
 
-(defvar cashmere/font-height 200)
+(defvar cashmere/font-height 170)
 
 (when (member "Fragment Mono" (font-family-list))
   (set-face-attribute 'default nil :font "Fragment Mono" :height cashmere/font-height)
@@ -1276,12 +1284,18 @@
   :config
   (setq consult-project-function #'projectile-project-root))
 
+(defun my/smart-find-file ()
+  (interactive)
+  (if (projectile-project-p)
+      (projectile-find-file)
+    (consult-buffer)))
+
 (my-leader
   "sp" '(consult-ripgrep :wk "search project")
   "/" '(consult-line :wk "search buffer")
   "." '(find-file :wk "find file")
   "," '(consult-buffer :wk "switch buffer")
-  "SPC" '(consult-buffer :wk "switch buffer")
+  "SPC" '(my/smart-find-file :wk "find file/buffer")
   ":" (lambda () (interactive) (execute-extended-command nil))
   
   "f" '(:ignore t :wk "files")
@@ -1328,17 +1342,17 @@
   "hf" '(describe-function :wk "function")
   "hv" '(describe-variable :wk "variable")
   "hk" '(describe-key :wk "key")
+  
   "y" '(:ignore t :wk "yank to kill-ring")
-
-"yy" (lambda ()
-       (interactive)
-       (kill-new (buffer-substring (line-beginning-position) (line-end-position)))
-       (message "Yanked line to kill-ring"))
-"yw" (lambda ()
-       (interactive)
-       (kill-new (thing-at-point 'word))
-       (message "Yanked word to kill-ring"))
-
+  "yy" (lambda ()
+         (interactive)
+         (kill-new (buffer-substring (line-beginning-position) (line-end-position)))
+         (message "Yanked line to kill-ring"))
+  "yw" (lambda ()
+         (interactive)
+         (kill-new (thing-at-point 'word))
+         (message "Yanked word to kill-ring"))
+  
   "w" '(:ignore t :wk "windows")
   "wv" '(split-window-right :wk "split right")
   "ws" '(split-window-below :wk "split below")
@@ -1361,20 +1375,7 @@
   
   "a" '(embark-act :wk "embark")
   "u" '(undo-tree-visualize :wk "undo tree")
-"P" '(consult-yank-from-kill-ring :wk "paste history")
-
-"y" '(:ignore t :wk "yank to kill-ring")
-"yy" (lambda ()
-       (interactive)
-       (kill-new (buffer-substring (line-beginning-position) (line-end-position)))
-       (message "Yanked line to kill-ring"))
-"yw" (lambda ()
-       (interactive)
-       (kill-new (thing-at-point 'word))
-       (message "Yanked word to kill-ring"))
-
-
-  )
+  "P" '(consult-yank-from-kill-ring :wk "paste history"))
 
 (my-local-leader
   "t" '(eat :wk "terminal"))
