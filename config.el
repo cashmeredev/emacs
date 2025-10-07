@@ -1,10 +1,10 @@
 ;;; config.el --- Emacs-Kick --- A feature rich Emacs config for (neo)vi(m)mers -*- lexical-binding: t; -*-
 ;; (setenv "LSP_USE_PLISTS" "true")
-(setq gc-cons-threshold #x40000000)
+;; (setq gc-cons-threshold #x40000000)
 
 (setq read-process-output-max (* 1024 1024 4))
 
-(setq package-enable-at-startup nil) 
+;; (setq package-enable-at-startup nil) 
 (when (boundp 'pgtk-wait-for-event-timeout)
   (setq pgtk-wait-for-event-timeout 0.001))
 
@@ -36,31 +36,32 @@
 
 ;; (add-to-list 'default-frame-alist '(internal-border-width . 16))
 
-(setq straight-check-for-modifications nil)
-(defvar bootstrap-version)
-(let ((bootstrap-file
-       (expand-file-name
-        "straight/repos/straight.el/bootstrap.el"
-        (or (bound-and-true-p straight-base-dir)
-            user-emacs-directory)))
-      (bootstrap-version 7))
-  (unless (file-exists-p bootstrap-file)
-    (with-current-buffer
-        (url-retrieve-synchronously
-         "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
-         'silent 'inhibit-cookies)
-      (goto-char (point-max))
-      (eval-print-last-sexp)))
-  (load bootstrap-file nil 'nomessage))
-
-(straight-use-package '(project :type built-in))
-(straight-use-package 'use-package)
-
-(setq straight-use-package-by-default t)
+;; (setq straight-check-for-modifications nil)
+;; (defvar bootstrap-version)
+;; (let ((bootstrap-file
+;;        (expand-file-name
+;;         "straight/repos/straight.el/bootstrap.el"
+;;         (or (bound-and-true-p straight-base-dir)
+;;             user-emacs-directory)))
+;;       (bootstrap-version 7))
+;;   (unless (file-exists-p bootstrap-file)
+;;     (with-current-buffer
+;;         (url-retrieve-synchronously
+;;          "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
+;;          'silent 'inhibit-cookies)
+;;       (goto-char (point-max))
+;;       (eval-print-last-sexp)))
+;;   (load bootstrap-file nil 'nomessage))
+;; 
+;; (straight-use-package '(project :type built-in))
+;; (straight-use-package 'use-package)
+;; 
+;; (setq straight-use-package-by-default t)
 
 ;;; EMACS
 ;;  This is biggest one. Keep going, plugins (oops, I mean packages) will be shorter :)
 (use-package emacs
+  :straight nil
   :ensure nil
   :custom                                         ;; Set custom variables to configure Emacs behavior.
   (column-number-mode t)                          ;; Display the column number in the mode line.
@@ -235,10 +236,25 @@
     (erc-timestamp-format "[%H:%M]")                                 ;; Format for timestamps in messages.
     (erc-autojoin-channels-alist '((".*\\.libera\\.chat" "#emacs"))));; Automatically join the #emacs channel on Libera.Chat.
 
-(setq scroll-preserve-screen-position t
-      scroll-conservatively 0
-      maximum-scroll-margin 0.5
-      scroll-margin 99999)
+(defvar my/centered-cursor-enabled nil)
+
+(defun my/centered-cursor ()
+  (interactive)
+  (if my/centered-cursor-enabled
+      (progn
+        (setq scroll-preserve-screen-position nil
+              scroll-conservatively 0
+              maximum-scroll-margin 0.0
+              scroll-margin 0)
+        (setq my/centered-cursor-enabled nil)
+        (message "centered-cursor off"))
+    (progn
+      (setq scroll-preserve-screen-position t
+            scroll-conservatively 0
+            maximum-scroll-margin 0.5
+            scroll-margin 99999)
+      (setq my/centered-cursor-enabled t)
+      (message "centered-cursor on"))))
 
 (use-package isearch
 :straight nil
@@ -295,67 +311,78 @@
     :ensure nil                                ;; This is built-in, no need to fetch it.
     :config
     (setq eldoc-idle-delay 0)                  ;; Automatically fetch doc help
-    (setq eldoc-echo-area-use-multiline-p nil) ;; We use the "K" floating help instead
+    (setq eldoc-echo-area-use-multiline-p t) ;; We use the "K" floating help instead
 						;; set to t if you want docs on the echo area
-    (setq eldoc-echo-area-display-truncation-message nil)
+	(setq eldoc-help-at-pt t)
+	(setq eldoc-echo-area-display-truncation-message nil)
     :init
     (global-eldoc-mode))
 
-;; (use-package flymake
-;;   :straight nil
-;;     ;; :ensure nil          ;; This is built-in, no need to fetch it.
-;;     ;; :defer t
-;;     ;; :hook (prog-mode . flymake-mode)
-;;     :custom
-;;     (flymake-margin-indicators-string
-;;     '((error "!»" compilation-error) (warning "»" compilation-warning)
-;; 	(note "»" compilation-info))))
+(use-package flymake
+  :straight nil
+    :ensure nil          ;; This is built-in, no need to fetch it.
+    :defer t
+    :hook (prog-mode . flymake-mode)
+    :custom
+    (flymake-margin-indicators-string
+    '((error "!»" compilation-error) (warning "»" compilation-warning)
+	(note "»" compilation-info))))
+
+(use-package xref
+  :straight nil
+  :ensure nil)
+
+(use-package project
+  :straight nil
+  :ensure nil)
 
 (use-package org
-    :straight nil
-    :ensure nil     
-    :defer t
-  :config
-  (require 'org-tempo)
-  (custom-set-faces
-   '(org-document-title ((t (:height 1.6))))
-   '(outline-1          ((t (:height 1.25))))
-   '(outline-2          ((t (:height 1.2))))
-   '(outline-3          ((t (:height 1.2))))
-   '(outline-4          ((t (:height 1.2))))
-   '(outline-5          ((t (:height 1.2))))
-   '(outline-6          ((t (:height 1.2))))
-   '(outline-7          ((t (:height 1.2))))
-   '(outline-8          ((t (:height 1.2))))
-   '(outline-9          ((t (:height 1.2)))))
-  (org-indent-mode -1)
-  (setq org-startup-folded 'content)
-  (setq org-adapt-indentation t
-        org-hide-leading-stars t
-        org-pretty-entities t
-        org-ellipsis "  ")
-  (setq org-src-fontify-natively t
-        org-src-tab-acts-natively t
-        org-edit-src-content-indentation 0)
-  (setq org-log-done                       t
-        org-auto-align-tags                t
-        org-tags-column                    -80
-        org-fold-catch-invisible-edits     'show-and-error
-        org-special-ctrl-a/e               t
-        org-insert-heading-respect-content t)
+     :straight nil
+     :ensure nil     
+     :defer t
+   :config
+(setq org-directory "~/org/")
+   (require 'org-tempo)
 
-;; (my-local-leader
-;;   )
-   
-  (add-hook 'org-mode-hook 'variable-pitch-mode)
-  (add-to-list 'font-lock-extra-managed-props 'display)
-  (font-lock-add-keywords 'org-mode
-                          `(("^.*?\( \)\(:[[:alnum:]_@#%:]+:\)$"
-                             (1 `(face nil
-                                       display (space :align-to (- right ,(org-string-width (match-string 2)) 3)))
-                                prepend))) t)
-  (setq org-blank-before-new-entry '((heading . nil)
-                                     (plain-list-item . nil))))
+   (custom-set-faces
+    '(org-document-title ((t (:height 1.6))))
+    '(outline-1          ((t (:height 1.25))))
+    '(outline-2          ((t (:height 1.2))))
+    '(outline-3          ((t (:height 1.2))))
+    '(outline-4          ((t (:height 1.2))))
+    '(outline-5          ((t (:height 1.2))))
+    '(outline-6          ((t (:height 1.2))))
+    '(outline-7          ((t (:height 1.2))))
+    '(outline-8          ((t (:height 1.2))))
+    '(outline-9          ((t (:height 1.2)))))
+   (org-indent-mode -1)
+   (setq org-startup-folded 'content)
+   (setq org-adapt-indentation t
+	  org-hide-leading-stars t
+	  org-pretty-entities t
+	  org-ellipsis "  ")
+   (setq org-src-fontify-natively t
+	  org-src-tab-acts-natively t
+	  org-edit-src-content-indentation 0)
+   (setq org-log-done                       t
+	  org-auto-align-tags                t
+	  org-tags-column                    -80
+	  org-fold-catch-invisible-edits     'show-and-error
+	  org-special-ctrl-a/e               t
+	  org-insert-heading-respect-content t)
+
+ ;; (my-local-leader
+ ;;   )
+    
+   (add-hook 'org-mode-hook 'variable-pitch-mode)
+   (add-to-list 'font-lock-extra-managed-props 'display)
+   (font-lock-add-keywords 'org-mode
+                           `(("^.*?\( \)\(:[[:alnum:]_@#%:]+:\)$"
+                              (1 `(face nil
+                                        display (space :align-to (- right ,(org-string-width (match-string 2)) 3)))
+                                 prepend))) t))
+   ;; (setq org-blank-before-new-entry '((heading . nil)
+   ;;                                    (plain-list-item . nil)))
 
 (use-package org-appear
   :commands (org-appear-mode)
@@ -365,6 +392,79 @@
   (setq org-appear-autoemphasis   t   ;; Show bold, italics, verbatim, etc.
         org-appear-autolinks      t   ;; Show links
         org-appear-autosubmarkers t)) ;; Show sub- and superscripts
+
+(setq org-agenda-start-on-weekday nil
+      org-agenda-block-separator  nil
+      org-agenda-remove-tags      t)
+
+(use-package org-super-agenda
+  :after org
+  :config
+  (setq org-super-agenda-header-prefix "\n❯ ")
+  ;; Hide the thin width char glyph
+  (add-hook 'org-agenda-mode-hook
+            #'(lambda () (setq-local nobreak-char-display nil)))
+  (org-super-agenda-mode))
+
+(use-package org-ql
+  :ensure t
+  :after org)
+
+(add-to-list 'org-agenda-custom-commands
+	  '("d" "Day View"
+		 ((agenda "" ((org-agenda-overriding-header "Day View")
+                      (org-agenda-span 'day)
+                      (org-super-agenda-groups regular-view-groups)))
+		  (org-ql-block '(todo "PROG") ((org-ql-block-header "\n❯ In Progress")))
+		  (org-ql-block '(todo "NEXT") ((org-ql-block-header "\n❯ Next Up")))
+          (org-ql-block '(todo "WAIT") ((org-ql-block-header "\n❯ Backlog")))
+		  (org-ql-block '(priority "A") ((org-ql-block-header "\n❯ Important"))))))
+
+(add-to-list 'org-agenda-custom-commands
+		'("e" "Three-Day View"
+               ((agenda "" ((org-agenda-span 3)
+                            (org-agenda-start-on-weekday nil)
+                            (org-deadline-warning-days 0))))))
+
+(org-babel-do-load-languages
+ 'org-babel-load-languages
+ '((python . t)))
+(defun sloth/org-babel-edit-prep (info)
+  (setq buffer-file-name (or (alist-get :file (caddr info))
+				"org-src-babel-tmp"))
+  (eglot-ensure))
+
+(advice-add 'org-edit-src-code
+            :before (defun sloth/org-edit-src-code/before (&rest args)
+                      (when-let* ((element (org-element-at-point))
+                                  (type (org-element-type element))
+                                  (lang (org-element-property :language element))
+                                  (mode (org-src-get-lang-mode lang))
+                                  ((eglot--lookup-mode mode))
+                                  (edit-pre (intern
+                                             (format "org-babel-edit-prep:%s" lang))))
+                        (if (fboundp edit-pre)
+                            (advice-add edit-pre :after #'sloth/org-babel-edit-prep)
+                          (fset edit-pre #'sloth/org-babel-edit-prep)))))
+
+(use-package denote
+  :ensure t
+  :hook (dired-mode . denote-dired-mode)
+  :config
+  (setq denote-rename-buffer-mode 1
+		denote-directory (expand-file-name "~/org/")))
+
+(use-package denote-agenda
+  :ensure t
+  :config
+  (setq denote-agenda-include-regexp "task")
+  (denote-agenda-insinuate))
+
+(use-package denote-menu
+  :ensure t)
+
+(use-package denote-org
+  :ensure t)
 
 (use-package which-key
   :straight nil
@@ -401,18 +501,18 @@
 		    "  ")
 		    cand))))
 
-(use-package vertico-posframe
-  :init
-  (setq vertico-posframe-parameters   '((left-fringe  . 12)    ;; Fringes
-                                        (right-fringe . 12)
-                                        (undecorated  . nil))) ;; Rounded frame
-  :config
-  (vertico-posframe-mode 1)
-  (setq vertico-posframe-width        96                       ;; Narrow frame
-        vertico-posframe-height       vertico-count            ;; Default height
-        ;; Don't create posframe for these commands
-        vertico-multiform-commands    '((consult-line    (:not posframe))
-                                        (consult-ripgrep (:not posframe)))))
+;; (use-package vertico-posframe
+;;   :init
+;;   (setq vertico-posframe-parameters   '((left-fringe  . 12)    ;; Fringes
+;;                                         (right-fringe . 12)
+;;                                         (undecorated  . nil))) ;; Rounded frame
+;;   :config
+;;   (vertico-posframe-mode 1)
+;;   (setq vertico-posframe-width        96                       ;; Narrow frame
+;;         vertico-posframe-height       vertico-count            ;; Default height
+;;         ;; Don't create posframe for these commands
+;;         vertico-multiform-commands    '((consult-line    (:not posframe))
+;;                                         (consult-ripgrep (:not posframe)))))
 
 ;;; CONSULT
 ;; Consult provides powerful completion and narrowing commands for Emacs.
@@ -426,8 +526,8 @@
   :init
   (advice-add #'register-preview :override #'consult-register-window)
 
-  (setq xref-show-xrefs-function #'consult-xref
-        xref-show-definitions-function #'consult-xref)
+  ;; (setq xref-show-xrefs-function #'consult-xref
+  ;;       xref-show-definitions-function #'consult-xref)
   
   :config
   (setq consult-buffer-filter
@@ -545,93 +645,36 @@
     :defer t
     :after (:all corfu))
 
-;; (use-package lsp-mode
-;;   :defer t
-;;   :init (setq lsp-use-plists t)
-;;   :hook ((rust-mode             . lsp)
-;;          (nix-mode              . lsp)
-;;          (lsp-mode              . lsp-enable-which-key-integration)
-;;          (typescript-mode       . lsp)
-;;          (tsx-ts-mode           . lsp)
-;;          (typescript-ts-mode    . lsp)
-;;          (web-mode              . lsp))
-;;   :bind (:map lsp-mode-map
-;;               ("M-<return>" . lsp-execute-code-action)
-;;               ("C-M-."      . lsp-find-references)
-;;               ("C-c r"      . lsp-rename))
-;;   :config
-;;   ;; (setq lsp-diagnostics-provider :flycheck
-;;   ;;       lsp-completion-provider  :none)       ;; I use corfu
-;;   ;; Disable visual features
-;;   (setq lsp-headerline-breadcrumb-enable nil  ;; No breadcrumbs
-;;         lsp-lens-enable                  nil  ;; No lenses
-;; 
-;;         ;; Enable code actions in the mode line
-;;         lsp-modeline-code-actions-enable t
-;;         lsp-modeline-code-action-fallback-icon "✦"
-;; 
-;;         ;; Limit raising of the echo area to show docs
-;;         lsp-signature-doc-lines 3)
-;;   (setq lsp-file-watch-threshold  1500)
-;;   (setq lsp-format-buffer-on-save nil)
-;; 
-;;   (with-eval-after-load 'lsp-modeline
-;;     (set-face-attribute 'lsp-modeline-code-actions-preferred-face nil
-;;                         :inherit font-lock-comment-face)
-;;     (set-face-attribute 'lsp-modeline-code-actions-face nil
-;;                         :inherit font-lock-comment-face)))
-
-(defun lsp-booster--advice-json-parse (old-fn &rest args)
-  "Try to parse bytecode instead of json."
-  (or
-   (when (equal (following-char) ?#)
-     (let ((bytecode (read (current-buffer))))
-       (when (byte-code-function-p bytecode)
-         (funcall bytecode))))
-   (apply old-fn args)))
-(advice-add (if (progn (require 'json)
-                       (fboundp 'json-parse-buffer))
-                'json-parse-buffer
-              'json-read)
-            :around
-            #'lsp-booster--advice-json-parse)
-
-(defun lsp-booster--advice-final-command (old-fn cmd &optional test?)
-  "Prepend emacs-lsp-booster command to lsp CMD."
-  (let ((orig-result (funcall old-fn cmd test?)))
-    (if (and (not test?)                             ;; for check lsp-server-present?
-             (not (file-remote-p default-directory)) ;; see lsp-resolve-final-command, it would add extra shell wrapper
-             lsp-use-plists
-             (not (functionp 'json-rpc-connection))  ;; native json-rpc
-             (executable-find "emacs-lsp-booster"))
-        (progn
-          (when-let ((command-from-exec-path (executable-find (car orig-result))))  ;; resolve command from exec-path (in case not found in $PATH)
-            (setcar orig-result command-from-exec-path))
-          (message "Using emacs-lsp-booster for %s!" orig-result)
-          (cons "emacs-lsp-booster" orig-result))
-      orig-result)))
-(advice-add 'lsp-resolve-final-command :around #'lsp-booster--advice-final-command)
-
-(use-package rust-mode
-  :ensure t
-  :mode "\\.rs\\'")
-
 (use-package eglot
+  :ensure nil
+  :straight nil
   :hook ((rust-mode . eglot-ensure)
-         (nix-mode  . eglot-ensure)
-         (eglot-managed-mode . (lambda () (eldoc-mode -1))))
+	   (nix-mode  . eglot-ensure)
+	   (python-mode . eglot-ensure)
+	   (eglot-managed-mode . (lambda () (eldoc-mode -1))))
   :bind (:map eglot-mode-map
-              ("M-<return>" . eglot-code-actions)
-              ("C-M-."      . xref-find-references)
-              ("C-c r"      . eglot-rename))
+		("M-<return>" . eglot-code-actions)
+		("C-M-."      . xref-find-references)
+		("C-c r"      . eglot-rename))
   :config
-  (setq eldoc-echo-area-use-multiline-p nil)
+  (add-to-list 'eglot-server-programs
+		 `(python-mode
+				 . ,(eglot-alternatives '(("basedpyright-langserver" "--stdio")
+										  ("pyright-langserver" "--stdio")
+					    "jedi-language-server"
+					    "pylsp"))))
+  (setq eldoc-echo-area-use-multiline-p nil
+	  eglot-inlay-hints-mode -1)
   (add-to-list 'eglot-server-programs '(nix-mode . ("nixd"))))
 
 (use-package eglot-booster
 	:straight ( eglot-booster :type git :host nil :repo "https://github.com/jdtsmith/eglot-booster")
 	:after eglot
 	:config (eglot-booster-mode))
+
+(use-package consult-eglot
+  :straight t
+  :after (consult eglot))
 
 (use-package eldoc-box
   :ensure t
@@ -727,30 +770,15 @@
   (define-key evil-motion-state-map (kbd "SPC") nil)
   (define-key evil-normal-state-map (kbd ",") nil)
   (define-key evil-visual-state-map (kbd ",") nil)
-  (define-key evil-motion-state-map (kbd ",") nil)
-  
-  (setq evil-kill-on-visual-paste nil)
-  
-  (defun my/evil-no-kill-ring (orig-fn beg end &optional type register yank-handler)
-    (let ((register (or register ?_)))
-      (funcall orig-fn beg end type register yank-handler)))
-
-  (advice-add 'evil-yank :around #'my/evil-no-kill-ring)
-  (advice-add 'evil-delete :around #'my/evil-no-kill-ring)
-  (advice-add 'evil-change :around #'my/evil-no-kill-ring)
-  
-  (defun ek/lsp-describe-and-jump ()
-    (interactive)
-    (lsp-describe-thing-at-point)
-    (let ((help-buffer "*lsp-help*"))
-      (when (get-buffer help-buffer)
-        (switch-to-buffer-other-window help-buffer)))))
+  (define-key evil-motion-state-map (kbd ",") nil))
 
 (use-package avy
   :ensure t
   :straight t
   :after evil
   :general
+  ;; (general-nmap "s" 'avy-goto-char-timer)
+  ;; (general-omap "s" 'evil-avy-goto-char-timer)
   
   :config
   (setq avy-all-windows t
@@ -759,14 +787,11 @@
         avy-case-fold-search t
         avy-timeout-seconds 0.3
         avy-style 'at-full
-        avy-keys '(?a ?s ?d ?f ?g ?h ?j ?k ?l ?q ?w ?e ?r ?t ?y ?u ?i ?o ?p)))
+        avy-keys '(?a ?s ?d ?f ?g ?h ?j ?k ?l ?q ?w ?e ?r ?t ?y ?u ?i ?o ?p))
+  
+  (evil-define-avy-motion evil-avy-goto-char-timer inclusive))
 
-(defun avy-action-exchange (pt)
-  "Exchange sexp at PT with the one at point."
-  (set-mark pt)
-  (transpose-sexps 0))
 
-(add-to-list 'avy-dispatch-alist '(?e . avy-action-exchange))
 
 (use-package evil-collection
   :defer t
@@ -883,23 +908,6 @@
   :config
   (require 'evil-org-agenda)
   (evil-org-agenda-set-keys))
-
-;;; NEOTREE
-;; The `neotree' package provides a file tree explorer for Emacs, allowing easy navigation
-;; through directories and files. It presents a visual representation of the file system
-;; and integrates with version control to show file states.
-;; (use-package neotree
-;;   :ensure t
-;;   :straight t
-;;   :custom
-;;   (neo-show-hidden-files t)                ;; By default shows hidden files (toggle with H)
-;;   (neo-theme 'nerd)                        ;; Set the default theme for Neotree to 'nerd' for a visually appealing look.
-;;   (neo-vc-integration '(face char))        ;; Enable VC integration to display file states with faces (color coding) and characters (icons).
-;;   :defer t                                 ;; Load the package only when needed to improve startup time.
-;;   :config
-;;   (if ek-use-nerd-fonts                    ;; Check if nerd fonts are being used.
-;;       (setq neo-theme 'nerd-icons)         ;; Set the theme to 'nerd-icons' if nerd fonts are available.
-;;     (setq neo-theme 'nerd)))               ;; Otherwise, fall back to the 'nerd' theme.
 
 ;;; NERD ICONS
 ;; The `nerd-icons' package provides a set of icons for use in Emacs. These icons can
@@ -1195,7 +1203,6 @@
 ;; Enable flashing mode-line on errors
 (doom-themes-visual-bell-config)
 ;; Enable custom neotree theme (nerd-icons must be installed!)
-(doom-themes-neotree-config)
 ;; or for treemacs users
 (doom-themes-treemacs-config)
 ;; Corrects (and improves) org-mode's native fontification.
@@ -1257,6 +1264,9 @@
         "^\\*ts-ls\\*$"
         "^\\*ts-ls::stderr\\*$"))
 
+(use-package bufler
+  :defer t)
+
 (use-package eat
   :ensure t
   :defer t
@@ -1267,7 +1277,6 @@
 
 (use-package projectile
   :ensure t
-  :straight t
   :demand t
   :config
   (projectile-mode +1)
@@ -1294,10 +1303,16 @@
   "sp" '(consult-ripgrep :wk "search project")
   "/" '(consult-line :wk "search buffer")
   "." '(find-file :wk "find file")
-  "," '(consult-buffer :wk "switch buffer")
+  "," '(bufler-switch-buffer :wk "switch buffer")
   "SPC" '(my/smart-find-file :wk "find file/buffer")
   ":" (lambda () (interactive) (execute-extended-command nil))
-  
+
+"d" '(:ignore t :wk "denote") 
+"dd" '(denote-menu-list-notes t :wk "List all notes")
+"dg" '(denote-grep t :wk "Search")
+"dn" '(denote t :wk "Create a new note")
+"dr" '(denote-rename-file t :wk "Rename Note")
+
   "f" '(:ignore t :wk "files")
   "fd" '(dired :wk "dired")
   "fD" '(dired-jump :wk "dired jump")
@@ -1325,10 +1340,10 @@
   "pt" '(projectile-test-project :wk "test")
   "pi" '(projectile-invalidate-cache :wk "invalidate cache")
   
-  "g" '(:ignore t :wk "git")
+  "g" '(:ignore t :wk "git/goto")
   "gg" '(magit-status :wk "status")
   "gl" '(magit-log-current :wk "log")
-  "gd" '(magit-diff-buffer-file :wk "diff file")
+  "gd" '(xref-find-definitions :wk "go to definition")  ; sowohl hier als auch unter code
   "gs" '(magit-status :wk "status")
   "gb" '(vc-annotate :wk "blame")
   
@@ -1341,17 +1356,7 @@
   "hm" '(describe-mode :wk "mode")
   "hf" '(describe-function :wk "function")
   "hv" '(describe-variable :wk "variable")
-  "hk" '(describe-key :wk "key")
-  
-  "y" '(:ignore t :wk "yank to kill-ring")
-  "yy" (lambda ()
-         (interactive)
-         (kill-new (buffer-substring (line-beginning-position) (line-end-position)))
-         (message "Yanked line to kill-ring"))
-  "yw" (lambda ()
-         (interactive)
-         (kill-new (thing-at-point 'word))
-         (message "Yanked word to kill-ring"))
+  "hk" '(describe-key :wk "key") 
   
   "w" '(:ignore t :wk "windows")
   "wv" '(split-window-right :wk "split right")
@@ -1360,6 +1365,17 @@
   "wo" '(delete-other-windows :wk "delete others")
   
   "c" '(:ignore t :wk "code")
+  "ca" '(eglot-code-actions :wk "code actions")
+  "cd" '(xref-find-definitions :wk "go to definition")  ; sowohl hier als auch unter g
+  "cD" '(xref-find-references :wk "find references")
+  "cr" '(eglot-rename :wk "lsp rename")
+  "ch" '(eglot-help-at-point :wk "help at point")
+  "cf" '(eglot-format :wk "format")
+  "ci" '(eglot-find-implementation :wk "implementation")
+  "ct" '(eglot-find-typeDefinition :wk "type definition")
+  "cs" '(consult-eglot-symbols :wk "workspace symbols")
+  "cS" '(eglot-shutdown :wk "shutdown lsp")
+  "cR" '(eglot-reconnect :wk "restart lsp")
   
   "m" '(:ignore t :wk "mode")
   "mp" (list (lambda ()
@@ -1372,12 +1388,13 @@
   "q" '(:ignore t :wk "quit")
   "qq" '(save-buffers-kill-terminal :wk "quit emacs")
   "qr" '(restart-emacs :wk "restart")
-  
+ 
   "a" '(embark-act :wk "embark")
   "u" '(undo-tree-visualize :wk "undo tree")
   "P" '(consult-yank-from-kill-ring :wk "paste history"))
 
 (my-local-leader
+"a" '(org-agenda :wk "org agen")
   "t" '(eat :wk "terminal"))
 
 (general-def 'normal 'override
@@ -1390,16 +1407,14 @@
   "]t" 'tab-next
   "[t" 'tab-previous
   "P" 'consult-yank-from-kill-ring
-  "K" (if (>= emacs-major-version 31)
-          #'eldoc-box-help-at-point
-        #'ek/lsp-describe-and-jump)
   "gcc" (lambda ()
           (interactive)
           (unless (use-region-p)
             (comment-or-uncomment-region 
              (line-beginning-position) 
-             (line-end-position))))
-  )
+             (line-end-position)))))
+
+;; Global K binding für alle Modi mit eglot
 
 (general-def 'visual 'override
   "gc" (lambda ()

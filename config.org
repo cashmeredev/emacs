@@ -1,16 +1,41 @@
 #+PROPERTY: header-args :tangle yes
 #+startup: content
+* early init
+
+#+begin_src emacs-lisp :tangle ~/.emacs.d/early-init.el
+;; -*- lexical-binding: t; -*-
+
+;; Native Compilation Setup
+(when (and (fboundp 'native-comp-available-p)
+           (native-comp-available-p))
+  (setq native-comp-deferred-compilation t)
+  (setq native-comp-async-report-warnings-errors nil)
+  (setq native-comp-async-jobs-number 6) ; 8 cores - 2 reserved = 6
+  (setq native-comp-warning-on-missing-source nil)
+  
+  ;; Cache Setup
+  (let ((path (expand-file-name "eln-cache/" user-emacs-directory)))
+    (setq native-comp-eln-load-path (list path))
+    (when (fboundp 'startup-redirect-eln-cache)
+      (startup-redirect-eln-cache path))))
+
+;; Package Management
+(setq package-enable-at-startup nil)
+(setq package-quickstart nil)
+(setq load-prefer-newer t)
+(setq gc-cons-threshold #x40000000)
+#+end_src
 
 * performance
 
 #+begin_src emacs-lisp
 ;;; config.el --- Emacs-Kick --- A feature rich Emacs config for (neo)vi(m)mers -*- lexical-binding: t; -*-
 ;; (setenv "LSP_USE_PLISTS" "true")
-(setq gc-cons-threshold #x40000000)
+;; (setq gc-cons-threshold #x40000000)
 
 (setq read-process-output-max (* 1024 1024 4))
 
-(setq package-enable-at-startup nil) 
+;; (setq package-enable-at-startup nil) 
 (when (boundp 'pgtk-wait-for-event-timeout)
   (setq pgtk-wait-for-event-timeout 0.001))
 
@@ -62,134 +87,135 @@
 * straight.el
 
 #+begin_src emacs-lisp
-(setq straight-check-for-modifications nil)
-(defvar bootstrap-version)
-(let ((bootstrap-file
-       (expand-file-name
-        "straight/repos/straight.el/bootstrap.el"
-        (or (bound-and-true-p straight-base-dir)
-            user-emacs-directory)))
-      (bootstrap-version 7))
-  (unless (file-exists-p bootstrap-file)
-    (with-current-buffer
-        (url-retrieve-synchronously
-         "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
-         'silent 'inhibit-cookies)
-      (goto-char (point-max))
-      (eval-print-last-sexp)))
-  (load bootstrap-file nil 'nomessage))
-
-(straight-use-package '(project :type built-in))
-(straight-use-package 'use-package)
-
-(setq straight-use-package-by-default t)
+;; (setq straight-check-for-modifications nil)
+;; (defvar bootstrap-version)
+;; (let ((bootstrap-file
+;;        (expand-file-name
+;;         "straight/repos/straight.el/bootstrap.el"
+;;         (or (bound-and-true-p straight-base-dir)
+;;             user-emacs-directory)))
+;;       (bootstrap-version 7))
+;;   (unless (file-exists-p bootstrap-file)
+;;     (with-current-buffer
+;;         (url-retrieve-synchronously
+;;          "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
+;;          'silent 'inhibit-cookies)
+;;       (goto-char (point-max))
+;;       (eval-print-last-sexp)))
+;;   (load bootstrap-file nil 'nomessage))
+;; 
+;; (straight-use-package '(project :type built-in))
+;; (straight-use-package 'use-package)
+;; 
+;; (setq straight-use-package-by-default t)
 #+end_src
 
 * emacs
 
 #+begin_src emacs-lisp
 
-  ;;; EMACS
-  ;;  This is biggest one. Keep going, plugins (oops, I mean packages) will be shorter :)
-  (use-package emacs
-    :ensure nil
-    :custom                                         ;; Set custom variables to configure Emacs behavior.
-    (column-number-mode t)                          ;; Display the column number in the mode line.
-    (auto-save-default nil)                         ;; Disable automatic saving of buffers.
-    (create-lockfiles nil)                          ;; Prevent the creation of lock files when editing.
-    (delete-by-moving-to-trash t)                   ;; Move deleted files to the trash instead of permanently deleting them.
-    (delete-selection-mode 1)                       ;; Enable replacing selected text with typed text.
-    (display-line-numbers-type 'relative)           ;; Use relative line numbering in programming modes.
-    (global-auto-revert-non-file-buffers t)         ;; Automatically refresh non-file buffers.
-    (history-length 25)                             ;; Set the length of the command history.
-    (inhibit-startup-message t)                     ;; Disable the startup message when Emacs launches.
-    (initial-scratch-message "")                    ;; Clear the initial message in the *scratch* buffer.
-    (ispell-dictionary "en_US")                     ;; Set the default dictionary for spell checking.
-    (make-backup-files nil)                         ;; Disable creation of backup files.
-    ;; (pixel-scroll-precision-mode t)                 ;; Enable precise pixel scrolling.
-    (pixel-scroll-precision-use-momentum nil)       ;; Disable momentum scrolling for pixel precision.
-    (ring-bell-function 'ignore)                    ;; Disable the audible bell.
-    (split-width-threshold 300)                     ;; Prevent automatic window splitting if the window width exceeds 300 pixels.
-    (switch-to-buffer-obey-display-actions t)       ;; Make buffer switching respect display actions.
-    (tab-always-indent 'complete)                   ;; Make the TAB key complete text instead of just indenting.
-    (tab-width 4)                                   ;; Set the tab width to 4 spaces.
-    (treesit-font-lock-level 4)                     ;; Use advanced font locking for Treesit mode.
-    (truncate-lines t)                              ;; Enable line truncation to avoid wrapping long lines.
-    (use-dialog-box nil)                            ;; Disable dialog boxes in favor of minibuffer prompts.
-    (use-short-answers t)                           ;; Use short answers in prompts for quicker responses (y instead of yes)
-    (warning-minimum-level :emergency)              ;; Set the minimum level of warnings to display.
+;;; EMACS
+;;  This is biggest one. Keep going, plugins (oops, I mean packages) will be shorter :)
+(use-package emacs
+  :straight nil
+  :ensure nil
+  :custom                                         ;; Set custom variables to configure Emacs behavior.
+  (column-number-mode t)                          ;; Display the column number in the mode line.
+  (auto-save-default nil)                         ;; Disable automatic saving of buffers.
+  (create-lockfiles nil)                          ;; Prevent the creation of lock files when editing.
+  (delete-by-moving-to-trash t)                   ;; Move deleted files to the trash instead of permanently deleting them.
+  (delete-selection-mode 1)                       ;; Enable replacing selected text with typed text.
+  (display-line-numbers-type 'relative)           ;; Use relative line numbering in programming modes.
+  (global-auto-revert-non-file-buffers t)         ;; Automatically refresh non-file buffers.
+  (history-length 25)                             ;; Set the length of the command history.
+  (inhibit-startup-message t)                     ;; Disable the startup message when Emacs launches.
+  (initial-scratch-message "")                    ;; Clear the initial message in the *scratch* buffer.
+  (ispell-dictionary "en_US")                     ;; Set the default dictionary for spell checking.
+  (make-backup-files nil)                         ;; Disable creation of backup files.
+  ;; (pixel-scroll-precision-mode t)                 ;; Enable precise pixel scrolling.
+  (pixel-scroll-precision-use-momentum nil)       ;; Disable momentum scrolling for pixel precision.
+  (ring-bell-function 'ignore)                    ;; Disable the audible bell.
+  (split-width-threshold 300)                     ;; Prevent automatic window splitting if the window width exceeds 300 pixels.
+  (switch-to-buffer-obey-display-actions t)       ;; Make buffer switching respect display actions.
+  (tab-always-indent 'complete)                   ;; Make the TAB key complete text instead of just indenting.
+  (tab-width 4)                                   ;; Set the tab width to 4 spaces.
+  (treesit-font-lock-level 4)                     ;; Use advanced font locking for Treesit mode.
+  (truncate-lines t)                              ;; Enable line truncation to avoid wrapping long lines.
+  (use-dialog-box nil)                            ;; Disable dialog boxes in favor of minibuffer prompts.
+  (use-short-answers t)                           ;; Use short answers in prompts for quicker responses (y instead of yes)
+  (warning-minimum-level :emergency)              ;; Set the minimum level of warnings to display.
 
-    :hook ;; Add hooks to enable specific features in certain modes.
-    (prog-mode . display-line-numbers-mode)
-    (org-mode . (lambda () (display-line-numbers-mode -1)))
-
-
-    :config
-    (add-to-list 'custom-theme-load-path user-emacs-directory)
-    ;; (load-theme 'rose-pine t)
-
-    ;; By default emacs gives you access to a lot of *special* buffers, while navigating with [b and ]b,
-    ;; this might be confusing for newcomers. This settings make sure ]b and [b will always load a
-    ;; file buffer. To see all buffers use <leader> SPC, <leader> b l, or <leader> b i.
-    (defun skip-these-buffers (_window buffer _bury-or-kill)
-      "Function for `switch-to-prev-buffer-skip'."
-      (string-match "\\*[^*]+\\*" (buffer-name buffer)))
-    (setq switch-to-prev-buffer-skip 'skip-these-buffers)
+  :hook ;; Add hooks to enable specific features in certain modes.
+  (prog-mode . display-line-numbers-mode)
+  (org-mode . (lambda () (display-line-numbers-mode -1)))
 
 
-    ;; Configure font settings based on the operating system.
-    ;; Ok, this kickstart is meant to be used on the terminal, not on GUI.
-    ;; But without this, I fear you could start Graphical Emacs and be sad :(
-    (set-face-attribute 'default nil :family "Fragment Mono"  :height 160)
-    ;; (when (eq system-type 'darwin)       ;; Check if the system is macOS.
-    ;; (setq mac-command-modifier 'meta)  ;; Set the Command key to act as the Meta key.
-    ;; (set-face-attribute 'default nil :family "Fragment Mono" :height 130))
+  :config
+  (add-to-list 'custom-theme-load-path user-emacs-directory)
+  ;; (load-theme 'rose-pine t)
 
-    ;; Save manual customizations to a separate file instead of cluttering `init.el'.
-    ;; You can M-x customize, M-x customize-group, or M-x customize-themes, etc.
-    ;; The saves you do manually using the Emacs interface would overwrite this file.
-    ;; The following makes sure those customizations are in a separate file.
-    (setq custom-file (locate-user-emacs-file "custom-vars.el")) ;; Specify the custom file path.
-    (load custom-file 'noerror 'nomessage)                       ;; Load the custom file quietly, ignoring errors.
+  ;; By default emacs gives you access to a lot of *special* buffers, while navigating with [b and ]b,
+  ;; this might be confusing for newcomers. This settings make sure ]b and [b will always load a
+  ;; file buffer. To see all buffers use <leader> SPC, <leader> b l, or <leader> b i.
+  (defun skip-these-buffers (_window buffer _bury-or-kill)
+    "Function for `switch-to-prev-buffer-skip'."
+    (string-match "\\*[^*]+\\*" (buffer-name buffer)))
+  (setq switch-to-prev-buffer-skip 'skip-these-buffers)
 
-    ;; Makes Emacs vertical divisor the symbol │ instead of |.
-    (set-display-table-slot standard-display-table 'vertical-border (make-glyph-code ?│))
 
-    :init                        ;; Initialization settings that apply before the package is loaded.
-    (tool-bar-mode -1)           ;; Disable the tool bar for a cleaner interface.
-    (menu-bar-mode -1)           ;; Disable the menu bar for a more streamlined look.
+  ;; Configure font settings based on the operating system.
+  ;; Ok, this kickstart is meant to be used on the terminal, not on GUI.
+  ;; But without this, I fear you could start Graphical Emacs and be sad :(
+  (set-face-attribute 'default nil :family "Fragment Mono"  :height 160)
+  ;; (when (eq system-type 'darwin)       ;; Check if the system is macOS.
+  ;; (setq mac-command-modifier 'meta)  ;; Set the Command key to act as the Meta key.
+  ;; (set-face-attribute 'default nil :family "Fragment Mono" :height 130))
 
-    (when scroll-bar-mode
-      (scroll-bar-mode -1))      ;; Disable the scroll bar if it is active.
+  ;; Save manual customizations to a separate file instead of cluttering `init.el'.
+  ;; You can M-x customize, M-x customize-group, or M-x customize-themes, etc.
+  ;; The saves you do manually using the Emacs interface would overwrite this file.
+  ;; The following makes sure those customizations are in a separate file.
+  (setq custom-file (locate-user-emacs-file "custom-vars.el")) ;; Specify the custom file path.
+  (load custom-file 'noerror 'nomessage)                       ;; Load the custom file quietly, ignoring errors.
 
-    (global-hl-line-mode -1)     ;; Disable highlight of the current line
-    (global-auto-revert-mode 1)  ;; Enable global auto-revert mode to keep buffers up to date with their corresponding files.
-    (indent-tabs-mode -1)        ;; Disable the use of tabs for indentation (use spaces instead).
-    (recentf-mode 1)             ;; Enable tracking of recently opened files.
-    (savehist-mode 1)            ;; Enable saving of command history.
-    (save-place-mode 1)          ;; Enable saving the place in files for easier return.
-    (winner-mode 1)              ;; Enable winner mode to easily undo window configuration changes.
-    (xterm-mouse-mode 1)         ;; Enable mouse support in terminal mode.
-    (file-name-shadow-mode 1)    ;; Enable shadowing of filenames for clarity.
+  ;; Makes Emacs vertical divisor the symbol │ instead of |.
+  (set-display-table-slot standard-display-table 'vertical-border (make-glyph-code ?│))
 
-    ;; Set the default coding system for files to UTF-8.
-    (modify-coding-system-alist 'file "" 'utf-8)
+  :init                        ;; Initialization settings that apply before the package is loaded.
+  (tool-bar-mode -1)           ;; Disable the tool bar for a cleaner interface.
+  (menu-bar-mode -1)           ;; Disable the menu bar for a more streamlined look.
 
-    ;; Add a hook to run code after Emacs has fully initialized.
-    (add-hook 'after-init-hook
-  			(lambda ()
-  			  (message "Emacs has fully loaded. This code runs after startup.")
+  (when scroll-bar-mode
+    (scroll-bar-mode -1))      ;; Disable the scroll bar if it is active.
 
-  			  ;; Insert a welcome message in the *scratch* buffer displaying loading time and activated packages.
-  			  (with-current-buffer (get-buffer-create "*scratch*")
-  				(insert (format
-  						 ";;    Welcome to Emacs!
-  ;;
-  ;;    Loading time : %s
-  ;;    Packages     : %s
-  "
-  						 (emacs-init-time)
-  						 (length (hash-table-keys straight--recipe-cache))))))))
+  (global-hl-line-mode -1)     ;; Disable highlight of the current line
+  (global-auto-revert-mode 1)  ;; Enable global auto-revert mode to keep buffers up to date with their corresponding files.
+  (indent-tabs-mode -1)        ;; Disable the use of tabs for indentation (use spaces instead).
+  (recentf-mode 1)             ;; Enable tracking of recently opened files.
+  (savehist-mode 1)            ;; Enable saving of command history.
+  (save-place-mode 1)          ;; Enable saving the place in files for easier return.
+  (winner-mode 1)              ;; Enable winner mode to easily undo window configuration changes.
+  (xterm-mouse-mode 1)         ;; Enable mouse support in terminal mode.
+  (file-name-shadow-mode 1)    ;; Enable shadowing of filenames for clarity.
+
+  ;; Set the default coding system for files to UTF-8.
+  (modify-coding-system-alist 'file "" 'utf-8)
+
+  ;; Add a hook to run code after Emacs has fully initialized.
+  (add-hook 'after-init-hook
+			(lambda ()
+			  (message "Emacs has fully loaded. This code runs after startup.")
+
+			  ;; Insert a welcome message in the *scratch* buffer displaying loading time and activated packages.
+			  (with-current-buffer (get-buffer-create "*scratch*")
+				(insert (format
+						 ";;    Welcome to Emacs!
+;;
+;;    Loading time : %s
+;;    Packages     : %s
+"
+						 (emacs-init-time)
+						 (length (hash-table-keys straight--recipe-cache))))))))
 #+end_src
 
 * emacs-kickstart font
@@ -286,11 +312,28 @@
 
 * centered-cursor
 
+[[https://entropicthoughts.com/centered-cursor-mode-in-vanilla-emacs][Centered Cursor Mode in Vanilla Emacs]] 
+
 #+begin_src emacs-lisp
-(setq scroll-preserve-screen-position t
-      scroll-conservatively 0
-      maximum-scroll-margin 0.5
-      scroll-margin 99999)
+(defvar my/centered-cursor-enabled nil)
+
+(defun my/centered-cursor ()
+  (interactive)
+  (if my/centered-cursor-enabled
+      (progn
+        (setq scroll-preserve-screen-position nil
+              scroll-conservatively 0
+              maximum-scroll-margin 0.0
+              scroll-margin 0)
+        (setq my/centered-cursor-enabled nil)
+        (message "centered-cursor off"))
+    (progn
+      (setq scroll-preserve-screen-position t
+            scroll-conservatively 0
+            maximum-scroll-margin 0.5
+            scroll-margin 99999)
+      (setq my/centered-cursor-enabled t)
+      (message "centered-cursor on"))))
 #+end_src
 
 * isearch
@@ -365,9 +408,10 @@
     :ensure nil                                ;; This is built-in, no need to fetch it.
     :config
     (setq eldoc-idle-delay 0)                  ;; Automatically fetch doc help
-    (setq eldoc-echo-area-use-multiline-p nil) ;; We use the "K" floating help instead
+    (setq eldoc-echo-area-use-multiline-p t) ;; We use the "K" floating help instead
 						;; set to t if you want docs on the echo area
-    (setq eldoc-echo-area-display-truncation-message nil)
+	(setq eldoc-help-at-pt t)
+	(setq eldoc-echo-area-display-truncation-message nil)
     :init
     (global-eldoc-mode))
 #+end_src
@@ -377,17 +421,33 @@
   Disabled because nix is managing the flymake configuration.
 
 #+begin_src emacs-lisp
-;; (use-package flymake
-;;   :straight nil
-;;     ;; :ensure nil          ;; This is built-in, no need to fetch it.
-;;     ;; :defer t
-;;     ;; :hook (prog-mode . flymake-mode)
-;;     :custom
-;;     (flymake-margin-indicators-string
-;;     '((error "!»" compilation-error) (warning "»" compilation-warning)
-;; 	(note "»" compilation-info))))
+(use-package flymake
+  :straight nil
+    :ensure nil          ;; This is built-in, no need to fetch it.
+    :defer t
+    :hook (prog-mode . flymake-mode)
+    :custom
+    (flymake-margin-indicators-string
+    '((error "!»" compilation-error) (warning "»" compilation-warning)
+	(note "»" compilation-info))))
 #+end_src
 
+* xref
+
+  #+begin_src emacs-lisp
+  (use-package xref
+    :straight nil
+    :ensure nil)
+  #+end_src
+
+* project
+
+  #+begin_src emacs-lisp
+  (use-package project
+    :straight nil
+    :ensure nil)
+  #+end_src
+  
 * org mode
 
   #+begin_src emacs-lisp
@@ -396,7 +456,9 @@
       :ensure nil     
       :defer t
     :config
+ (setq org-directory "~/org/")
     (require 'org-tempo)
+ 
     (custom-set-faces
      '(org-document-title ((t (:height 1.6))))
      '(outline-1          ((t (:height 1.25))))
@@ -411,18 +473,18 @@
     (org-indent-mode -1)
     (setq org-startup-folded 'content)
     (setq org-adapt-indentation t
-          org-hide-leading-stars t
-          org-pretty-entities t
-          org-ellipsis "  ")
+	  org-hide-leading-stars t
+	  org-pretty-entities t
+	  org-ellipsis "  ")
     (setq org-src-fontify-natively t
-          org-src-tab-acts-natively t
-          org-edit-src-content-indentation 0)
+	  org-src-tab-acts-natively t
+	  org-edit-src-content-indentation 0)
     (setq org-log-done                       t
-          org-auto-align-tags                t
-          org-tags-column                    -80
-          org-fold-catch-invisible-edits     'show-and-error
-          org-special-ctrl-a/e               t
-          org-insert-heading-respect-content t)
+	  org-auto-align-tags                t
+	  org-tags-column                    -80
+	  org-fold-catch-invisible-edits     'show-and-error
+	  org-special-ctrl-a/e               t
+	  org-insert-heading-respect-content t)
 
   ;; (my-local-leader
   ;;   )
@@ -433,9 +495,9 @@
                             `(("^.*?\( \)\(:[[:alnum:]_@#%:]+:\)$"
                                (1 `(face nil
                                          display (space :align-to (- right ,(org-string-width (match-string 2)) 3)))
-                                  prepend))) t)
-    (setq org-blank-before-new-entry '((heading . nil)
-                                       (plain-list-item . nil))))
+                                  prepend))) t))
+    ;; (setq org-blank-before-new-entry '((heading . nil)
+    ;;                                    (plain-list-item . nil)))
   #+end_src
 
 ** org-appear
@@ -449,6 +511,122 @@
   (setq org-appear-autoemphasis   t   ;; Show bold, italics, verbatim, etc.
         org-appear-autolinks      t   ;; Show links
         org-appear-autosubmarkers t)) ;; Show sub- and superscripts
+   #+end_src
+** org agenda
+
+   We will start of with setting some sane configuration for org agenda.
+
+   #+begin_src emacs-lisp
+(setq org-agenda-start-on-weekday nil
+      org-agenda-block-separator  nil
+      org-agenda-remove-tags      t)
+   #+end_src
+
+*** org super agenda
+
+    #+begin_src emacs-lisp
+(use-package org-super-agenda
+  :after org
+  :config
+  (setq org-super-agenda-header-prefix "\n❯ ")
+  ;; Hide the thin width char glyph
+  (add-hook 'org-agenda-mode-hook
+            #'(lambda () (setq-local nobreak-char-display nil)))
+  (org-super-agenda-mode))
+    #+end_src
+
+*** org-ql
+
+    #+begin_src emacs-lisp
+    (use-package org-ql
+      :ensure t
+      :after org)
+    #+end_src
+
+*** agenda views
+
+let us disable the predefined org agenda commands.
+
+#+begin_src emacs-lisp
+(add-to-list 'org-agenda-custom-commands
+	  '("d" "Day View"
+		 ((agenda "" ((org-agenda-overriding-header "Day View")
+                      (org-agenda-span 'day)
+                      (org-super-agenda-groups regular-view-groups)))
+		  (org-ql-block '(todo "PROG") ((org-ql-block-header "\n❯ In Progress")))
+		  (org-ql-block '(todo "NEXT") ((org-ql-block-header "\n❯ Next Up")))
+          (org-ql-block '(todo "WAIT") ((org-ql-block-header "\n❯ Backlog")))
+		  (org-ql-block '(priority "A") ((org-ql-block-header "\n❯ Important"))))))
+
+(add-to-list 'org-agenda-custom-commands
+		'("e" "Three-Day View"
+               ((agenda "" ((org-agenda-span 3)
+                            (org-agenda-start-on-weekday nil)
+                            (org-deadline-warning-days 0))))))
+#+end_src
+
+** org-babel
+
+   #+begin_src emacs-lisp
+   (org-babel-do-load-languages
+    'org-babel-load-languages
+    '((python . t)))
+   (defun sloth/org-babel-edit-prep (info)
+     (setq buffer-file-name (or (alist-get :file (caddr info))
+   				"org-src-babel-tmp"))
+     (eglot-ensure))
+
+   (advice-add 'org-edit-src-code
+               :before (defun sloth/org-edit-src-code/before (&rest args)
+                         (when-let* ((element (org-element-at-point))
+                                     (type (org-element-type element))
+                                     (lang (org-element-property :language element))
+                                     (mode (org-src-get-lang-mode lang))
+                                     ((eglot--lookup-mode mode))
+                                     (edit-pre (intern
+                                                (format "org-babel-edit-prep:%s" lang))))
+                           (if (fboundp edit-pre)
+                               (advice-add edit-pre :after #'sloth/org-babel-edit-prep)
+                             (fset edit-pre #'sloth/org-babel-edit-prep)))))
+   #+end_src
+   
+** denote
+
+   Denote is objectively the best note taking extension, which you coul;d install. It has a very easy to parse file naming scheme and suports not only org files. It has also transclusion inclusive! if you are interested, then check it out yourself.
+   
+   #+begin_src emacs-lisp
+   (use-package denote
+     :ensure t
+     :hook (dired-mode . denote-dired-mode)
+     :config
+     (setq denote-rename-buffer-mode 1
+		denote-directory (expand-file-name "~/org/")))
+   #+end_src
+
+*** denote-agenda
+
+    Denote itself focused on the last versions to have a core for note taking and to be independent of org. But of course you may extend it with your own extensions, functions and helper or even extensions by its developer. One of these extesions is =denote-agenda=, which allows you to dynamically add and remove org-agendas files based on a denote keyword. I set it to =task=, very simple. When we compare it with org-roam, It took me several days to achieve almost the same workflow, one or two external packages and around of 200 extra lines of code.
+
+    #+begin_src emacs-lisp
+    (use-package denote-agenda
+      :ensure t
+      :config
+      (setq denote-agenda-include-regexp "task")
+      (denote-agenda-insinuate))
+    #+end_src
+
+** denote-menu
+   
+    #+begin_src emacs-lisp
+    (use-package denote-menu
+      :ensure t)
+    #+end_src
+
+** denote-org
+
+   #+begin_src emacs-lisp
+   (use-package denote-org
+     :ensure t)
    #+end_src
 
 * which-key
@@ -503,18 +681,18 @@
 ** vertico-posframe
 
    #+begin_src emacs-lisp
-(use-package vertico-posframe
-  :init
-  (setq vertico-posframe-parameters   '((left-fringe  . 12)    ;; Fringes
-                                        (right-fringe . 12)
-                                        (undecorated  . nil))) ;; Rounded frame
-  :config
-  (vertico-posframe-mode 1)
-  (setq vertico-posframe-width        96                       ;; Narrow frame
-        vertico-posframe-height       vertico-count            ;; Default height
-        ;; Don't create posframe for these commands
-        vertico-multiform-commands    '((consult-line    (:not posframe))
-                                        (consult-ripgrep (:not posframe)))))
+;; (use-package vertico-posframe
+;;   :init
+;;   (setq vertico-posframe-parameters   '((left-fringe  . 12)    ;; Fringes
+;;                                         (right-fringe . 12)
+;;                                         (undecorated  . nil))) ;; Rounded frame
+;;   :config
+;;   (vertico-posframe-mode 1)
+;;   (setq vertico-posframe-width        96                       ;; Narrow frame
+;;         vertico-posframe-height       vertico-count            ;; Default height
+;;         ;; Don't create posframe for these commands
+;;         vertico-multiform-commands    '((consult-line    (:not posframe))
+;;                                         (consult-ripgrep (:not posframe)))))
    #+end_src
 
 * consult
@@ -532,8 +710,8 @@
   :init
   (advice-add #'register-preview :override #'consult-register-window)
 
-  (setq xref-show-xrefs-function #'consult-xref
-        xref-show-definitions-function #'consult-xref)
+  ;; (setq xref-show-xrefs-function #'consult-xref
+  ;;       xref-show-definitions-function #'consult-xref)
   
   :config
   (setq consult-buffer-filter
@@ -684,103 +862,32 @@
     :after (:all corfu))
 #+end_src
 
-* lsp
-
-#+begin_src emacs-lisp
-;; (use-package lsp-mode
-;;   :defer t
-;;   :init (setq lsp-use-plists t)
-;;   :hook ((rust-mode             . lsp)
-;;          (nix-mode              . lsp)
-;;          (lsp-mode              . lsp-enable-which-key-integration)
-;;          (typescript-mode       . lsp)
-;;          (tsx-ts-mode           . lsp)
-;;          (typescript-ts-mode    . lsp)
-;;          (web-mode              . lsp))
-;;   :bind (:map lsp-mode-map
-;;               ("M-<return>" . lsp-execute-code-action)
-;;               ("C-M-."      . lsp-find-references)
-;;               ("C-c r"      . lsp-rename))
-;;   :config
-;;   ;; (setq lsp-diagnostics-provider :flycheck
-;;   ;;       lsp-completion-provider  :none)       ;; I use corfu
-;;   ;; Disable visual features
-;;   (setq lsp-headerline-breadcrumb-enable nil  ;; No breadcrumbs
-;;         lsp-lens-enable                  nil  ;; No lenses
-;; 
-;;         ;; Enable code actions in the mode line
-;;         lsp-modeline-code-actions-enable t
-;;         lsp-modeline-code-action-fallback-icon "✦"
-;; 
-;;         ;; Limit raising of the echo area to show docs
-;;         lsp-signature-doc-lines 3)
-;;   (setq lsp-file-watch-threshold  1500)
-;;   (setq lsp-format-buffer-on-save nil)
-;; 
-;;   (with-eval-after-load 'lsp-modeline
-;;     (set-face-attribute 'lsp-modeline-code-actions-preferred-face nil
-;;                         :inherit font-lock-comment-face)
-;;     (set-face-attribute 'lsp-modeline-code-actions-face nil
-;;                         :inherit font-lock-comment-face)))
-#+end_src
-
-** emacs-lsp-booster
-
-   #+begin_src emacs-lisp
-(defun lsp-booster--advice-json-parse (old-fn &rest args)
-  "Try to parse bytecode instead of json."
-  (or
-   (when (equal (following-char) ?#)
-     (let ((bytecode (read (current-buffer))))
-       (when (byte-code-function-p bytecode)
-         (funcall bytecode))))
-   (apply old-fn args)))
-(advice-add (if (progn (require 'json)
-                       (fboundp 'json-parse-buffer))
-                'json-parse-buffer
-              'json-read)
-            :around
-            #'lsp-booster--advice-json-parse)
-
-(defun lsp-booster--advice-final-command (old-fn cmd &optional test?)
-  "Prepend emacs-lsp-booster command to lsp CMD."
-  (let ((orig-result (funcall old-fn cmd test?)))
-    (if (and (not test?)                             ;; for check lsp-server-present?
-             (not (file-remote-p default-directory)) ;; see lsp-resolve-final-command, it would add extra shell wrapper
-             lsp-use-plists
-             (not (functionp 'json-rpc-connection))  ;; native json-rpc
-             (executable-find "emacs-lsp-booster"))
-        (progn
-          (when-let ((command-from-exec-path (executable-find (car orig-result))))  ;; resolve command from exec-path (in case not found in $PATH)
-            (setcar orig-result command-from-exec-path))
-          (message "Using emacs-lsp-booster for %s!" orig-result)
-          (cons "emacs-lsp-booster" orig-result))
-      orig-result)))
-(advice-add 'lsp-resolve-final-command :around #'lsp-booster--advice-final-command)
-   #+end_src
-
-** rust-mode
-  #+begin_src emacs-lisp
-(use-package rust-mode
-  :ensure t
-  :mode "\\.rs\\'")
-  #+end_src
 * eglot
 
   #+begin_src emacs-lisp
-(use-package eglot
-  :hook ((rust-mode . eglot-ensure)
-         (nix-mode  . eglot-ensure)
-         (eglot-managed-mode . (lambda () (eldoc-mode -1))))
-  :bind (:map eglot-mode-map
-              ("M-<return>" . eglot-code-actions)
-              ("C-M-."      . xref-find-references)
-              ("C-c r"      . eglot-rename))
-  :config
-  (setq eldoc-echo-area-use-multiline-p nil)
-  (add-to-list 'eglot-server-programs '(nix-mode . ("nixd"))))
+  (use-package eglot
+    :ensure nil
+    :straight nil
+    :hook ((rust-mode . eglot-ensure)
+  	   (nix-mode  . eglot-ensure)
+  	   (python-mode . eglot-ensure)
+  	   (eglot-managed-mode . (lambda () (eldoc-mode -1))))
+    :bind (:map eglot-mode-map
+  		("M-<return>" . eglot-code-actions)
+  		("C-M-."      . xref-find-references)
+  		("C-c r"      . eglot-rename))
+    :config
+    (add-to-list 'eglot-server-programs
+  		 `(python-mode
+  				 . ,(eglot-alternatives '(("basedpyright-langserver" "--stdio")
+  										  ("pyright-langserver" "--stdio")
+  					    "jedi-language-server"
+  					    "pylsp"))))
+    (setq eldoc-echo-area-use-multiline-p nil
+  	  eglot-inlay-hints-mode -1)
+    (add-to-list 'eglot-server-programs '(nix-mode . ("nixd"))))
   #+end_src
-
+  
 ** eglot shut up
 
 #+begin_src emacs-lisp
@@ -788,6 +895,13 @@
 	:straight ( eglot-booster :type git :host nil :repo "https://github.com/jdtsmith/eglot-booster")
 	:after eglot
 	:config (eglot-booster-mode))
+#+end_src
+** consult-eglot integration
+
+#+begin_src emacs-lisp
+(use-package consult-eglot
+  :straight t
+  :after (consult eglot))
 #+end_src
 
 * eldoc
@@ -915,24 +1029,9 @@
     (define-key evil-motion-state-map (kbd "SPC") nil)
     (define-key evil-normal-state-map (kbd ",") nil)
     (define-key evil-visual-state-map (kbd ",") nil)
-    (define-key evil-motion-state-map (kbd ",") nil)
+    (define-key evil-motion-state-map (kbd ",") nil))
     
-    (setq evil-kill-on-visual-paste nil)
-    
-    (defun my/evil-no-kill-ring (orig-fn beg end &optional type register yank-handler)
-      (let ((register (or register ?_)))
-        (funcall orig-fn beg end type register yank-handler)))
-
-    (advice-add 'evil-yank :around #'my/evil-no-kill-ring)
-    (advice-add 'evil-delete :around #'my/evil-no-kill-ring)
-    (advice-add 'evil-change :around #'my/evil-no-kill-ring)
-    
-    (defun ek/lsp-describe-and-jump ()
-      (interactive)
-      (lsp-describe-thing-at-point)
-      (let ((help-buffer "*lsp-help*"))
-        (when (get-buffer help-buffer)
-          (switch-to-buffer-other-window help-buffer)))))
+       
   #+end_src
 
 * avy
@@ -943,6 +1042,8 @@
     :straight t
     :after evil
     :general
+    ;; (general-nmap "s" 'avy-goto-char-timer)
+    ;; (general-omap "s" 'evil-avy-goto-char-timer)
     
     :config
     (setq avy-all-windows t
@@ -951,7 +1052,9 @@
           avy-case-fold-search t
           avy-timeout-seconds 0.3
           avy-style 'at-full
-          avy-keys '(?a ?s ?d ?f ?g ?h ?j ?k ?l ?q ?w ?e ?r ?t ?y ?u ?i ?o ?p)))
+          avy-keys '(?a ?s ?d ?f ?g ?h ?j ?k ?l ?q ?w ?e ?r ?t ?y ?u ?i ?o ?p))
+    
+    (evil-define-avy-motion evil-avy-goto-char-timer inclusive))
   #+end_src
 
 
@@ -959,12 +1062,6 @@
 ** avy flash behaviour
 
    #+begin_src emacs-lisp
-    (defun avy-action-exchange (pt)
-      "Exchange sexp at PT with the one at point."
-      (set-mark pt)
-      (transpose-sexps 0))
-
-    (add-to-list 'avy-dispatch-alist '(?e . avy-action-exchange))
 
    #+end_src
 
@@ -1115,27 +1212,6 @@
     :config
     (require 'evil-org-agenda)
     (evil-org-agenda-set-keys))
-  #+end_src
-
-* TODO Neotree
-
-  #+begin_src emacs-lisp
-  ;;; NEOTREE
-  ;; The `neotree' package provides a file tree explorer for Emacs, allowing easy navigation
-  ;; through directories and files. It presents a visual representation of the file system
-  ;; and integrates with version control to show file states.
-  ;; (use-package neotree
-  ;;   :ensure t
-  ;;   :straight t
-  ;;   :custom
-  ;;   (neo-show-hidden-files t)                ;; By default shows hidden files (toggle with H)
-  ;;   (neo-theme 'nerd)                        ;; Set the default theme for Neotree to 'nerd' for a visually appealing look.
-  ;;   (neo-vc-integration '(face char))        ;; Enable VC integration to display file states with faces (color coding) and characters (icons).
-  ;;   :defer t                                 ;; Load the package only when needed to improve startup time.
-  ;;   :config
-  ;;   (if ek-use-nerd-fonts                    ;; Check if nerd fonts are being used.
-  ;;       (setq neo-theme 'nerd-icons)         ;; Set the theme to 'nerd-icons' if nerd fonts are available.
-  ;;     (setq neo-theme 'nerd)))               ;; Otherwise, fall back to the 'nerd' theme.
   #+end_src
 
 * nerd-icons
@@ -1508,7 +1584,6 @@ The Modeline itself with Battery and Time on the right, Line:Column after VC on 
 ;; Enable flashing mode-line on errors
 (doom-themes-visual-bell-config)
 ;; Enable custom neotree theme (nerd-icons must be installed!)
-(doom-themes-neotree-config)
 ;; or for treemacs users
 (doom-themes-treemacs-config)
 ;; Corrects (and improves) org-mode's native fontification.
@@ -1563,7 +1638,7 @@ The Modeline itself with Battery and Time on the right, Line:Column after VC on 
 
 * olivetti global mode
 
-#+begin_src emacs-lisp :tangle yes
+#+begin_src emacs-lisp 
 (setq-default olivetti-body-width 95)
 (define-globalized-minor-mode my-global-olivetti-mode olivetti-mode
   (lambda () (olivetti-mode 1)))
@@ -1592,6 +1667,12 @@ The Modeline itself with Battery and Time on the right, Line:Column after VC on 
         "^\\*ts-ls\\*$"
         "^\\*ts-ls::stderr\\*$"))
    #+end_src
+* bufler
+
+  #+begin_src emacs-lisp
+  (use-package bufler
+    :defer t)
+  #+end_src
 
 * eat
 
@@ -1610,7 +1691,6 @@ The Modeline itself with Battery and Time on the right, Line:Column after VC on 
   #+begin_src emacs-lisp
 (use-package projectile
   :ensure t
-  :straight t
   :demand t
   :config
   (projectile-mode +1)
@@ -1647,10 +1727,16 @@ The Modeline itself with Battery and Time on the right, Line:Column after VC on 
   "sp" '(consult-ripgrep :wk "search project")
   "/" '(consult-line :wk "search buffer")
   "." '(find-file :wk "find file")
-  "," '(consult-buffer :wk "switch buffer")
+  "," '(bufler-switch-buffer :wk "switch buffer")
   "SPC" '(my/smart-find-file :wk "find file/buffer")
   ":" (lambda () (interactive) (execute-extended-command nil))
-  
+
+"d" '(:ignore t :wk "denote") 
+"dd" '(denote-menu-list-notes t :wk "List all notes")
+"dg" '(denote-grep t :wk "Search")
+"dn" '(denote t :wk "Create a new note")
+"dr" '(denote-rename-file t :wk "Rename Note")
+
   "f" '(:ignore t :wk "files")
   "fd" '(dired :wk "dired")
   "fD" '(dired-jump :wk "dired jump")
@@ -1678,10 +1764,10 @@ The Modeline itself with Battery and Time on the right, Line:Column after VC on 
   "pt" '(projectile-test-project :wk "test")
   "pi" '(projectile-invalidate-cache :wk "invalidate cache")
   
-  "g" '(:ignore t :wk "git")
+  "g" '(:ignore t :wk "git/goto")
   "gg" '(magit-status :wk "status")
   "gl" '(magit-log-current :wk "log")
-  "gd" '(magit-diff-buffer-file :wk "diff file")
+  "gd" '(xref-find-definitions :wk "go to definition")  ; sowohl hier als auch unter code
   "gs" '(magit-status :wk "status")
   "gb" '(vc-annotate :wk "blame")
   
@@ -1694,17 +1780,7 @@ The Modeline itself with Battery and Time on the right, Line:Column after VC on 
   "hm" '(describe-mode :wk "mode")
   "hf" '(describe-function :wk "function")
   "hv" '(describe-variable :wk "variable")
-  "hk" '(describe-key :wk "key")
-  
-  "y" '(:ignore t :wk "yank to kill-ring")
-  "yy" (lambda ()
-         (interactive)
-         (kill-new (buffer-substring (line-beginning-position) (line-end-position)))
-         (message "Yanked line to kill-ring"))
-  "yw" (lambda ()
-         (interactive)
-         (kill-new (thing-at-point 'word))
-         (message "Yanked word to kill-ring"))
+  "hk" '(describe-key :wk "key") 
   
   "w" '(:ignore t :wk "windows")
   "wv" '(split-window-right :wk "split right")
@@ -1713,6 +1789,17 @@ The Modeline itself with Battery and Time on the right, Line:Column after VC on 
   "wo" '(delete-other-windows :wk "delete others")
   
   "c" '(:ignore t :wk "code")
+  "ca" '(eglot-code-actions :wk "code actions")
+  "cd" '(xref-find-definitions :wk "go to definition")  ; sowohl hier als auch unter g
+  "cD" '(xref-find-references :wk "find references")
+  "cr" '(eglot-rename :wk "lsp rename")
+  "ch" '(eglot-help-at-point :wk "help at point")
+  "cf" '(eglot-format :wk "format")
+  "ci" '(eglot-find-implementation :wk "implementation")
+  "ct" '(eglot-find-typeDefinition :wk "type definition")
+  "cs" '(consult-eglot-symbols :wk "workspace symbols")
+  "cS" '(eglot-shutdown :wk "shutdown lsp")
+  "cR" '(eglot-reconnect :wk "restart lsp")
   
   "m" '(:ignore t :wk "mode")
   "mp" (list (lambda ()
@@ -1725,7 +1812,7 @@ The Modeline itself with Battery and Time on the right, Line:Column after VC on 
   "q" '(:ignore t :wk "quit")
   "qq" '(save-buffers-kill-terminal :wk "quit emacs")
   "qr" '(restart-emacs :wk "restart")
-  
+ 
   "a" '(embark-act :wk "embark")
   "u" '(undo-tree-visualize :wk "undo tree")
   "P" '(consult-yank-from-kill-ring :wk "paste history"))
@@ -1735,6 +1822,7 @@ The Modeline itself with Battery and Time on the right, Line:Column after VC on 
 
 #+begin_src emacs-lisp
 (my-local-leader
+"a" '(org-agenda :wk "org agen")
   "t" '(eat :wk "terminal"))
 #+end_src
 
@@ -1751,16 +1839,14 @@ The Modeline itself with Battery and Time on the right, Line:Column after VC on 
   "]t" 'tab-next
   "[t" 'tab-previous
   "P" 'consult-yank-from-kill-ring
-  "K" (if (>= emacs-major-version 31)
-          #'eldoc-box-help-at-point
-        #'ek/lsp-describe-and-jump)
   "gcc" (lambda ()
           (interactive)
           (unless (use-region-p)
             (comment-or-uncomment-region 
              (line-beginning-position) 
-             (line-end-position))))
-  )
+             (line-end-position)))))
+
+;; Global K binding für alle Modi mit eglot
 #+end_src
 
 ** visual state
