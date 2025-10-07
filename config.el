@@ -4,7 +4,7 @@
 
 (setq read-process-output-max (* 1024 1024 4))
 
-;; (setq package-enable-at-startup nil) 
+;; (setq package-enable-at-startup nil)
 (when (boundp 'pgtk-wait-for-event-timeout)
   (setq pgtk-wait-for-event-timeout 0.001))
 
@@ -34,8 +34,6 @@
 
 (add-to-list 'default-frame-alist '(alpha-background . 90))
 
-;; (add-to-list 'default-frame-alist '(internal-border-width . 16))
-
 ;; (setq straight-check-for-modifications nil)
 ;; (defvar bootstrap-version)
 ;; (let ((bootstrap-file
@@ -52,14 +50,15 @@
 ;;       (goto-char (point-max))
 ;;       (eval-print-last-sexp)))
 ;;   (load bootstrap-file nil 'nomessage))
-;; 
+;;
 ;; (straight-use-package '(project :type built-in))
 ;; (straight-use-package 'use-package)
-;; 
+;;
 ;; (setq straight-use-package-by-default t)
 
 ;;; EMACS
 ;;  This is biggest one. Keep going, plugins (oops, I mean packages) will be shorter :)
+(setq debug-on-error t)
 (use-package emacs
   :straight nil
   :ensure nil
@@ -91,7 +90,8 @@
 
   :hook ;; Add hooks to enable specific features in certain modes.
   (prog-mode . display-line-numbers-mode)
-  (org-mode . (lambda () (display-line-numbers-mode -1)))
+  (org-mode . display-line-numbers-mode)
+  ;; (org-mode . (lambda () (display-line-numbers-mode -1)))
 
 
   :config
@@ -147,19 +147,19 @@
 
   ;; Add a hook to run code after Emacs has fully initialized.
   (add-hook 'after-init-hook
-			(lambda ()
-			  (message "Emacs has fully loaded. This code runs after startup.")
+(lambda ()
+  (message "Emacs has fully loaded. This code runs after startup.")
 
-			  ;; Insert a welcome message in the *scratch* buffer displaying loading time and activated packages.
-			  (with-current-buffer (get-buffer-create "*scratch*")
-				(insert (format
-						 ";;    Welcome to Emacs!
+  ;; Insert a welcome message in the *scratch* buffer displaying loading time and activated packages.
+  (with-current-buffer (get-buffer-create "*scratch*")
+(insert (format
+ ";;    Welcome to Emacs!
 ;;
 ;;    Loading time : %s
 ;;    Packages     : %s
 "
-						 (emacs-init-time)
-						 (length (hash-table-keys straight--recipe-cache))))))))
+ (emacs-init-time)
+ (length (hash-table-keys straight--recipe-cache))))))))
 
 (defcustom ek-use-nerd-fonts t
     "Configuration for using Nerd Fonts Symbols."
@@ -176,39 +176,39 @@
 ;; Emacs journey later on. These configurations can be useful for displaying
 ;; other types of buffers in side windows, allowing for a more organized workspace.
 (use-package window
-:straight nil
-    :ensure nil       ;; This is built-in, no need to fetch it.
-    :custom
-    (display-buffer-alist
-    '(
-	;; ("\\*.*e?shell\\*"
-	;;  (display-buffer-in-side-window)
-	;;  (window-height . 0.25)
-	;;  (side . bottom)
-	;;  (slot . -1))
+  :straight nil
+  :ensure nil       ;; This is built-in, no need to fetch it.
+  :custom
+  (display-buffer-alist
+   '(
+ ;; ("\\*.*e?shell\\*"
+ ;;  (display-buffer-in-side-window)
+ ;;  (window-height . 0.25)
+ ;;  (side . bottom)
+ ;;  (slot . -1))
 
-	("\\*\\(Backtrace\\|Warnings\\|Compile-Log\\|[Hh]elp\\|Messages\\|Bookmark List\\|Ibuffer\\|Occur\\|eldoc.*\\)\\*"
-	(display-buffer-in-side-window)
-	(window-height . 0.25)
-	(side . bottom)
-	(slot . 0))
+ ("\\*\\(Backtrace\\|Warnings\\|Compile-Log\\|[Hh]elp\\|Messages\\|Bookmark List\\|Ibuffer\\|Occur\\|eldoc.*\\)\\*"
+  (display-buffer-in-side-window)
+  (window-height . 0.25)
+  (side . bottom)
+  (slot . 0))
 
-	;; Example configuration for the LSP help buffer,
-	;; keeps it always on bottom using 25% of the available space:
-	("\\*\\(lsp-help\\)\\*"
-	(display-buffer-in-side-window)
-	(window-height . 0.25)
-	(side . bottom)
-	(slot . 0))
+ ;; Example configuration for the LSP help buffer,
+ ;; keeps it always on bottom using 25% of the available space:
+ ("\\*\\(lsp-help\\)\\*"
+  (display-buffer-in-side-window)
+  (window-height . 0.25)
+  (side . bottom)
+  (slot . 0))
 
-	;; Configuration for displaying various diagnostic buffers on
-	;; bottom 25%:
-	("\\*\\(Flymake diagnostics\\|xref\\|ivy\\|Swiper\\|Completions\\)"
-	(display-buffer-in-side-window)
-	(window-height . 0.25)
-	(side . bottom)
-	(slot . 1))
-	)))
+ ;; Configuration for displaying various diagnostic buffers on
+ ;; bottom 25%:
+ ("\\*\\(Flymake diagnostics\\|xref\\|ivy\\|Swiper\\|Completions\\)"
+  (display-buffer-in-side-window)
+  (window-height . 0.25)
+  (side . bottom)
+  (slot . 1))
+ )))
 
 (use-package dired
 :straight nil
@@ -218,14 +218,14 @@
     (dired-dwim-target t)                                      ;; Enable "do what I mean" for target directories.
     (dired-guess-shell-alist-user
     '(("\\.\\(png\\|jpe?g\\|tiff\\)" "feh" "xdg-open" "open") ;; Open image files with `feh' or the default viewer.
-	("\\.\\(mp[34]\\|m4a\\|ogg\\|flac\\|webm\\|mkv\\)" "mpv" "xdg-open" "open") ;; Open audio and video files with `mpv'.
-	(".*" "open" "xdg-open")))                              ;; Default opening command for other files.
+("\\.\\(mp[34]\\|m4a\\|ogg\\|flac\\|webm\\|mkv\\)" "mpv" "xdg-open" "open") ;; Open audio and video files with `mpv'.
+(".*" "open" "xdg-open")))                              ;; Default opening command for other files.
     (dired-kill-when-opening-new-dired-buffer t)               ;; Close the previous buffer when opening a new `dired' instance.
     :config
     (when (eq system-type 'darwin)
     (let ((gls (executable-find "gls")))                     ;; Use GNU ls on macOS if available.
-	(when gls
-	(setq insert-directory-program gls)))))
+(when gls
+(setq insert-directory-program gls)))))
 
 (use-package erc
 :straight nil
@@ -265,7 +265,7 @@
     (setq lazy-count-suffix-format nil)          ;; Disable suffix formatting for match count.
     (setq search-whitespace-regexp ".*?")        ;; Allow searching across whitespace.
     :bind (("C-s" . isearch-forward)             ;; Bind C-s to forward isearch.
-	    ("C-r" . isearch-backward)))          ;; Bind C-r to backward isearch.
+    ("C-r" . isearch-backward)))          ;; Bind C-r to backward isearch.
 
 (use-package vc
 :straight nil
@@ -279,20 +279,20 @@
     :config
     ;; Better colors for <leader> g b  (blame file)
     (setq vc-annotate-color-map
-	'((20 . "#f5e0dc")
-	    (40 . "#f2cdcd")
-	    (60 . "#f5c2e7")
-	    (80 . "#cba6f7")
-	    (100 . "#f38ba8")
-	    (120 . "#eba0ac")
-	    (140 . "#fab387")
-	    (160 . "#f9e2af")
-	    (180 . "#a6e3a1")
-	    (200 . "#94e2d5")
-	    (220 . "#89dceb")
-	    (240 . "#74c7ec")
-	    (260 . "#89b4fa")
-	    (280 . "#b4befe"))))
+'((20 . "#f5e0dc")
+    (40 . "#f2cdcd")
+    (60 . "#f5c2e7")
+    (80 . "#cba6f7")
+    (100 . "#f38ba8")
+    (120 . "#eba0ac")
+    (140 . "#fab387")
+    (160 . "#f9e2af")
+    (180 . "#a6e3a1")
+    (200 . "#94e2d5")
+    (220 . "#89dceb")
+    (240 . "#74c7ec")
+    (260 . "#89b4fa")
+    (280 . "#b4befe"))))
 
 
 
@@ -301,10 +301,10 @@
     :ensure nil                                  ;; This is built-in, no need to fetch it.
     :defer t
     :bind (:map smerge-mode-map
-		("C-c ^ u" . smerge-keep-upper)  ;; Keep the changes from the upper version.
-		("C-c ^ l" . smerge-keep-lower)  ;; Keep the changes from the lower version.
-		("C-c ^ n" . smerge-next)        ;; Move to the next conflict.
-		("C-c ^ p" . smerge-previous)))  ;; Move to the previous conflict.
+("C-c ^ u" . smerge-keep-upper)  ;; Keep the changes from the upper version.
+("C-c ^ l" . smerge-keep-lower)  ;; Keep the changes from the lower version.
+("C-c ^ n" . smerge-next)        ;; Move to the next conflict.
+("C-c ^ p" . smerge-previous)))  ;; Move to the previous conflict.
 
 (use-package eldoc
 :straight nil
@@ -312,9 +312,9 @@
     :config
     (setq eldoc-idle-delay 0)                  ;; Automatically fetch doc help
     (setq eldoc-echo-area-use-multiline-p t) ;; We use the "K" floating help instead
-						;; set to t if you want docs on the echo area
-	(setq eldoc-help-at-pt t)
-	(setq eldoc-echo-area-display-truncation-message nil)
+;; set to t if you want docs on the echo area
+(setq eldoc-help-at-pt t)
+(setq eldoc-echo-area-display-truncation-message nil)
     :init
     (global-eldoc-mode))
 
@@ -326,7 +326,7 @@
     :custom
     (flymake-margin-indicators-string
     '((error "!»" compilation-error) (warning "»" compilation-warning)
-	(note "»" compilation-info))))
+(note "»" compilation-info))))
 
 (use-package xref
   :straight nil
@@ -336,62 +336,59 @@
   :straight nil
   :ensure nil)
 
-(use-package org
-     :straight nil
-     :ensure nil     
-     :defer t
-   :config
-(setq org-directory "~/org/")
-   (require 'org-tempo)
+  (use-package org
+      :straight nil
+      :ensure nil     
+      :defer t
+    :config
+    (custom-set-faces
+     '(org-document-title ((t (:height 1.6))))
+     '(outline-1          ((t (:height 1.25))))
+     '(outline-2          ((t (:height 1.2))))
+     '(outline-3          ((t (:height 1.2))))
+     '(outline-4          ((t (:height 1.2))))
+     '(outline-5          ((t (:height 1.2))))
+     '(outline-6          ((t (:height 1.2))))
+     '(outline-7          ((t (:height 1.2))))
+     '(outline-8          ((t (:height 1.2))))
+     '(outline-9          ((t (:height 1.2)))))
+    (org-indent-mode -1)
+    (setq org-startup-folded 'content)
+    (setq org-adapt-indentation t
+          org-hide-leading-stars t
+          org-pretty-entities t
+          org-ellipsis "  ")
+    (setq org-src-fontify-natively t
+          org-src-tab-acts-natively t
+          org-edit-src-content-indentation 0)
+    (setq org-log-done                       t
+          org-auto-align-tags                t
+          org-tags-column                    -80
+          org-fold-catch-invisible-edits     'show-and-error
+          org-special-ctrl-a/e               t
+          org-insert-heading-respect-content t)
 
-   (custom-set-faces
-    '(org-document-title ((t (:height 1.6))))
-    '(outline-1          ((t (:height 1.25))))
-    '(outline-2          ((t (:height 1.2))))
-    '(outline-3          ((t (:height 1.2))))
-    '(outline-4          ((t (:height 1.2))))
-    '(outline-5          ((t (:height 1.2))))
-    '(outline-6          ((t (:height 1.2))))
-    '(outline-7          ((t (:height 1.2))))
-    '(outline-8          ((t (:height 1.2))))
-    '(outline-9          ((t (:height 1.2)))))
-   (org-indent-mode -1)
-   (setq org-startup-folded 'content)
-   (setq org-adapt-indentation t
-	  org-hide-leading-stars t
-	  org-pretty-entities t
-	  org-ellipsis "  ")
-   (setq org-src-fontify-natively t
-	  org-src-tab-acts-natively t
-	  org-edit-src-content-indentation 0)
-   (setq org-log-done                       t
-	  org-auto-align-tags                t
-	  org-tags-column                    -80
-	  org-fold-catch-invisible-edits     'show-and-error
-	  org-special-ctrl-a/e               t
-	  org-insert-heading-respect-content t)
+  ;; (my-local-leader
+  ;;   )
+     
+    (add-hook 'org-mode-hook 'variable-pitch-mode)
+    (add-to-list 'font-lock-extra-managed-props 'display)
+    (font-lock-add-keywords 'org-mode
+                            `(("^.*?\( \)\(:[[:alnum:]_@#%:]+:\)$"
+                               (1 `(face nil
+                                         display (space :align-to (- right ,(org-string-width (match-string 2)) 3)))
+                                  prepend))) t)
+    (setq org-blank-before-new-entry '((heading . nil)
+                                       (plain-list-item . nil))))
 
- ;; (my-local-leader
- ;;   )
-    
-   (add-hook 'org-mode-hook 'variable-pitch-mode)
-   (add-to-list 'font-lock-extra-managed-props 'display)
-   (font-lock-add-keywords 'org-mode
-                           `(("^.*?\( \)\(:[[:alnum:]_@#%:]+:\)$"
-                              (1 `(face nil
-                                        display (space :align-to (- right ,(org-string-width (match-string 2)) 3)))
-                                 prepend))) t))
-   ;; (setq org-blank-before-new-entry '((heading . nil)
-   ;;                                    (plain-list-item . nil)))
-
-(use-package org-appear
-  :commands (org-appear-mode)
-  :hook     (org-mode . org-appear-mode)
-  :config 
-  (setq org-hide-emphasis-markers t)  ;; Must be activated for org-appear to work
-  (setq org-appear-autoemphasis   t   ;; Show bold, italics, verbatim, etc.
-        org-appear-autolinks      t   ;; Show links
-        org-appear-autosubmarkers t)) ;; Show sub- and superscripts
+;; (use-package org-appear
+;;   :commands (org-appear-mode)
+;;   :hook     (org-mode . org-appear-mode)
+;;   :config
+;;   (setq org-hide-emphasis-markers t)  ;; Must be activated for org-appear to work
+;;   (setq org-appear-autoemphasis   t   ;; Show bold, italics, verbatim, etc.
+;;         org-appear-autolinks      t   ;; Show links
+;;         org-appear-autosubmarkers t)) ;; Show sub- and superscripts
 
 (setq org-agenda-start-on-weekday nil
       org-agenda-block-separator  nil
@@ -400,7 +397,7 @@
 (use-package org-super-agenda
   :after org
   :config
-  (setq org-super-agenda-header-prefix "\n❯ ")
+  (setq org-super-agenda-header-prefix "\n ")
   ;; Hide the thin width char glyph
   (add-hook 'org-agenda-mode-hook
             #'(lambda () (setq-local nobreak-char-display nil)))
@@ -411,48 +408,29 @@
   :after org)
 
 (add-to-list 'org-agenda-custom-commands
-	  '("d" "Day View"
-		 ((agenda "" ((org-agenda-overriding-header "Day View")
+  '("d" "Day View"
+ ((agenda "" ((org-agenda-overriding-header "Day View")
                       (org-agenda-span 'day)
                       (org-super-agenda-groups regular-view-groups)))
-		  (org-ql-block '(todo "PROG") ((org-ql-block-header "\n❯ In Progress")))
-		  (org-ql-block '(todo "NEXT") ((org-ql-block-header "\n❯ Next Up")))
-          (org-ql-block '(todo "WAIT") ((org-ql-block-header "\n❯ Backlog")))
-		  (org-ql-block '(priority "A") ((org-ql-block-header "\n❯ Important"))))))
+  (org-ql-block '(todo "PROG") ((org-ql-block-header "\n In Progress")))
+  (org-ql-block '(todo "NEXT") ((org-ql-block-header "\n Next Up")))
+          (org-ql-block '(todo "WAIT") ((org-ql-block-header "\n Backlog")))
+  (org-ql-block '(priority "A") ((org-ql-block-header "\n Important"))))))
 
 (add-to-list 'org-agenda-custom-commands
-		'("e" "Three-Day View"
+'("e" "Three-Day View"
                ((agenda "" ((org-agenda-span 3)
                             (org-agenda-start-on-weekday nil)
                             (org-deadline-warning-days 0))))))
 
-(org-babel-do-load-languages
- 'org-babel-load-languages
- '((python . t)))
-(defun sloth/org-babel-edit-prep (info)
-  (setq buffer-file-name (or (alist-get :file (caddr info))
-				"org-src-babel-tmp"))
-  (eglot-ensure))
 
-(advice-add 'org-edit-src-code
-            :before (defun sloth/org-edit-src-code/before (&rest args)
-                      (when-let* ((element (org-element-at-point))
-                                  (type (org-element-type element))
-                                  (lang (org-element-property :language element))
-                                  (mode (org-src-get-lang-mode lang))
-                                  ((eglot--lookup-mode mode))
-                                  (edit-pre (intern
-                                             (format "org-babel-edit-prep:%s" lang))))
-                        (if (fboundp edit-pre)
-                            (advice-add edit-pre :after #'sloth/org-babel-edit-prep)
-                          (fset edit-pre #'sloth/org-babel-edit-prep)))))
 
 (use-package denote
   :ensure t
   :hook (dired-mode . denote-dired-mode)
   :config
   (setq denote-rename-buffer-mode 1
-		denote-directory (expand-file-name "~/org/")))
+denote-directory (expand-file-name "~/org/")))
 
 (use-package denote-agenda
   :ensure t
@@ -461,10 +439,13 @@
   (denote-agenda-insinuate))
 
 (use-package denote-menu
-  :ensure t)
+:ensure t
+:config
+(setq denote-menu-title-column-width 40
+denote-menu-show-file-type nil))
 
 (use-package denote-org
-  :ensure t)
+    :ensure t)
 
 (use-package which-key
   :straight nil
@@ -493,13 +474,13 @@
            ("C-k" . vertico-previous))
     :config
     (advice-add #'vertico--format-candidate :around
-		(lambda (orig cand prefix suffix index _start)
-		(setq cand (funcall orig cand prefix suffix index _start))
-		(concat
-		    (if (= vertico--index index)
-			(propertize "» " 'face '(:foreground "#80adf0" :weight bold))
-		    "  ")
-		    cand))))
+(lambda (orig cand prefix suffix index _start)
+(setq cand (funcall orig cand prefix suffix index _start))
+(concat
+    (if (= vertico--index index)
+(propertize "» " 'face '(:foreground "#80adf0" :weight bold))
+    "  ")
+    cand))))
 
 ;; (use-package vertico-posframe
 ;;   :init
@@ -528,7 +509,7 @@
 
   ;; (setq xref-show-xrefs-function #'consult-xref
   ;;       xref-show-definitions-function #'consult-xref)
-  
+
   :config
   (setq consult-buffer-filter
         '("\\` "
@@ -625,8 +606,8 @@
     :after vertico                              ;; Ensure Vertico is loaded before Orderless.
     :init
     (setq completion-styles '(orderless basic)  ;; Set the completion styles.
-	completion-category-defaults nil      ;; Clear default category settings.
-	completion-category-overrides '((file (styles partial-completion))))) ;; Customize file completion styles.
+completion-category-defaults nil      ;; Clear default category settings.
+completion-category-overrides '((file (styles partial-completion))))) ;; Customize file completion styles.
 
 ;; Marginalia enhances the completion experience in Emacs by adding
 ;; additional context to the completion candidates. This includes
@@ -649,28 +630,28 @@
   :ensure nil
   :straight nil
   :hook ((rust-mode . eglot-ensure)
-	   (nix-mode  . eglot-ensure)
-	   (python-mode . eglot-ensure)
-	   (eglot-managed-mode . (lambda () (eldoc-mode -1))))
+   (nix-mode  . eglot-ensure)
+   (python-mode . eglot-ensure)
+   (eglot-managed-mode . (lambda () (eldoc-mode -1))))
   :bind (:map eglot-mode-map
-		("M-<return>" . eglot-code-actions)
-		("C-M-."      . xref-find-references)
-		("C-c r"      . eglot-rename))
+("M-<return>" . eglot-code-actions)
+("C-M-."      . xref-find-references)
+("C-c r"      . eglot-rename))
   :config
   (add-to-list 'eglot-server-programs
-		 `(python-mode
-				 . ,(eglot-alternatives '(("basedpyright-langserver" "--stdio")
-										  ("pyright-langserver" "--stdio")
-					    "jedi-language-server"
-					    "pylsp"))))
+ `(python-mode
+ . ,(eglot-alternatives '(("basedpyright-langserver" "--stdio")
+  ("pyright-langserver" "--stdio")
+    "jedi-language-server"
+    "pylsp"))))
   (setq eldoc-echo-area-use-multiline-p nil
-	  eglot-inlay-hints-mode -1)
+  eglot-inlay-hints-mode -1)
   (add-to-list 'eglot-server-programs '(nix-mode . ("nixd"))))
 
 (use-package eglot-booster
-	:straight ( eglot-booster :type git :host nil :repo "https://github.com/jdtsmith/eglot-booster")
-	:after eglot
-	:config (eglot-booster-mode))
+:straight ( eglot-booster :type git :host nil :repo "https://github.com/jdtsmith/eglot-booster")
+:after eglot
+:config (eglot-booster-mode))
 
 (use-package consult-eglot
   :straight t
@@ -687,23 +668,23 @@
   :ensure t
   :hook
   (find-file . (lambda ()
-				 (global-diff-hl-mode)           ;; Enable Diff-HL mode for all files.
-				 (diff-hl-flydiff-mode)          ;; Automatically refresh diffs.
-				 (diff-hl-margin-mode)))         ;; Show diff indicators in the margin.
+ (global-diff-hl-mode)           ;; Enable Diff-HL mode for all files.
+ (diff-hl-flydiff-mode)          ;; Automatically refresh diffs.
+ (diff-hl-margin-mode)))         ;; Show diff indicators in the margin.
   :custom
   (diff-hl-side 'left)                           ;; Set the side for diff indicators.
   (diff-hl-margin-symbols-alist '((insert . "┃") ;; Customize symbols for each change type.
-								  (delete . "-")
-								  (change . "┃")
-								  (unknown . "┆")
-								  (ignored . "i"))))
+  (delete . "-")
+  (change . "┃")
+  (unknown . "┆")
+  (ignored . "i"))))
 
 (use-package magit
   :ensure t
   :straight t
   :config
   (if ek-use-nerd-fonts   ;; Check if nerd fonts are being used
-	  (setopt magit-format-file-function #'magit-format-file-nerd-icons)) ;; Turns on magit nerd-icons
+  (setopt magit-format-file-function #'magit-format-file-nerd-icons)) ;; Turns on magit nerd-icons
   :defer t)
 
 (use-package indent-guide
@@ -758,14 +739,14 @@
         evil-want-C-u-scroll t
         evil-want-C-u-delete t
         evil-want-C-i-jump nil)
-  
+
   :config
   (evil-set-undo-system 'undo-tree)
   (setq evil-leader/in-all-states t
         evil-want-fine-undo t)
-  
+
   (evil-mode 1)
-  
+
   (define-key evil-normal-state-map (kbd "SPC") nil)
   (define-key evil-motion-state-map (kbd "SPC") nil)
   (define-key evil-normal-state-map (kbd ",") nil)
@@ -779,7 +760,7 @@
   :general
   ;; (general-nmap "s" 'avy-goto-char-timer)
   ;; (general-omap "s" 'evil-avy-goto-char-timer)
-  
+
   :config
   (setq avy-all-windows t
         avy-all-windows-alt t
@@ -788,7 +769,7 @@
         avy-timeout-seconds 0.3
         avy-style 'at-full
         avy-keys '(?a ?s ?d ?f ?g ?h ?j ?k ?l ?q ?w ?e ?r ?t ?y ?u ?i ?o ?p))
-  
+
   (evil-define-avy-motion evil-avy-goto-char-timer inclusive))
 
 
@@ -828,14 +809,14 @@
   (after-init . global-undo-tree-mode)
   :init
   (setq undo-tree-visualizer-timestamps t
-		undo-tree-visualizer-diff t
-		;; Increase undo limits to avoid losing history due to Emacs' garbage collection.
-		;; These values can be adjusted based on your needs.
-		;; 10X bump of the undo limits to avoid issues with premature
-		;; Emacs GC which truncates the undo history very aggressively.
-		undo-limit 800000                     ;; Limit for undo entries.
-		undo-strong-limit 12000000            ;; Strong limit for undo entries.
-		undo-outer-limit 120000000)           ;; Outer limit for undo entries.
+undo-tree-visualizer-diff t
+;; Increase undo limits to avoid losing history due to Emacs' garbage collection.
+;; These values can be adjusted based on your needs.
+;; 10X bump of the undo limits to avoid issues with premature
+;; Emacs GC which truncates the undo history very aggressively.
+undo-limit 800000                     ;; Limit for undo entries.
+undo-strong-limit 12000000            ;; Strong limit for undo entries.
+undo-outer-limit 120000000)           ;; Outer limit for undo entries.
   :config
   ;; Set the directory where `undo-tree' will save its history files.
   ;; This keeps undo history across sessions, stored in a cache directory.
@@ -984,15 +965,15 @@
 (provide 'init)
 ;;; init.el ends here
 
-(use-package org-modern
-  :ensure t
-  :straight t)
-(with-eval-after-load 'org (global-org-modern-mode))
-
-(setq org-modern-star 'fold)
-(setq org-modern-fold-stars '(("◉" . "○")))
-(setq org-modern-star 'replace)
-(setq org-modern-replace-stars "◉○◉○◉")
+;; (use-package org-modern
+;;   :ensure t
+;;   :straight t)
+;; (with-eval-after-load 'org (global-org-modern-mode))
+;;
+;; (setq org-modern-star 'fold)
+;; (setq org-modern-fold-stars '(("◉" . "○")))
+;; (setq org-modern-star 'replace)
+;; (setq org-modern-replace-stars "◉○◉○◉")
 
 (require 'battery)
 (require 'nerd-icons)
@@ -1111,32 +1092,32 @@
 
 (setq-default header-line-format
   '("%e"
-	(:propertize " " display (raise +0.4))
-	(:propertize " " display (raise -0.4))
+(:propertize " " display (raise +0.4))
+(:propertize " " display (raise -0.4))
 
-	(:propertize "λ " face font-lock-comment-face)
-	mode-line-frame-identification
-	mode-line-buffer-identification
+(:propertize "λ " face font-lock-comment-face)
+mode-line-frame-identification
+mode-line-buffer-identification
 
-	(:eval (when-let (vc vc-mode)
-			 (list (propertize "   " 'face 'font-lock-comment-face)
-				   (propertize (truncate-string-to-width
+(:eval (when-let (vc vc-mode)
+ (list (propertize "   " 'face 'font-lock-comment-face)
+   (propertize (truncate-string-to-width
                                 (substring vc 5) 50)
-							   'face 'font-lock-comment-face))))
+   'face 'font-lock-comment-face))))
 
-	(:propertize "  %4l:%c" face mode-line-buffer-id)
+(:propertize "  %4l:%c" face mode-line-buffer-id)
 
-	(:eval (propertize
-			 " " 'display
-			 `((space :align-to
-					  (-  (+ right right-fringe right-margin)
-						 ,(+ 3
+(:eval (propertize
+ " " 'display
+ `((space :align-to
+  (-  (+ right right-fringe right-margin)
+ ,(+ 3
                              (string-width (or my-battery-string ""))
                              (string-width (or display-time-string ""))))))))
 
     (:eval my-battery-string)
-	" "
-	(:eval display-time-string)))
+" "
+(:eval display-time-string)))
 
 (setq-default mode-line-format nil)
 
@@ -1154,20 +1135,20 @@
 (blink-cursor-mode        0)
 (setq-default cursor-type 'bar)
 
-(setq my-whitespace-style '(face tabs lines-tail)
-      whitespace-style my-whitespace-style
-      whitespace-line-column 120
-      fill-column 120
-      whitespace-display-mappings
-      '((space-mark 32 [183] [46])
-        (newline-mark 10 [36 10])
-        (tab-mark 9 [9655 9] [92 9])))
+;; (setq my-whitespace-style '(face tabs lines-tail) ;; ⚠️ DEAKTIVIERT
+;;       whitespace-style my-whitespace-style ;; ⚠️ DEAKTIVIERT
+;;       whitespace-line-column 120 ;; ⚠️ DEAKTIVIERT
+;;       fill-column 120 ;; ⚠️ DEAKTIVIERT
+;;       whitespace-display-mappings ;; ⚠️ DEAKTIVIERT
+;;       '((space-mark 32 [183] [46]) ;; ⚠️ DEAKTIVIERT
+;;         (newline-mark 10 [36 10]) ;; ⚠️ DEAKTIVIERT
+;;         (tab-mark 9 [9655 9] [92 9]))) ;; ⚠️ DEAKTIVIERT
 
 ;; in e.g. clojure-mode-hook
 ;; (whitespace-mode 1)
 ;; or globally
 ;; (global-whitespace-mode 1)
-(add-hook 'prog-mode 'whitespace-mode)
+;; (add-hook 'prog-mode 'whitespace-mode) ;; ⚠️ DEAKTIVIERT - verursacht Whitespace-Anzeige
 
 (defvar cashmere/font-height 170)
 
@@ -1212,24 +1193,24 @@
   :straight t
   :init
   (dirvish-override-dired-mode)
-  
+
   :custom
   (dirvish-quick-access-entries
    '(("h" "~/" "Home")
      ("d" "~/Downloads/" "Downloads")
      ("p" "~/projects/" "Projects")))
-  
+
   (dirvish-reuse-session 'open)
   (dirvish-attributes '(file-size))
   (dirvish-mode-line-format
    '(:left (sort file-time symlink) :right (omit yank index)))
-  
+
   (dirvish-hide-details '(dirvish dirvish-side))
   (dirvish-hide-cursor '(dirvish dirvish-side))
-  
+
   (dired-listing-switches
    "-l --almost-all --human-readable --group-directories-first --no-group")
-  
+
   :config
   (setq dired-dwim-target t)
   (setq delete-by-moving-to-trash t)
@@ -1241,11 +1222,6 @@
 
 (use-package olivetti
   :defer t)
-
-(setq-default olivetti-body-width 95)
-(define-globalized-minor-mode my-global-olivetti-mode olivetti-mode
-  (lambda () (olivetti-mode 1)))
-(my-global-olivetti-mode)
 
 (setq ibuffer-never-show-predicates
       '(;; System buffers
@@ -1307,7 +1283,7 @@
   "SPC" '(my/smart-find-file :wk "find file/buffer")
   ":" (lambda () (interactive) (execute-extended-command nil))
 
-"d" '(:ignore t :wk "denote") 
+"d" '(:ignore t :wk "denote")
 "dd" '(denote-menu-list-notes t :wk "List all notes")
 "dg" '(denote-grep t :wk "Search")
 "dn" '(denote t :wk "Create a new note")
@@ -1319,14 +1295,14 @@
   "fr" '(consult-recent-file :wk "recent files")
   "ff" '(find-file :wk "find file")
   "fs" '(save-buffer :wk "save file")
-  
+
   "b" '(:ignore t :wk "buffers")
   "bb" '(consult-buffer :wk "switch buffer")
   "bi" '(ibuffer :wk "ibuffer")
   "bd" '(kill-current-buffer :wk "kill buffer")
   "bk" '(kill-current-buffer :wk "kill buffer")
   "bs" '(save-buffer :wk "save buffer")
-  
+
   "p" '(:ignore t :wk "project")
   "pp" '(projectile-switch-project :wk "switch project")
   "pf" '(projectile-find-file :wk "find file")
@@ -1339,31 +1315,31 @@
   "pc" '(projectile-compile-project :wk "compile")
   "pt" '(projectile-test-project :wk "test")
   "pi" '(projectile-invalidate-cache :wk "invalidate cache")
-  
+
   "g" '(:ignore t :wk "git/goto")
   "gg" '(magit-status :wk "status")
   "gl" '(magit-log-current :wk "log")
   "gd" '(xref-find-definitions :wk "go to definition")  ; sowohl hier als auch unter code
   "gs" '(magit-status :wk "status")
   "gb" '(vc-annotate :wk "blame")
-  
+
   "o" '(:ignore t :wk "open")
   "op" '(neotree-toggle :wk "neotree")
   "oP" '(dired-jump :wk "dired")
   "od" '(dirvish :wk "dirvish")
-  
+
   "h" '(:ignore t :wk "help")
   "hm" '(describe-mode :wk "mode")
   "hf" '(describe-function :wk "function")
   "hv" '(describe-variable :wk "variable")
-  "hk" '(describe-key :wk "key") 
-  
+  "hk" '(describe-key :wk "key")
+
   "w" '(:ignore t :wk "windows")
   "wv" '(split-window-right :wk "split right")
   "ws" '(split-window-below :wk "split below")
   "wd" '(delete-window :wk "delete")
   "wo" '(delete-other-windows :wk "delete others")
-  
+
   "c" '(:ignore t :wk "code")
   "ca" '(eglot-code-actions :wk "code actions")
   "cd" '(xref-find-definitions :wk "go to definition")  ; sowohl hier als auch unter g
@@ -1376,19 +1352,19 @@
   "cs" '(consult-eglot-symbols :wk "workspace symbols")
   "cS" '(eglot-shutdown :wk "shutdown lsp")
   "cR" '(eglot-reconnect :wk "restart lsp")
-  
+
   "m" '(:ignore t :wk "mode")
   "mp" (list (lambda ()
                (interactive)
-               (shell-command (concat "prettier --write " 
+               (shell-command (concat "prettier --write "
                                     (shell-quote-argument (buffer-file-name))))
                (revert-buffer t t t))
              :wk "format prettier")
-  
+
   "q" '(:ignore t :wk "quit")
   "qq" '(save-buffers-kill-terminal :wk "quit emacs")
   "qr" '(restart-emacs :wk "restart")
- 
+
   "a" '(embark-act :wk "embark")
   "u" '(undo-tree-visualize :wk "undo tree")
   "P" '(consult-yank-from-kill-ring :wk "paste history"))
@@ -1410,8 +1386,8 @@
   "gcc" (lambda ()
           (interactive)
           (unless (use-region-p)
-            (comment-or-uncomment-region 
-             (line-beginning-position) 
+            (comment-or-uncomment-region
+             (line-beginning-position)
              (line-end-position)))))
 
 ;; Global K binding für alle Modi mit eglot
@@ -1420,8 +1396,8 @@
   "gc" (lambda ()
          (interactive)
          (when (use-region-p)
-           (comment-or-uncomment-region 
-            (region-beginning) 
+           (comment-or-uncomment-region
+            (region-beginning)
             (region-end)))))
 
 (general-def '(normal visual) 'override
