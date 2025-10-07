@@ -3,7 +3,37 @@
 
 (setq read-process-output-max (* 1024 1024 4))
 
-(setq package-enable-at-startup nil)
+(setq package-enable-at-startup nil) 
+(when (boundp 'pgtk-wait-for-event-timeout)
+  (setq pgtk-wait-for-event-timeout 0.001))
+
+(setq which-func-update-delay 1.0)
+(setq gnutls-algorithm-priority "NORMAL:-VERS-TLS1.3")
+(set-language-environment    "UTF-8")
+(setq locale-coding-system   'utf-8)
+(prefer-coding-system        'utf-8)
+(set-default-coding-systems  'utf-8)
+(set-terminal-coding-system  'utf-8)
+(set-keyboard-coding-system  'utf-8)
+(set-selection-coding-system 'utf-8)
+
+(setq create-lockfiles nil)
+(setq make-backup-files nil)
+
+(setq backup-directory-alist
+      `(("." . ,(expand-file-name "backup" user-emacs-directory))))
+(setq tramp-backup-directory-alist backup-directory-alist)
+
+(setq backup-by-copying-when-linked t)
+(setq backup-by-copying             t) ; Backup by copying rather renaming
+(setq delete-old-versions           t) ; Delete excess backup versions silently
+(setq version-control               t) ; Use version numbers for backup files
+(setq kept-new-versions             5)
+(setq kept-old-versions             5)
+
+(add-to-list 'default-frame-alist '(alpha-background . 90))
+
+;; (add-to-list 'default-frame-alist '(internal-border-width . 16))
 
 (setq straight-check-for-modifications nil)
 (defvar bootstrap-version)
@@ -44,7 +74,7 @@
   (initial-scratch-message "")                    ;; Clear the initial message in the *scratch* buffer.
   (ispell-dictionary "en_US")                     ;; Set the default dictionary for spell checking.
   (make-backup-files nil)                         ;; Disable creation of backup files.
-  (pixel-scroll-precision-mode t)                 ;; Enable precise pixel scrolling.
+  ;; (pixel-scroll-precision-mode t)                 ;; Enable precise pixel scrolling.
   (pixel-scroll-precision-use-momentum nil)       ;; Disable momentum scrolling for pixel precision.
   (ring-bell-function 'ignore)                    ;; Disable the audible bell.
   (split-width-threshold 300)                     ;; Prevent automatic window splitting if the window width exceeds 300 pixels.
@@ -247,6 +277,8 @@
 	    (260 . "#89b4fa")
 	    (280 . "#b4befe"))))
 
+
+
 (use-package smerge-mode
 :straight nil
     :ensure nil                                  ;; This is built-in, no need to fetch it.
@@ -279,34 +311,86 @@
 	(note "»" compilation-info))))
 
 (use-package org
-:straight nil
-    :ensure nil     ;; This is built-in, no need to fetch it.
+    :straight nil
+    :ensure nil     
     :defer t
-    :config
-    (require 'org-tempo))
+  :config
+  (require 'org-tempo)
+  (custom-set-faces
+   '(org-document-title ((t (:height 1.6))))
+   '(outline-1          ((t (:height 1.25))))
+   '(outline-2          ((t (:height 1.2))))
+   '(outline-3          ((t (:height 1.2))))
+   '(outline-4          ((t (:height 1.2))))
+   '(outline-5          ((t (:height 1.2))))
+   '(outline-6          ((t (:height 1.2))))
+   '(outline-7          ((t (:height 1.2))))
+   '(outline-8          ((t (:height 1.2))))
+   '(outline-9          ((t (:height 1.2)))))
+  (org-indent-mode -1)
+  (setq org-startup-folded 'content)
+  (setq org-adapt-indentation t
+        org-hide-leading-stars t
+        org-pretty-entities t
+        org-ellipsis "  ")
+  (setq org-src-fontify-natively t
+        org-src-tab-acts-natively t
+        org-edit-src-content-indentation 0)
+  (setq org-log-done                       t
+        org-auto-align-tags                t
+        org-tags-column                    -80
+        org-fold-catch-invisible-edits     'show-and-error
+        org-special-ctrl-a/e               t
+        org-insert-heading-respect-content t)
+
+;; (my-local-leader
+;;   )
+   
+  (add-hook 'org-mode-hook 'variable-pitch-mode)
+  (add-to-list 'font-lock-extra-managed-props 'display)
+  (font-lock-add-keywords 'org-mode
+                          `(("^.*?\( \)\(:[[:alnum:]_@#%:]+:\)$"
+                             (1 `(face nil
+                                       display (space :align-to (- right ,(org-string-width (match-string 2)) 3)))
+                                prepend))) t)
+  (setq org-blank-before-new-entry '((heading . nil)
+                                     (plain-list-item . nil))))
+
+(use-package org-appear
+  :commands (org-appear-mode)
+  :hook     (org-mode . org-appear-mode)
+  :config 
+  (setq org-hide-emphasis-markers t)  ;; Must be activated for org-appear to work
+  (setq org-appear-autoemphasis   t   ;; Show bold, italics, verbatim, etc.
+        org-appear-autolinks      t   ;; Show links
+        org-appear-autosubmarkers t)) ;; Show sub- and superscripts
 
 (use-package which-key
-:straight nil
-    :ensure nil     ;; This is built-in, no need to fetch it.
-    :defer t        ;; Defer loading Which-Key until after init.
-    :hook
-    (after-init . which-key-mode)) ;; Enable which-key mode after initialization.
+  :straight nil
+  :ensure nil
+  :defer t
+  :hook
+  (after-init . which-key-mode)
+  :custom
+  (which-key-idle-delay 0.3))
 
-      (setq which-key-idle-delay 0.001)
+(use-package gcmh
+  :config
+  (gcmh-mode 1))
 
 (use-package vertico
     :ensure t
     :straight t
     :hook
-    (after-init . vertico-mode)           ;; Enable vertico after Emacs has initialized.
+    (after-init . vertico-mode)
     :custom
-    (vertico-count 10)                    ;; Number of candidates to display in the completion list.
-    (vertico-resize nil)                  ;; Disable resizing of the vertico minibuffer.
-    (vertico-cycle nil)                   ;; Do not cycle through candidates when reaching the end of the list.
+    (vertico-count 10)
+    (vertico-resize nil)
+    (vertico-cycle nil)
+    :bind (:map vertico-map
+           ("C-j" . vertico-next)
+           ("C-k" . vertico-previous))
     :config
-    ;; Customize the display of the current candidate in the completion list.
-    ;; This will prefix the current candidate with “» ” to make it stand out.
-    ;; Reference: https://github.com/minad/vertico/wiki#prefix-current-candidate-with-arrow
     (advice-add #'vertico--format-candidate :around
 		(lambda (orig cand prefix suffix index _start)
 		(setq cand (funcall orig cand prefix suffix index _start))
@@ -315,6 +399,19 @@
 			(propertize "» " 'face '(:foreground "#80adf0" :weight bold))
 		    "  ")
 		    cand))))
+
+(use-package vertico-posframe
+  :init
+  (setq vertico-posframe-parameters   '((left-fringe  . 12)    ;; Fringes
+                                        (right-fringe . 12)
+                                        (undecorated  . nil))) ;; Rounded frame
+  :config
+  (vertico-posframe-mode 1)
+  (setq vertico-posframe-width        96                       ;; Narrow frame
+        vertico-posframe-height       vertico-count            ;; Default height
+        ;; Don't create posframe for these commands
+        vertico-multiform-commands    '((consult-line    (:not posframe))
+                                        (consult-ripgrep (:not posframe)))))
 
 ;;; CONSULT
 ;; Consult provides powerful completion and narrowing commands for Emacs.
@@ -326,12 +423,27 @@
   :straight t
   :defer t
   :init
-  ;; Enhance register preview with thin lines and no mode line.
   (advice-add #'register-preview :override #'consult-register-window)
 
-  ;; Use Consult for xref locations with a preview feature.
   (setq xref-show-xrefs-function #'consult-xref
-        xref-show-definitions-function #'consult-xref))
+        xref-show-definitions-function #'consult-xref)
+  
+  :config
+  (setq consult-buffer-filter
+        '("\\` "
+          "\\`\\*Messages\\*\\'"
+          "\\`\\*Warnings\\*\\'"
+          "\\`\\*Compile-Log\\*\\'"
+          "\\`\\*Backtrace\\*\\'"
+          "\\`\\*Help\\*\\'"
+          "\\`\\*scratch\\*\\'"
+          "\\`\\*Completions\\*\\'"
+          "\\`\\*Flymake"
+          "\\`\\*lsp-help\\*\\'"
+          "\\`\\*eldoc"
+          "\\`\\*straight-process\\*\\'"
+          "\\`\\*Native-compile-Log\\*\\'"
+          "\\`\\*Async-native-compile-log\\*\\'")))
 
 ;;; MARKDOWN-MODE
 ;; Markdown Mode provides support for editing Markdown files in Emacs,
@@ -463,20 +575,23 @@
     (lsp-enable-xref t)                                   ;; Enable cross-references.
     (lsp-auto-configure t)                                ;; Automatically configure LSP.
     (lsp-enable-links nil)                                ;; Disable links.
-    (lsp-eldoc-enable-hover t)                            ;; Enable ElDoc hover.
+    (lsp-eldoc-enable-hover nil)                            ;; Enable ElDoc hover.
+	(lsp-modeline-diagnostics-enable nil)
+	(lsp-signature-auto-activate nil)
+	(lsp-signature-render-documentation nil)
     (lsp-enable-file-watchers nil)                        ;; Disable file watchers.
     (lsp-enable-folding nil)                              ;; Disable folding.
     (lsp-enable-imenu t)                                  ;; Enable Imenu support.
     (lsp-enable-indentation nil)                          ;; Disable indentation.
     (lsp-enable-on-type-formatting nil)                   ;; Disable on-type formatting.
     (lsp-enable-suggest-server-download t)                ;; Enable server download suggestion.
-    (lsp-enable-symbol-highlighting t)                    ;; Enable symbol highlighting.
+    (lsp-enable-symbol-highlighting nil)                    ;; Enable symbol highlighting.
     (lsp-enable-text-document-color t)                    ;; Enable text document color.
     ;; Modeline settings
     (lsp-modeline-code-actions-enable nil)                ;; Keep modeline clean.
     (lsp-modeline-diagnostics-enable nil)                 ;; Use `flymake' instead.
     (lsp-modeline-workspace-status-enable t)              ;; Display "LSP" in the modeline when enabled.
-    (lsp-signature-doc-lines 1)                           ;; Limit echo area to one line.
+    (lsp-signature-doc-lines nil)                           ;; Limit echo area to one line.
     (lsp-eldoc-render-all t)                              ;; Render all ElDoc messages.
     ;; Completion settings
     (lsp-completion-enable t)                             ;; Enable completion.
@@ -486,7 +601,7 @@
     ;; Lens settings
     (lsp-lens-enable t)                                   ;; Enable lens support.
     ;; Headerline settings
-    (lsp-headerline-breadcrumb-enable-symbol-numbers t)   ;; Enable symbol numbers in the headerline.
+    (lsp-headerline-breadcrumb-enable-symbol-numbers nil)   ;; Enable symbol numbers in the headerline.
     (lsp-headerline-arrow "▶")                            ;; Set arrow for headerline.
     (lsp-headerline-breadcrumb-enable-diagnostics nil)    ;; Disable diagnostics in headerline.
     (lsp-headerline-breadcrumb-icons-enable nil)          ;; Disable icons in breadcrumb.
@@ -508,6 +623,10 @@
           (add-to-list 'lsp-language-id-configuration '(".*\\.erb$" . "html")) ;; Associate ERB files with HTML.
           :init
           (setq lsp-tailwindcss-add-on-mode t))
+
+
+
+
 
 (use-package eldoc-box
     :ensure t
@@ -584,143 +703,65 @@
 (use-package evil
   :ensure t
   :straight t
+  :after general
   :init
   (setq evil-want-integration t
         evil-want-keybinding nil
         evil-want-C-u-scroll t
-        evil-want-C-u-delete t)
+        evil-want-C-u-delete t
+        evil-want-C-i-jump nil)
+  
   :config
   (evil-set-undo-system 'undo-tree)
   (setq evil-leader/in-all-states t
         evil-want-fine-undo t)
   
-  (my-leader
-    "sp" 'consult-ripgrep
-    "/" 'consult-line
-    "." 'find-file
-    "," 'consult-buffer
-    "SPC" 'consult-buffer
-    ":" (lambda () (interactive) (execute-extended-command nil))
-    
-    "f" '(:ignore t :wk "file")
-    "fd" 'dired
-    "fD" 'dired-jump
-    "fr" 'consult-buffer
-    "ff" 'find-file
-    "fs" 'save-buffer
-    
-    "b" '(:ignore t :wk "buffer")
-    "bb" 'consult-buffer
-    "bi" 'ibuffer
-    "bd" 'kill-current-buffer
-    "bk" 'kill-current-buffer
-    "bx" 'kill-current-buffer
-    "bs" 'save-buffer
-    
-    "p" '(:ignore t :wk "project")
-    "pb" 'consult-project-buffer
-    "pp" 'project-switch-project
-    "pf" 'project-find-file
-    "ps" 'project-find-regexp
-    "pk" 'project-kill-buffers
-    "pd" 'project-dired
-    
-    "g" '(:ignore t :wk "git")
-    "gg" 'magit-status
-    "gl" 'magit-log-current
-    "gd" 'magit-diff-buffer-file
-    "gs" 'magit-status
-    "gb" 'vc-annotate
-    
-    "o" '(:ignore t :wk "open")
-    "op" 'neotree-toggle
-    "oP" 'dired-jump
-    
-    "h" '(:ignore t :wk "help")
-    "hm" 'describe-mode
-    "hf" 'describe-function
-    "hv" 'describe-variable
-    "hk" 'describe-key
-    
-    "w" '(:ignore t :wk "window")
-    "wv" 'split-window-right
-    "ws" 'split-window-below
-    "wd" 'delete-window
-    "wo" 'delete-other-windows
-    
-    "c" '(:ignore t :wk "code")
-    
-    "m" '(:ignore t :wk "mode")
-    "mp" (lambda ()
-           (interactive)
-           (shell-command (concat "prettier --write " 
-                                  (shell-quote-argument (buffer-file-name))))
-           (revert-buffer t t t))
-    
-    "q" '(:ignore t :wk "quit")
-    "qq" 'save-buffers-kill-terminal
-    
-    "a" 'embark-act
-    "u" 'undo-tree-visualize
-    "P" 'consult-yank-from-kill-ring)
+  (evil-mode 1)
   
-  (general-def 'normal 'override
-    "]d" 'flymake-goto-next-error
-    "[d" 'flymake-goto-prev-error
-    "]c" 'diff-hl-next-hunk
-    "[c" 'diff-hl-previous-hunk
-    "]b" 'switch-to-next-buffer
-    "[b" 'switch-to-prev-buffer
-    "]t" 'tab-next
-    "[t" 'tab-previous
-    "P" 'consult-yank-from-kill-ring
-    "K" (if (>= emacs-major-version 31)
-            #'eldoc-box-help-at-point
-          #'ek/lsp-describe-and-jump)
-    "gcc" (lambda ()
-            (interactive)
-            (unless (use-region-p)
-              (comment-or-uncomment-region 
-               (line-beginning-position) 
-               (line-end-position)))))
+  (define-key evil-normal-state-map (kbd "SPC") nil)
+  (define-key evil-motion-state-map (kbd "SPC") nil)
+  (define-key evil-normal-state-map (kbd ",") nil)
+  (define-key evil-visual-state-map (kbd ",") nil)
+  (define-key evil-motion-state-map (kbd ",") nil)
   
-  (general-def 'visual 'override
-    "gc" (lambda ()
-           (interactive)
-           (when (use-region-p)
-             (comment-or-uncomment-region 
-              (region-beginning) 
-              (region-end)))))
+  (setq evil-kill-on-visual-paste nil)
+  
+  (defun my/evil-no-kill-ring (orig-fn beg end &optional type register yank-handler)
+    (let ((register (or register ?_)))
+      (funcall orig-fn beg end type register yank-handler)))
+
+  (advice-add 'evil-yank :around #'my/evil-no-kill-ring)
+  (advice-add 'evil-delete :around #'my/evil-no-kill-ring)
+  (advice-add 'evil-change :around #'my/evil-no-kill-ring)
   
   (defun ek/lsp-describe-and-jump ()
     (interactive)
     (lsp-describe-thing-at-point)
     (let ((help-buffer "*lsp-help*"))
       (when (get-buffer help-buffer)
-        (switch-to-buffer-other-window help-buffer))))
-
-  (evil-mode 1))
-(define-key minibuffer-local-map [escape] 'abort-recursive-edit)
-(define-key minibuffer-local-ns-map [escape] 'abort-recursive-edit)
-(define-key minibuffer-local-completion-map [escape] 'abort-recursive-edit)
-(define-key minibuffer-local-must-match-map [escape] 'abort-recursive-edit)
-(define-key minibuffer-local-isearch-map [escape] 'abort-recursive-edit)
+        (switch-to-buffer-other-window help-buffer)))))
 
 (use-package avy
-    :ensure t
-    :straight t
-    :after evil
-    :general
-    (my-local-leader
-	  "d" 'dirvish)
+  :ensure t
+  :straight t
+  :after evil
+  :general
+  
+  :config
+  (setq avy-all-windows t
+        avy-all-windows-alt t
+        avy-background t
+        avy-case-fold-search t
+        avy-timeout-seconds 0.3
+        avy-style 'at-full
+        avy-keys '(?a ?s ?d ?f ?g ?h ?j ?k ?l ?q ?w ?e ?r ?t ?y ?u ?i ?o ?p)))
 
-    (general-def 'normal 'override
-    "s" 'avy-goto-char-timer)
+;; (defun avy-action-exchange (pt)
+;;   "Exchange sexp at PT with the one at point."
+;;   (set-mark pt)
+;;   (transpose-sexps 0))
 
-    :config
-    (setq avy-all-windows t
-	avy-case-fold-search t
-	avy-timeout-seconds 0.39))
+;; (add-to-list 'avy-dispatch-alist '(?e . avy-action-exchange))
 
 (use-package evil-collection
     :defer t
@@ -839,18 +880,18 @@
 ;; The `neotree' package provides a file tree explorer for Emacs, allowing easy navigation
 ;; through directories and files. It presents a visual representation of the file system
 ;; and integrates with version control to show file states.
-(use-package neotree
-  :ensure t
-  :straight t
-  :custom
-  (neo-show-hidden-files t)                ;; By default shows hidden files (toggle with H)
-  (neo-theme 'nerd)                        ;; Set the default theme for Neotree to 'nerd' for a visually appealing look.
-  (neo-vc-integration '(face char))        ;; Enable VC integration to display file states with faces (color coding) and characters (icons).
-  :defer t                                 ;; Load the package only when needed to improve startup time.
-  :config
-  (if ek-use-nerd-fonts                    ;; Check if nerd fonts are being used.
-      (setq neo-theme 'nerd-icons)         ;; Set the theme to 'nerd-icons' if nerd fonts are available.
-    (setq neo-theme 'nerd)))               ;; Otherwise, fall back to the 'nerd' theme.
+;; (use-package neotree
+;;   :ensure t
+;;   :straight t
+;;   :custom
+;;   (neo-show-hidden-files t)                ;; By default shows hidden files (toggle with H)
+;;   (neo-theme 'nerd)                        ;; Set the default theme for Neotree to 'nerd' for a visually appealing look.
+;;   (neo-vc-integration '(face char))        ;; Enable VC integration to display file states with faces (color coding) and characters (icons).
+;;   :defer t                                 ;; Load the package only when needed to improve startup time.
+;;   :config
+;;   (if ek-use-nerd-fonts                    ;; Check if nerd fonts are being used.
+;;       (setq neo-theme 'nerd-icons)         ;; Set the theme to 'nerd-icons' if nerd fonts are available.
+;;     (setq neo-theme 'nerd)))               ;; Otherwise, fall back to the 'nerd' theme.
 
 ;;; NERD ICONS
 ;; The `nerd-icons' package provides a set of icons for use in Emacs. These icons can
@@ -1152,8 +1193,6 @@
 ;; Corrects (and improves) org-mode's native fontification.
 (doom-themes-org-config))
 
-(add-to-list 'default-frame-alist '(alpha-background . 90))
-
 (use-package dirvish
   :straight t
   :init
@@ -1179,57 +1218,241 @@
   :config
   (setq dired-dwim-target t)
   (setq delete-by-moving-to-trash t)
-  (setq dired-mouse-drag-files t)
-  
-  (general-define-key
-   :states 'normal
-   :keymaps 'dirvish-mode-map
-   "?" 'dirvish-dispatch
-   "q" 'dirvish-quit
-   "b" 'dirvish-quick-access
-   "f" 'dirvish-file-info-menu
-   "p" 'dirvish-yank
-   "S" 'dirvish-quicksort
-   "F" 'dirvish-layout-toggle
-   "z" 'dirvish-history-jump
-   "gh" 'dirvish-subtree-up
-   "gl" 'dirvish-subtree-toggle
-   "h" 'dired-up-directory
-   "l" 'dired-find-file
-   "TAB" 'dirvish-subtree-toggle)
-  
-  (general-define-key
-   :states '(normal visual motion)
-   :keymaps 'dirvish-mode-map
-   "[h" 'dirvish-history-go-backward
-   "]h" 'dirvish-history-go-forward
-   "[e" 'dirvish-emerge-next-group
-   "]e" 'dirvish-emerge-previous-group
-   "M-b" 'dirvish-history-go-backward
-   "M-f" 'dirvish-history-go-forward
-   "M-n" 'dirvish-narrow
-   "M-m" 'dirvish-mark-menu
-   "M-s" 'dirvish-setup-menu
-   "M-e" 'dirvish-emerge-menu)
-  
-  (general-define-key
-   :states 'normal
-   :keymaps 'dirvish-mode-map
-   :prefix "y"
-   "l" 'dirvish-copy-file-true-path
-   "n" 'dirvish-copy-file-name
-   "p" 'dirvish-copy-file-path
-   "r" 'dirvish-copy-remote-path
-   "y" 'dired-do-copy)
-  
-  (general-define-key
-   :states 'normal
-   :keymaps 'dirvish-mode-map
-   :prefix "s"
-   "s" 'dirvish-symlink
-   "S" 'dirvish-relative-symlink
-   "h" 'dirvish-hardlink))
+  (setq dired-mouse-drag-files t))
 
 (use-package nix-mode
   :ensure t
   :mode "\\.nix\\'")
+
+(use-package olivetti
+  :defer t)
+
+(setq-default olivetti-body-width 95)
+(define-globalized-minor-mode my-global-olivetti-mode olivetti-mode
+  (lambda () (olivetti-mode 1)))
+(my-global-olivetti-mode)
+
+(setq ibuffer-never-show-predicates
+      '(;; System buffers
+        "^\\*Messages\\*$"
+        "^\\*scratch\\*$"
+        "^\\*Completions\\*$"
+        "^\\*Help\\*$"
+        "^\\*Apropos\\*$"
+        "^\\*info\\*$"
+        "^\\*Async-native-compile-log\\*$"
+
+        ;; LSP Buffers
+        "^\\*lsp-log\\*$"
+        "^\\*clojure-lsp\\*$"
+        "^\\*clojure-lsp::stderr\\*$"
+        "^\\*ts-ls\\*$"
+        "^\\*ts-ls::stderr\\*$"))
+
+(use-package eat
+  :ensure t
+  :defer t
+  :config
+  (when (fboundp 'eat-global-mode)
+    (eat-global-mode)
+    (setq eat-kill-buffer-on-exit t)))
+
+(use-package projectile
+  :ensure t
+  :straight t
+  :demand t
+  :config
+  (projectile-mode +1)
+  (setq projectile-completion-system 'default
+        projectile-enable-caching t
+        projectile-indexing-method 'alien
+        projectile-sort-order 'recentf
+        projectile-require-project-root nil))
+
+(use-package consult-projectile
+  :ensure t
+  :straight t
+  :after (consult projectile)
+  :config
+  (setq consult-project-function #'projectile-project-root))
+
+(my-leader
+  "sp" '(consult-ripgrep :wk "search project")
+  "/" '(consult-line :wk "search buffer")
+  "." '(find-file :wk "find file")
+  "," '(consult-buffer :wk "switch buffer")
+  "SPC" '(consult-buffer :wk "switch buffer")
+  ":" (lambda () (interactive) (execute-extended-command nil))
+  
+  "f" '(:ignore t :wk "files")
+  "fd" '(dired :wk "dired")
+  "fD" '(dired-jump :wk "dired jump")
+  "fr" '(consult-recent-file :wk "recent files")
+  "ff" '(find-file :wk "find file")
+  "fs" '(save-buffer :wk "save file")
+  
+  "b" '(:ignore t :wk "buffers")
+  "bb" '(consult-buffer :wk "switch buffer")
+  "bi" '(ibuffer :wk "ibuffer")
+  "bd" '(kill-current-buffer :wk "kill buffer")
+  "bk" '(kill-current-buffer :wk "kill buffer")
+  "bs" '(save-buffer :wk "save buffer")
+  
+  "p" '(:ignore t :wk "project")
+  "pp" '(projectile-switch-project :wk "switch project")
+  "pf" '(projectile-find-file :wk "find file")
+  "ps" '(consult-ripgrep :wk "search")
+  "pb" '(consult-projectile-buffer :wk "buffers")
+  "pk" '(projectile-kill-buffers :wk "kill buffers")
+  "pd" '(projectile-dired :wk "root dir")
+  "pr" '(projectile-recentf :wk "recent files")
+  "pa" '(projectile-add-known-project :wk "add project")
+  "pc" '(projectile-compile-project :wk "compile")
+  "pt" '(projectile-test-project :wk "test")
+  "pi" '(projectile-invalidate-cache :wk "invalidate cache")
+  
+  "g" '(:ignore t :wk "git")
+  "gg" '(magit-status :wk "status")
+  "gl" '(magit-log-current :wk "log")
+  "gd" '(magit-diff-buffer-file :wk "diff file")
+  "gs" '(magit-status :wk "status")
+  "gb" '(vc-annotate :wk "blame")
+  
+  "o" '(:ignore t :wk "open")
+  "op" '(neotree-toggle :wk "neotree")
+  "oP" '(dired-jump :wk "dired")
+  "od" '(dirvish :wk "dirvish")
+  
+  "h" '(:ignore t :wk "help")
+  "hm" '(describe-mode :wk "mode")
+  "hf" '(describe-function :wk "function")
+  "hv" '(describe-variable :wk "variable")
+  "hk" '(describe-key :wk "key")
+  "y" '(:ignore t :wk "yank to kill-ring")
+
+"yy" (lambda ()
+       (interactive)
+       (kill-new (buffer-substring (line-beginning-position) (line-end-position)))
+       (message "Yanked line to kill-ring"))
+"yw" (lambda ()
+       (interactive)
+       (kill-new (thing-at-point 'word))
+       (message "Yanked word to kill-ring"))
+
+  "w" '(:ignore t :wk "windows")
+  "wv" '(split-window-right :wk "split right")
+  "ws" '(split-window-below :wk "split below")
+  "wd" '(delete-window :wk "delete")
+  "wo" '(delete-other-windows :wk "delete others")
+  
+  "c" '(:ignore t :wk "code")
+  
+  "m" '(:ignore t :wk "mode")
+  "mp" (list (lambda ()
+               (interactive)
+               (shell-command (concat "prettier --write " 
+                                    (shell-quote-argument (buffer-file-name))))
+               (revert-buffer t t t))
+             :wk "format prettier")
+  
+  "q" '(:ignore t :wk "quit")
+  "qq" '(save-buffers-kill-terminal :wk "quit emacs")
+  "qr" '(restart-emacs :wk "restart")
+  
+  "a" '(embark-act :wk "embark")
+  "u" '(undo-tree-visualize :wk "undo tree")
+"P" '(consult-yank-from-kill-ring :wk "paste history")
+
+"y" '(:ignore t :wk "yank to kill-ring")
+"yy" (lambda ()
+       (interactive)
+       (kill-new (buffer-substring (line-beginning-position) (line-end-position)))
+       (message "Yanked line to kill-ring"))
+"yw" (lambda ()
+       (interactive)
+       (kill-new (thing-at-point 'word))
+       (message "Yanked word to kill-ring"))
+
+
+  )
+
+(my-local-leader
+  "t" '(eat :wk "terminal"))
+
+(general-def 'normal 'override
+  "]d" 'flymake-goto-next-error
+  "[d" 'flymake-goto-prev-error
+  "]c" 'diff-hl-next-hunk
+  "[c" 'diff-hl-previous-hunk
+  "]b" 'switch-to-next-buffer
+  "[b" 'switch-to-prev-buffer
+  "]t" 'tab-next
+  "[t" 'tab-previous
+  "P" 'consult-yank-from-kill-ring
+  "K" (if (>= emacs-major-version 31)
+          #'eldoc-box-help-at-point
+        #'ek/lsp-describe-and-jump)
+  "gcc" (lambda ()
+          (interactive)
+          (unless (use-region-p)
+            (comment-or-uncomment-region 
+             (line-beginning-position) 
+             (line-end-position))))
+  )
+
+(general-def 'visual 'override
+  "gc" (lambda ()
+         (interactive)
+         (when (use-region-p)
+           (comment-or-uncomment-region 
+            (region-beginning) 
+            (region-end)))))
+
+(general-def '(normal visual) 'override
+  "s" (lambda ()
+        (interactive)
+        (let ((avy-all-windows t)
+              (avy-background t)
+              (scroll-margin 0)
+              (maximum-scroll-margin 0))
+          (call-interactively 'avy-goto-char-timer))))
+
+(general-def 'normal dirvish-mode-map
+  "?" 'dirvish-dispatch
+  "q" 'dirvish-quit
+  "b" 'dirvish-quick-access
+  "f" 'dirvish-file-info-menu
+  "p" 'dirvish-yank
+  "S" 'dirvish-quicksort
+  "F" 'dirvish-layout-toggle
+  "z" 'dirvish-history-jump
+  "gh" 'dirvish-subtree-up
+  "gl" 'dirvish-subtree-toggle
+  "h" 'dired-up-directory
+  "l" 'dired-find-file
+  "TAB" 'dirvish-subtree-toggle
+  "[h" 'dirvish-history-go-backward
+  "]h" 'dirvish-history-go-forward)
+
+(general-def '(normal visual) dirvish-mode-map
+  :prefix "y"
+  "l" 'dirvish-copy-file-true-path
+  "n" 'dirvish-copy-file-name
+  "p" 'dirvish-copy-file-path
+  "y" 'dired-do-copy)
+
+(general-def 'normal dirvish-mode-map
+  :prefix "s"
+  "s" 'dirvish-symlink
+  "S" 'dirvish-relative-symlink
+  "h" 'dirvish-hardlink)
+
+(my-local-leader
+  :keymaps 'org-mode-map
+  "h" '(consult-org-heading :wk "search headings"))
+
+(define-key minibuffer-local-map [escape] 'abort-recursive-edit)
+(define-key minibuffer-local-ns-map [escape] 'abort-recursive-edit)
+(define-key minibuffer-local-completion-map [escape] 'abort-recursive-edit)
+(define-key minibuffer-local-must-match-map [escape] 'abort-recursive-edit)
+(define-key minibuffer-local-isearch-map [escape] 'abort-recursive-edit)
