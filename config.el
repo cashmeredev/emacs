@@ -341,6 +341,7 @@
     :ensure nil     
     :defer t
   :config
+  (require 'org-tempo)
   (custom-set-faces
    '(org-document-title ((t (:height 1.6))))
    '(outline-1          ((t (:height 1.25))))
@@ -962,18 +963,18 @@ undo-outer-limit 120000000)           ;; Outer limit for undo entries.
   (read-key)                                         ;; Wait for the user to press any key.
   (kill-emacs))                                      ;; Close Emacs after installation is complete.
 
-(provide 'init)
 ;;; init.el ends here
 
-;;  (use-package org-modern
-;;    :ensure t
-;;    :straight t)
-;;  (with-eval-after-load 'org (global-org-modern-mode))
-;;
-;;  (setq org-modern-star 'fold)
-;;  (setq org-modern-fold-stars '(("◉" . "○")))
-;;  (setq org-modern-star 'replace)
-;;  (setq org-modern-replace-stars "◉○◉○◉")
+(use-package org-modern
+  :ensure t
+  :straight t
+  )
+(with-eval-after-load 'org (global-org-modern-mode))
+
+(setq org-modern-star 'fold)
+(setq org-modern-fold-stars '(("◉" . "○")))
+(setq org-modern-star 'replace)
+(setq org-modern-replace-stars "◉○◉○◉")
 
 (require 'battery)
 (require 'nerd-icons)
@@ -1266,8 +1267,13 @@ mode-line-buffer-identification
   :ensure t
   :straight t
   :after (consult projectile)
+  :defer t
   :config
   (setq consult-project-function #'projectile-project-root))
+
+(use-package pass
+  :ensure t
+  :defer t)
 
 (defun my/smart-find-file ()
   (interactive)
@@ -1448,3 +1454,5 @@ mode-line-buffer-identification
 (define-key minibuffer-local-completion-map [escape] 'abort-recursive-edit)
 (define-key minibuffer-local-must-match-map [escape] 'abort-recursive-edit)
 (define-key minibuffer-local-isearch-map [escape] 'abort-recursive-edit)
+
+(provide 'init)
