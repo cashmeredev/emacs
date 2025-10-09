@@ -151,7 +151,7 @@
     :init                        ;; Initialization settings that apply before the package is loaded.
     (tool-bar-mode -1)           ;; Disable the tool bar for a cleaner interface.
     (menu-bar-mode -1)           ;; Disable the menu bar for a more streamlined look.
-
+;; (default-frame-alist '((undecorated . t)))
     (when scroll-bar-mode
       (scroll-bar-mode -1))      ;; Disable the scroll bar if it is active.
 
@@ -364,8 +364,9 @@
 (use-package eldoc
 :straight nil
     :ensure nil                                ;; This is built-in, no need to fetch it.
+	:after eglot
     :config
-    (setq eldoc-idle-delay 0)                  ;; Automatically fetch doc help
+    (setq eldoc-idle-delay 0.0001)                  ;; Automatically fetch doc help
     (setq eldoc-echo-area-use-multiline-p t) ;; We use the "K" floating help instead
 ;; set to t if you want docs on the echo area
 (setq eldoc-help-at-pt t)
@@ -463,6 +464,7 @@ Disabled because nix is managing the flymake configuration.
         org-appear-autolinks      t   ;; Show links
         org-appear-autosubmarkers t)) ;; Show sub- and superscripts
 #+end_src
+
 ** org agenda
 
 We will start of with setting some sane configuration for org agenda.
@@ -472,6 +474,7 @@ We will start of with setting some sane configuration for org agenda.
       org-agenda-block-separator  nil
       org-agenda-remove-tags      t)
 #+end_src
+
 *** org super agenda
 
 #+begin_src emacs-lisp
@@ -484,6 +487,7 @@ We will start of with setting some sane configuration for org agenda.
             #'(lambda () (setq-local nobreak-char-display nil)))
   (org-super-agenda-mode))
 #+end_src
+
 *** org-ql
 
 #+begin_src emacs-lisp
@@ -491,6 +495,7 @@ We will start of with setting some sane configuration for org agenda.
       :ensure t
       :after org)
 #+end_src
+
 *** agenda views
 
 let us disable the predefined org agenda commands.
@@ -512,10 +517,12 @@ let us disable the predefined org agenda commands.
                             (org-agenda-start-on-weekday nil)
                             (org-deadline-warning-days 0))))))
 #+end_src
+
 ** org-babel
 
 #+begin_src emacs-lisp
 #+end_src
+
 ** denote
 Denote is objectively the best note taking extension, which you coul;d install. It has a very easy to parse file naming scheme and suports not only org files. It has also transclusion inclusive! if you are interested, then check it out yourself.
 
@@ -913,14 +920,15 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 #+begin_src emacs-lisp
 (use-package evil
-:ensure t
-:init
-(setq evil-want-integration t)
-(setq evil-want-keybinding nil)
-(setq evil-want-C-u-delete t)       ;; Makes C-u delete on insert mode
+  :ensure t
+  :init
+  (setq evil-want-integration t)
+  (setq evil-want-keybinding nil)
+  (setq evil-want-C-u-delete t)       ;; Makes C-u delete on insert mode
+  (setq evil-want-C-u-scroll t)       ;; Makes C-u delete on insert mode
 
-:config
-(evil-mode 1))
+  :config
+  (evil-mode 1))
 
 
 #+end_src
@@ -1477,13 +1485,57 @@ mode-line-buffer-identification
   (setq delete-by-moving-to-trash t)
   (setq dired-mouse-drag-files t))
 #+end_src
-* nix-mode
 
-#+begin_src emacs-lisp
-  (use-package nix-mode
-    :ensure t
-    :mode "\\.nix\\'")
-#+end_src
+* programming modes
+
+** nix-mode
+
+    #+begin_src emacs-lisp
+    (use-package nix-mode
+      :ensure t
+      :mode "\\.nix\\'")
+    #+end_src
+
+** rust mode
+
+   #+begin_src emacs-lisp
+   (use-package rustic
+     :ensure t
+     :defer t)
+   #+end_src 
+
+*** org babel integration
+
+    #+begin_src emacs-lisp
+    ;; Make sure rustic gets activated in the org-src block and add the original file's source code.
+    (defun org-babel-edit-prep:rust (babel-info)
+      ;; This gets the second item in the "babel-info" list, which holds the code in the original src block
+      (setq-local src-code (nth 1 babel-info))
+      (setq-local buffer-file-name (expand-file-name (->> babel-info caddr (alist-get :tangle))))
+      (setq-local buffer-src-code (replace-regexp-in-string src-code "" (my-read-file-to-string (buffer-file-name))))
+      (goto-char (point-max))
+      (insert buffer-src-code)
+      (narrow-to-region (point-min) (+ (point-min) (length src-code)))
+      (rustic-mode)
+      (org-src-mode))
+
+    (defun my-delete-hidden-text ()
+      "Remove all text that would be revealed by a call to `widen'"
+      (-let [p-start (point-max)]
+        (widen)
+        (delete-region p-start (point-max))))
+
+    (define-advice org-edit-src-exit
+        (:before (&rest _args) remove-src-block)
+      (when (eq major-mode 'rustic-mode)
+        (my-delete-hidden-text)))
+
+    (define-advice org-edit-src-save
+        (:before (&rest _args) remove-src-block)
+      (when (eq major-mode 'rustic-mode)
+        (my-delete-hidden-text)))
+    #+end_src
+    
 ** olivetti
 
 #+begin_src emacs-lisp
@@ -1491,6 +1543,13 @@ mode-line-buffer-identification
     :defer t)
 #+end_src
 * olivetti global mode
+
+#+begin_src emacs-lisp :tangle yes
+(setq-default olivetti-body-width 100)
+(define-globalized-minor-mode my-global-olivetti-mode olivetti-mode
+  (lambda () (olivetti-mode 1)))
+(my-global-olivetti-mode)
+#+end_src
 * declutter
 ** ibuffer
 
@@ -1522,13 +1581,18 @@ mode-line-buffer-identification
 * eat
 
 #+begin_src emacs-lisp
-    (use-package eat
-      :ensure t
-      :defer t
-      :config
-      (when (fboundp 'eat-global-mode)
-        (eat-global-mode)
-        (setq eat-kill-buffer-on-exit t)))
+(use-package eat
+  :ensure t
+  :defer t
+  :init
+  (defun my/eat-reset-key ()
+    (when (boundp 'eat-emacs-mode-map)
+      (define-key eat-emacs-mode-map (kbd "C-l") #'eat-reset)))
+  :hook (eat-mode . my/eat-reset-key)
+  :config
+  (when (fboundp 'eat-global-mode)
+    (eat-global-mode)
+    (setq eat-kill-buffer-on-exit t)))
 #+end_src
 * projectile
 
@@ -1563,6 +1627,12 @@ mode-line-buffer-identification
   :defer t)
 #+end_src  
 * keybindings
+** disable frame
+
+   #+begin_src emacs-lisp
+   ;; (setq )
+   #+end_src
+   
 ** global leader (SPC) kill ring
 
 #+begin_src emacs-lisp
@@ -1769,9 +1839,15 @@ mode-line-buffer-identification
 (define-key minibuffer-local-must-match-map [escape] 'abort-recursive-edit)
 (define-key minibuffer-local-isearch-map [escape] 'abort-recursive-edit)
 #+end_src
+** scroll
+
+      #+begin_src emacs-lisp
+   (global-set-key (kbd "C-=") 'text-scale-increase)
+   (global-set-key (kbd "C--") 'text-scale-decrease)
+   #+end_src
+   
 ** provide init
 
    #+begin_src emacs-lisp
-
   (provide 'init)
    #+end_src

@@ -128,7 +128,7 @@
     :init                        ;; Initialization settings that apply before the package is loaded.
     (tool-bar-mode -1)           ;; Disable the tool bar for a cleaner interface.
     (menu-bar-mode -1)           ;; Disable the menu bar for a more streamlined look.
-
+;; (default-frame-alist '((undecorated . t)))
     (when scroll-bar-mode
       (scroll-bar-mode -1))      ;; Disable the scroll bar if it is active.
 
@@ -731,14 +731,15 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
     :prefix ","))
 
 (use-package evil
-:ensure t
-:init
-(setq evil-want-integration t)
-(setq evil-want-keybinding nil)
-(setq evil-want-C-u-delete t)       ;; Makes C-u delete on insert mode
+  :ensure t
+  :init
+  (setq evil-want-integration t)
+  (setq evil-want-keybinding nil)
+  (setq evil-want-C-u-delete t)       ;; Makes C-u delete on insert mode
+  (setq evil-want-C-u-scroll t)       ;; Makes C-u delete on insert mode
 
-:config
-(evil-mode 1))
+  :config
+  (evil-mode 1))
 
 (use-package avy
   :ensure t
@@ -1206,6 +1207,11 @@ mode-line-buffer-identification
 (use-package olivetti
   :defer t)
 
+(setq-default olivetti-body-width 100)
+(define-globalized-minor-mode my-global-olivetti-mode olivetti-mode
+  (lambda () (olivetti-mode 1)))
+(my-global-olivetti-mode)
+
 (setq ibuffer-never-show-predicates
       '(;; System buffers
         "^\\*Messages\\*$"
@@ -1229,6 +1235,11 @@ mode-line-buffer-identification
 (use-package eat
   :ensure t
   :defer t
+  :init
+  (defun my/eat-reset-key ()
+    (when (boundp 'eat-emacs-mode-map)
+      (define-key eat-emacs-mode-map (kbd "C-l") #'eat-reset)))
+  :hook (eat-mode . my/eat-reset-key)
   :config
   (when (fboundp 'eat-global-mode)
     (eat-global-mode)
@@ -1256,6 +1267,8 @@ mode-line-buffer-identification
 (use-package pass
   :ensure t
   :defer t)
+
+;; (setq )
 
 (defun my/smart-find-file ()
   (interactive)
@@ -1436,5 +1449,8 @@ mode-line-buffer-identification
 (define-key minibuffer-local-completion-map [escape] 'abort-recursive-edit)
 (define-key minibuffer-local-must-match-map [escape] 'abort-recursive-edit)
 (define-key minibuffer-local-isearch-map [escape] 'abort-recursive-edit)
+
+(global-set-key (kbd "C-=") 'text-scale-increase)
+(global-set-key (kbd "C--") 'text-scale-decrease)
 
 (provide 'init)
