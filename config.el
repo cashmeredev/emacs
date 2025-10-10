@@ -32,134 +32,114 @@
 (setq kept-new-versions             5)
 (setq kept-old-versions             5)
 
-(add-to-list 'default-frame-alist '(alpha-background . 90))
-
-;; (setq straight-check-for-modifications nil)
-;; (defvar bootstrap-version)
-;; (let ((bootstrap-file
-;;        (expand-file-name
-;;         "straight/repos/straight.el/bootstrap.el"
-;;         (or (bound-and-true-p straight-base-dir)
-;;             user-emacs-directory)))
-;;       (bootstrap-version 7))
-;;   (unless (file-exists-p bootstrap-file)
-;;     (with-current-buffer
-;;         (url-retrieve-synchronously
-;;          "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
-;;          'silent 'inhibit-cookies)
-;;       (goto-char (point-max))
-;;       (eval-print-last-sexp)))
-;;   (load bootstrap-file nil 'nomessage))
-;;
-;; (straight-use-package '(project :type built-in))
-;; (straight-use-package 'use-package)
-;;
-;; (setq straight-use-package-by-default t)
+(setq default-frame-alist 
+      '((alpha-background . 90)
+	(undecorated . t)))
 
 ;;; EMACS
-  ;;  This is biggest one. Keep going, plugins (oops, I mean packages) will be shorter :)
-  (setq debug-on-error t)
-  (use-package emacs
-    :straight nil
-    :ensure nil
-    :custom                                         ;; Set custom variables to configure Emacs behavior.
-    (column-number-mode t)                          ;; Display the column number in the mode line.
-    (auto-save-default nil)                         ;; Disable automatic saving of buffers.
-    (create-lockfiles nil)                          ;; Prevent the creation of lock files when editing.
-    (delete-by-moving-to-trash t)                   ;; Move deleted files to the trash instead of permanently deleting them.
-    (delete-selection-mode 1)                       ;; Enable replacing selected text with typed text.
-    (display-line-numbers-type 'relative)           ;; Use relative line numbering in programming modes.
-    (global-auto-revert-non-file-buffers t)         ;; Automatically refresh non-file buffers.
-    (history-length 25)                             ;; Set the length of the command history.
-    (inhibit-startup-message t)                     ;; Disable the startup message when Emacs launches.
-    (initial-scratch-message "")                    ;; Clear the initial message in the *scratch* buffer.
-    (ispell-dictionary "en_US")                     ;; Set the default dictionary for spell checking.
-    (make-backup-files nil)                         ;; Disable creation of backup files.
-    ;; (pixel-scroll-precision-mode t)                 ;; Enable precise pixel scrolling.
-    (pixel-scroll-precision-use-momentum nil)       ;; Disable momentum scrolling for pixel precision.
-    (ring-bell-function 'ignore)                    ;; Disable the audible bell.
-    (split-width-threshold 300)                     ;; Prevent automatic window splitting if the window width exceeds 300 pixels.
-    (switch-to-buffer-obey-display-actions t)       ;; Make buffer switching respect display actions.
-    (tab-always-indent 'complete)                   ;; Make the TAB key complete text instead of just indenting.
-    (tab-width 4)                                   ;; Set the tab width to 4 spaces.
-    (treesit-font-lock-level 4)                     ;; Use advanced font locking for Treesit mode.
-    (truncate-lines t)                              ;; Enable line truncation to avoid wrapping long lines.
-    (use-dialog-box nil)                            ;; Disable dialog boxes in favor of minibuffer prompts.
-    (use-short-answers t)                           ;; Use short answers in prompts for quicker responses (y instead of yes)
-    (warning-minimum-level :emergency)              ;; Set the minimum level of warnings to display.
+;;  This is biggest one. Keep going, plugins (oops, I mean packages) will be shorter :)
+(setq debug-on-error nil)
+(use-package emacs
+  :straight nil
+  :ensure nil
+  :custom                                         ;; Set custom variables to configure Emacs behavior.
+  (column-number-mode t)                          ;; Display the column number in the mode line.
+  (auto-save-default nil)                         ;; Disable automatic saving of buffers.
+  (create-lockfiles nil)                          ;; Prevent the creation of lock files when editing.
+  (delete-by-moving-to-trash t)                   ;; Move deleted files to the trash instead of permanently deleting them.
+  (delete-selection-mode 1)                       ;; Enable replacing selected text with typed text.
+  (display-line-numbers-type 'relative)           ;; Use relative line numbering in programming modes.
+  (global-auto-revert-non-file-buffers t)         ;; Automatically refresh non-file buffers.
+  (history-length 25)                             ;; Set the length of the command history.
+  (inhibit-startup-message t)                     ;; Disable the startup message when Emacs launches.
+  (initial-scratch-message "")                    ;; Clear the initial message in the *scratch* buffer.
+  (ispell-dictionary "en_US")                     ;; Set the default dictionary for spell checking.
+  (make-backup-files nil)                         ;; Disable creation of backup files.
+  ;; (pixel-scroll-precision-mode t)                 ;; Enable precise pixel scrolling.
+  (pixel-scroll-precision-use-momentum nil)       ;; Disable momentum scrolling for pixel precision.
+  (ring-bell-function 'ignore)                    ;; Disable the audible bell.
+  (split-width-threshold 300)                     ;; Prevent automatic window splitting if the window width exceeds 300 pixels.
+  (switch-to-buffer-obey-display-actions t)       ;; Make buffer switching respect display actions.
+  (tab-always-indent 'complete)                   ;; Make the TAB key complete text instead of just indenting.
+  (tab-width 4)                                   ;; Set the tab width to 4 spaces.
+  (treesit-font-lock-level 4)                     ;; Use advanced font locking for Treesit mode.
+  (truncate-lines t)                              ;; Enable line truncation to avoid wrapping long lines.
+  (use-dialog-box nil)                            ;; Disable dialog boxes in favor of minibuffer prompts.
+  (use-short-answers t)                           ;; Use short answers in prompts for quicker responses (y instead of yes)
+  (warning-minimum-level :emergency)              ;; Set the minimum level of warnings to display.
 
-    :hook ;; Add hooks to enable specific features in certain modes.
-    (prog-mode . display-line-numbers-mode)
-    (org-mode . display-line-numbers-mode)
-    ;; (org-mode . (lambda () (display-line-numbers-mode -1)))
-
-
-    :config
-    (add-to-list 'custom-theme-load-path user-emacs-directory)
-    ;; (load-theme 'rose-pine t)
-
-    ;; By default emacs gives you access to a lot of *special* buffers, while navigating with [b and ]b,
-    ;; this might be confusing for newcomers. This settings make sure ]b and [b will always load a
-    ;; file buffer. To see all buffers use <leader> SPC, <leader> b l, or <leader> b i.
-    (defun skip-these-buffers (_window buffer _bury-or-kill)
-      "Function for `switch-to-prev-buffer-skip'."
-      (string-match "\\*[^*]+\\*" (buffer-name buffer)))
-    (setq switch-to-prev-buffer-skip 'skip-these-buffers)
+  :hook ;; Add hooks to enable specific features in certain modes.
+  (prog-mode . display-line-numbers-mode)
+  (org-mode . display-line-numbers-mode)
+  ;; (org-mode . (lambda () (display-line-numbers-mode -1)))
 
 
-    ;; Configure font settings based on the operating system.
-    ;; Ok, this kickstart is meant to be used on the terminal, not on GUI.
-    ;; But without this, I fear you could start Graphical Emacs and be sad :(
-    (set-face-attribute 'default nil :family "Maple Mono NF"  :height 160)
-    ;; (when (eq system-type 'darwin)       ;; Check if the system is macOS.
-    ;; (setq mac-command-modifier 'meta)  ;; Set the Command key to act as the Meta key.
-    ;; (set-face-attribute 'default nil :family "Fragment Mono" :height 130))
+  :config
+  (add-to-list 'custom-theme-load-path user-emacs-directory)
+  ;; (load-theme 'rose-pine t)
 
-    ;; Save manual customizations to a separate file instead of cluttering `init.el'.
-    ;; You can M-x customize, M-x customize-group, or M-x customize-themes, etc.
-    ;; The saves you do manually using the Emacs interface would overwrite this file.
-    ;; The following makes sure those customizations are in a separate file.
-    (setq custom-file (locate-user-emacs-file "custom-vars.el")) ;; Specify the custom file path.
-    (load custom-file 'noerror 'nomessage)                       ;; Load the custom file quietly, ignoring errors.
+  ;; By default emacs gives you access to a lot of *special* buffers, while navigating with [b and ]b,
+  ;; this might be confusing for newcomers. This settings make sure ]b and [b will always load a
+  ;; file buffer. To see all buffers use <leader> SPC, <leader> b l, or <leader> b i.
+  (defun skip-these-buffers (_window buffer _bury-or-kill)
+    "Function for `switch-to-prev-buffer-skip'."
+    (string-match "\\*[^*]+\\*" (buffer-name buffer)))
+  (setq switch-to-prev-buffer-skip 'skip-these-buffers)
 
-    ;; Makes Emacs vertical divisor the symbol │ instead of |.
-    (set-display-table-slot standard-display-table 'vertical-border (make-glyph-code ?│))
 
-    :init                        ;; Initialization settings that apply before the package is loaded.
-    (tool-bar-mode -1)           ;; Disable the tool bar for a cleaner interface.
-    (menu-bar-mode -1)           ;; Disable the menu bar for a more streamlined look.
-;; (default-frame-alist '((undecorated . t)))
-    (when scroll-bar-mode
-      (scroll-bar-mode -1))      ;; Disable the scroll bar if it is active.
+  ;; Configure font settings based on the operating system.
+  ;; Ok, this kickstart is meant to be used on the terminal, not on GUI.
+  ;; But without this, I fear you could start Graphical Emacs and be sad :(
+  (set-face-attribute 'default nil :family "Maple Mono NF"  :height 160)
+  ;; (when (eq system-type 'darwin)       ;; Check if the system is macOS.
+  ;; (setq mac-command-modifier 'meta)  ;; Set the Command key to act as the Meta key.
+  ;; (set-face-attribute 'default nil :family "Fragment Mono" :height 130))
 
-    (global-hl-line-mode -1)     ;; Disable highlight of the current line
-    (global-auto-revert-mode 1)  ;; Enable global auto-revert mode to keep buffers up to date with their corresponding files.
-    (indent-tabs-mode -1)        ;; Disable the use of tabs for indentation (use spaces instead).
-    (recentf-mode 1)             ;; Enable tracking of recently opened files.
-    (savehist-mode 1)            ;; Enable saving of command history.
-    (save-place-mode 1)          ;; Enable saving the place in files for easier return.
-    (winner-mode 1)              ;; Enable winner mode to easily undo window configuration changes.
-    (xterm-mouse-mode 1)         ;; Enable mouse support in terminal mode.
-    (file-name-shadow-mode 1)    ;; Enable shadowing of filenames for clarity.
+  ;; Save manual customizations to a separate file instead of cluttering `init.el'.
+  ;; You can M-x customize, M-x customize-group, or M-x customize-themes, etc.
+  ;; The saves you do manually using the Emacs interface would overwrite this file.
+  ;; The following makes sure those customizations are in a separate file.
+  (setq custom-file (locate-user-emacs-file "custom-vars.el")) ;; Specify the custom file path.
+  (load custom-file 'noerror 'nomessage)                       ;; Load the custom file quietly, ignoring errors.
 
-;;oding system for files to UTF-8.
-    (modify-coding-system-alist 'file "" 'utf-8)
+  ;; Makes Emacs vertical divisor the symbol │ instead of |.
+  (set-display-table-slot standard-display-table 'vertical-border (make-glyph-code ?│))
 
-    ;; Add a hook to run code after Emacs has fully initialized.
-    (add-hook 'after-init-hook
-  (lambda ()
-    (message "Emacs has fully loaded. This code runs after startup.")
+  :init                        ;; Initialization settings that apply before the package is loaded.
+  (tool-bar-mode -1)
+  (menu-bar-mode -1)
+  (scroll-bar-mode -1)
+  (add-to-list 'default-frame-alist '(vertical-scroll-bars . nil))
+  (add-to-list 'default-frame-alist '(horizontal-scroll-bars . nil))
 
-    ;; Insert a welcome message in the *scratch* buffer displaying loading time and activated packages.
-    (with-current-buffer (get-buffer-create "*scratch*")
-  (insert (format
-   ";;    Welcome to Emacs!
+  (global-hl-line-mode -1)     ;; Disable highlight of the current line
+  (global-auto-revert-mode 1)  ;; Enable global auto-revert mode to keep buffers up to date with their corresponding files.
+  (indent-tabs-mode -1)        ;; Disable the use of tabs for indentation (use spaces instead).
+  (recentf-mode 1)             ;; Enable tracking of recently opened files.
+  (savehist-mode 1)            ;; Enable saving of command history.
+  (save-place-mode 1)          ;; Enable saving the place in files for easier return.
+  (winner-mode 1)              ;; Enable winner mode to easily undo window configuration changes.
+  (xterm-mouse-mode 1)         ;; Enable mouse support in terminal mode.
+  (file-name-shadow-mode 1)    ;; Enable shadowing of filenames for clarity.
+
+  ;;oding system for files to UTF-8.
+  (modify-coding-system-alist 'file "" 'utf-8)
+
+  ;; Add a hook to run code after Emacs has fully initialized.
+  (add-hook 'after-init-hook
+			(lambda ()
+			  (message "Emacs has fully loaded. This code runs after startup.")
+
+			  ;; Insert a welcome message in the *scratch* buffer displaying loading time and activated packages.
+			  (with-current-buffer (get-buffer-create "*scratch*")
+				(insert (format
+						 ";;    Welcome to Emacs!
   ;;
   ;;    Loading time : %s
   ;;    Packages     : %s
   "
-   (emacs-init-time)
-   (length (hash-table-keys straight--recipe-cache))))))))
+						 (emacs-init-time)
+						 (length (hash-table-keys straight--recipe-cache))))))))
 
 (defcustom ek-use-nerd-fonts t
     "Configuration for using Nerd Fonts Symbols."
@@ -294,8 +274,6 @@
     (260 . "#89b4fa")
     (280 . "#b4befe"))))
 
-
-
 (use-package smerge-mode
 :straight nil
     :ensure nil                                  ;; This is built-in, no need to fetch it.
@@ -309,8 +287,9 @@
 (use-package eldoc
 :straight nil
     :ensure nil                                ;; This is built-in, no need to fetch it.
+	:after eglot
     :config
-    (setq eldoc-idle-delay 0)                  ;; Automatically fetch doc help
+    (setq eldoc-idle-delay 0.0001)                  ;; Automatically fetch doc help
     (setq eldoc-echo-area-use-multiline-p t) ;; We use the "K" floating help instead
 ;; set to t if you want docs on the echo area
 (setq eldoc-help-at-pt t)
@@ -353,9 +332,9 @@
    '(outline-7          ((t (:height 1.2))))
    '(outline-8          ((t (:height 1.2))))
    '(outline-9          ((t (:height 1.2)))))
-  (org-indent-mode -1)
-  (setq org-startup-folded 'content)
-  (setq org-adapt-indentation t
+  
+  (setq org-startup-folded 'nil)
+  (setq org-adapt-indentation nil
         org-hide-leading-stars t
         org-pretty-entities t
         org-ellipsis "  ")
@@ -368,19 +347,15 @@
         org-fold-catch-invisible-edits     'show-and-error
         org-special-ctrl-a/e               t
         org-insert-heading-respect-content t)
-
-;; (my-local-leader
-;;   )
    
   (add-hook 'org-mode-hook 'variable-pitch-mode)
+  (add-hook 'org-mode-hook 'org-indent-mode)
   (add-to-list 'font-lock-extra-managed-props 'display)
   (font-lock-add-keywords 'org-mode
                           `(("^.*?\( \)\(:[[:alnum:]_@#%:]+:\)$"
                              (1 `(face nil
                                        display (space :align-to (- right ,(org-string-width (match-string 2)) 3)))
-                                prepend))) t)
-  (setq org-blank-before-new-entry '((heading . nil)
-                                     (plain-list-item . nil))))
+                                prepend))) t))
 
 (use-package org-appear
   :commands (org-appear-mode)
@@ -426,6 +401,10 @@
 
 
 
+(use-package ox-typst
+  :straight (:host github :repo "jmpunkt/ox-typst")
+  :after org)
+
 (use-package denote
      :ensure t
      :hook (dired-mode . denote-dired-mode)
@@ -440,10 +419,10 @@ denote-directory (expand-file-name "~/org/")))
   (denote-agenda-insinuate))
 
 (use-package denote-menu
-:ensure t
-:config
-(setq denote-menu-title-column-width 40
-denote-menu-show-file-type nil))
+  :ensure t
+  :config
+  (setq denote-menu-title-column-width 40
+		denote-menu-show-file-type nil))
 
 (use-package denote-org
     :ensure t)
@@ -627,26 +606,77 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
     :defer t
     :after (:all corfu))
 
+(use-package nix-mode
+  :ensure t
+  :mode "\\.nix\\'")
+
+(use-package typst-ts-mode
+  :straight t
+  :mode "\\.typ\\'"
+  :hook (typst-ts-mode . eglot-ensure)
+  :config
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 `(typst-ts-mode . ,(eglot-alternatives '("tinymist" "typst-lsp"))))))
+
+(use-package rustic
+  :ensure t
+  :defer t
+  :custom
+  (rustic-lsp-client 'eglot))
+
+;; Make sure rustic gets activated in the org-src block and add the original file's source code.
+(defun my-read-file-to-string (file)
+  (with-temp-buffer
+    (insert-file-contents file)
+    (buffer-string)))
+
+(defun org-babel-edit-prep:rust (babel-info)
+  (setq-local src-code (nth 1 babel-info))
+  (setq-local buffer-file-name (expand-file-name (->> babel-info caddr (alist-get :tangle))))
+  (setq-local buffer-src-code (replace-regexp-in-string src-code "" (my-read-file-to-string (buffer-file-name))))
+  (goto-char (point-max))
+  (insert buffer-src-code)
+  (narrow-to-region (point-min) (+ (point-min) (length src-code)))
+  (rustic-mode)
+  (org-src-mode))
+
+(defun my-delete-hidden-text ()
+  (-let [p-start (point-max)]
+    (widen)
+    (delete-region p-start (point-max))))
+
+(define-advice org-edit-src-exit
+    (:before (&rest _args) remove-src-block)
+  (when (eq major-mode 'rustic-mode)
+    (my-delete-hidden-text)))
+
+(define-advice org-edit-src-save
+    (:before (&rest _args) remove-src-block)
+  (when (eq major-mode 'rustic-mode)
+    (my-delete-hidden-text)))
+
 (use-package eglot
   :ensure nil
   :straight nil
-  :hook ((rust-mode . eglot-ensure)
-   (nix-mode  . eglot-ensure)
-   (python-mode . eglot-ensure)
-   (eglot-managed-mode . (lambda () (eldoc-mode -1))))
+  :hook ((rustic-mode . eglot-ensure)
+		 (nix-mode . eglot-ensure)
+		 (python-mode . eglot-ensure)
+		 ;; (eglot-managed-mode . (lambda () (eldoc-mode -1)))
+		 )
   :bind (:map eglot-mode-map
-("M-<return>" . eglot-code-actions)
-("C-M-."      . xref-find-references)
-("C-c r"      . eglot-rename))
+			  ("M-<return>" . eglot-code-actions)
+			  ("C-M-." . xref-find-references)
+			  ("C-c r" . eglot-rename))
   :config
   (add-to-list 'eglot-server-programs
- `(python-mode
- . ,(eglot-alternatives '(("basedpyright-langserver" "--stdio")
-  ("pyright-langserver" "--stdio")
-    "jedi-language-server"
-    "pylsp"))))
+			   `(python-mode
+				 . ,(eglot-alternatives '(("basedpyright-langserver" "--stdio")
+										  ("pyright-langserver" "--stdio")
+										  "jedi-language-server"
+										  "pylsp"))))
   (setq eldoc-echo-area-use-multiline-p nil
-  eglot-inlay-hints-mode -1)
+		eglot-inlay-hints-mode -1)
   (add-to-list 'eglot-server-programs '(nix-mode . ("nixd"))))
 
 (use-package eglot-booster
@@ -657,6 +687,9 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (use-package consult-eglot
   :straight t
   :after (consult eglot))
+
+(use-package olivetti
+  :defer t)
 
 (use-package eldoc-box
   :ensure t
@@ -697,21 +730,21 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :config
   (setq indent-guide-char "│"))    ;; Set the character used for the indent guide.
 
-(use-package add-node-modules-path
-  :ensure t
-  :straight t
-  :defer t
-  :custom
-  ;; Makes sure you are using the local bin for your
-  ;; node project. Local eslint, typescript server...
-  (eval-after-load 'typescript-ts-mode
-    '(add-hook 'typescript-ts-mode-hook #'add-node-modules-path))
-  (eval-after-load 'tsx-ts-mode
-    '(add-hook 'tsx-ts-mode-hook #'add-node-modules-path))
-  (eval-after-load 'typescriptreact-mode
-    '(add-hook 'typescriptreact-mode-hook #'add-node-modules-path))
-  (eval-after-load 'js-mode
-    '(add-hook 'js-mode-hook #'add-node-modules-path)))
+;;  (u se-package add-node-modules-path
+  ;; :ensure t
+  ;; :straight t
+  ;; :defer t
+  ;; :custom
+  ;; ;; Makes sure you are using the local bin for your
+  ;; ;; node project. Local eslint, typescript server...
+  ;; (eval-after-load 'typescript-ts-mode
+  ;;   '(add-hook 'typescript-ts-mode-hook #'add-node-modules-path))
+  ;; (eval-after-load 'tsx-ts-mode
+  ;;   '(add-hook 'tsx-ts-mode-hook #'add-node-modules-path))
+  ;; (eval-after-load 'typescriptreact-mode
+  ;;   '(add-hook 'typescriptreact-mode-hook #'add-node-modules-path))
+  ;; (eval-after-load 'js-mode
+  ;;   '(add-hook 'js-mode-hook #'add-node-modules-path)))
 
 (use-package general
   :straight t
@@ -741,6 +774,58 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :config
   (evil-mode 1))
 
+(use-package smartparens
+  :ensure t
+  :hook ((emacs-lisp-mode . smartparens-strict-mode)
+         (lisp-mode . smartparens-strict-mode)
+         (scheme-mode . smartparens-strict-mode)
+         (clojure-mode . smartparens-strict-mode))
+  :config
+  (require 'smartparens-config)
+  (smartparens-mode))
+
+(use-package evil-smartparens
+  :ensure t
+  :after evil-collection
+  :hook (smartparens-global-mode . evil-smartparens-mode))
+
+(use-package evil-collection
+  :after evil
+  :ensure t
+  :config
+  (evil-collection-init))
+
+
+(use-package evil-surround
+  :ensure t
+  :straight t
+  :after evil-collection
+  :config
+  (global-evil-surround-mode 1))
+
+(use-package evil-matchit
+  :ensure t
+  :straight t
+  :after evil-collection
+  :config
+  (global-evil-matchit-mode 1))
+
+(use-package evil-textobj-anyblock
+  :ensure t
+  :after evil
+  :config
+  (define-key evil-inner-text-objects-map "b" 'evil-textobj-anyblock-inner-block)
+  (define-key evil-outer-text-objects-map "b" 'evil-textobj-anyblock-a-block)
+  
+  (define-key evil-inner-text-objects-map "q" 'evil-textobj-anyblock-inner-quote)
+  (define-key evil-outer-text-objects-map "q" 'evil-textobj-anyblock-a-quote)
+  
+  (setq evil-textobj-anyblock-blocks
+	   '(("(" . ")")
+	     ("{" . "}")
+	     ("\\[" . "\\]")
+	     ("<" . ">"))))
+
 (use-package avy
   :ensure t
   :straight t
@@ -761,29 +846,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (evil-define-avy-motion evil-avy-goto-char-timer inclusive))
 
 
-
-(use-package evil-collection
-  :after evil
-  :ensure t
-  :config
-  (evil-collection-init))
-
-
-(use-package evil-surround
-  :ensure t
-  :straight t
-  :after evil-collection
-  :config
-  (global-evil-surround-mode 1))
-
-
-
-(use-package evil-matchit
-  :ensure t
-  :straight t
-  :after evil-collection
-  :config
-  (global-evil-matchit-mode 1))
 
 (use-package undo-tree
   :defer t
@@ -931,7 +993,7 @@ undo-outer-limit 120000000)           ;; Outer limit for undo entries.
 
 ;;; UTILITARY FUNCTION TO INSTALL EMACS-KICK
 (defun ek/first-install ()
-  "Install tree-sitter grammars and compile packages on first run..."
+  "dired"
   (interactive)                                      ;; Allow this function to be called interactively.
   (switch-to-buffer "*Messages*")                    ;; Switch to the *Messages* buffer to display installation messages.
   (message ">>> All required packages installed.")
@@ -1200,13 +1262,6 @@ mode-line-buffer-identification
   (setq delete-by-moving-to-trash t)
   (setq dired-mouse-drag-files t))
 
-(use-package nix-mode
-  :ensure t
-  :mode "\\.nix\\'")
-
-(use-package olivetti
-  :defer t)
-
 (setq-default olivetti-body-width 100)
 (define-globalized-minor-mode my-global-olivetti-mode olivetti-mode
   (lambda () (olivetti-mode 1)))
@@ -1267,6 +1322,13 @@ mode-line-buffer-identification
 (use-package pass
   :ensure t
   :defer t)
+
+(use-package zoom
+  :ensure t
+  :defer t)
+
+(use-package pdf-tools
+  :ensure t)
 
 ;; (setq )
 
@@ -1371,8 +1433,10 @@ mode-line-buffer-identification
   "P" '(consult-yank-from-kill-ring :wk "paste history"))
 
 (my-local-leader
-"a" '(org-agenda :wk "org agen")
-  "t" '(eat :wk "terminal"))
+  "a" '(org-agenda :wk "org agenda")
+  "t" '(eat :wk "terminal")
+  "c" '(my/centered-cursor :wk "center cursor")
+  "d" '(dirvish :wk "dired"))
 
 (general-def 'normal 'override
   "]d" 'flymake-goto-next-error
@@ -1408,7 +1472,7 @@ mode-line-buffer-identification
               (avy-background t)
               (scroll-margin 0)
               (maximum-scroll-margin 0))
-          (call-interactively 'avy-goto-char-timer))))
+          (call-interactively 'evil-avy-goto-char-2 ))))
 
 (general-def 'normal dirvish-mode-map
   "?" 'dirvish-dispatch
@@ -1442,7 +1506,25 @@ mode-line-buffer-identification
 
 (my-local-leader
   :keymaps 'org-mode-map
-  "h" '(consult-org-heading :wk "search headings"))
+  "h" '(consult-org-heading :wk "search headings")
+  "n" '(my-toggle-org-tree-indirect-buffer :wk "toggle narrow"))
+
+(general-def 'normal eat-mode-map
+  "C-l" 'eat-reset)
+
+;; (defun my-toggle-org-tree-indirect-buffer ()
+;;   (interactive)
+;;   (if (and (boundp 'my-org-indirect-buffer)
+;;            my-org-indirect-buffer
+;;            (buffer-live-p my-org-indirect-buffer))
+;;       (progn
+;;         (kill-buffer my-org-indirect-buffer)
+;;         (setq my-org-indirect-buffer nil))
+;;     (org-tree-to-indirect-buffer)
+;;     (setq my-org-indirect-buffer (current-buffer))
+;;     (delete-other-windows)))
+
+;; (evil-define-key 'normal 'org (kbd "z n") 'my-toggle-org-tree-indirect-buffer)
 
 (define-key minibuffer-local-map [escape] 'abort-recursive-edit)
 (define-key minibuffer-local-ns-map [escape] 'abort-recursive-edit)
