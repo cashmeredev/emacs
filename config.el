@@ -1,15 +1,11 @@
 ;;; config.el --- Emacs-Kick --- A feature rich Emacs config for (neo)vi(m)mers -*- lexical-binding: t; -*-
 ;; (setenv "LSP_USE_PLISTS" "true")
-;; (setq gc-cons-threshold #x40000000)
+(setq gc-cons-threshold #x40000000)
 
-(setq read-process-output-max (* 1024 1024 4))
+;; (setq read-process-output-max (* 1024 1024 4))
 
 ;; (setq package-enable-at-startup nil)
-(when (boundp 'pgtk-wait-for-event-timeout)
-  (setq pgtk-wait-for-event-timeout 0.001))
 
-(setq which-func-update-delay 1.0)
-(setq gnutls-algorithm-priority "NORMAL:-VERS-TLS1.3")
 (set-language-environment    "UTF-8")
 (setq locale-coding-system   'utf-8)
 (prefer-coding-system        'utf-8)
@@ -38,7 +34,6 @@
 
 ;;; EMACS
 ;;  This is biggest one. Keep going, plugins (oops, I mean packages) will be shorter :)
-(setq debug-on-error nil)
 (use-package emacs
   :straight nil
   :ensure nil
@@ -248,31 +243,31 @@
     ("C-r" . isearch-backward)))          ;; Bind C-r to backward isearch.
 
 (use-package vc
-:straight nil
-    :ensure nil                        ;; This is built-in, no need to fetch it.
-    :defer t
-    :bind
-    (("C-x v d" . vc-dir)              ;; Open VC directory for version control status.
-    ("C-x v =" . vc-diff)             ;; Show differences for the current file.
-    ("C-x v D" . vc-root-diff)        ;; Show differences for the entire repository.
-    ("C-x v v" . vc-next-action))     ;; Perform the next version control action.
-    :config
-    ;; Better colors for <leader> g b  (blame file)
-    (setq vc-annotate-color-map
-'((20 . "#f5e0dc")
-    (40 . "#f2cdcd")
-    (60 . "#f5c2e7")
-    (80 . "#cba6f7")
-    (100 . "#f38ba8")
-    (120 . "#eba0ac")
-    (140 . "#fab387")
-    (160 . "#f9e2af")
-    (180 . "#a6e3a1")
-    (200 . "#94e2d5")
-    (220 . "#89dceb")
-    (240 . "#74c7ec")
-    (260 . "#89b4fa")
-    (280 . "#b4befe"))))
+  :straight nil
+  :ensure nil                        ;; This is built-in, no need to fetch it.
+  :defer t
+  :bind
+  (("C-x v d" . vc-dir)              ;; Open VC directory for version control status.
+   ("C-x v =" . vc-diff)             ;; Show differences for the current file.
+   ("C-x v D" . vc-root-diff)        ;; Show differences for the entire repository.
+   ("C-x v v" . vc-next-action))     ;; Perform the next version control action.
+  :config
+  ;; Better colors for <leader> g b  (blame file)
+  (setq vc-annotate-color-map
+                '((20 . "#f5e0dc")
+                  (40 . "#f2cdcd")
+                  (60 . "#f5c2e7")
+                  (80 . "#cba6f7")
+                  (100 . "#f38ba8")
+                  (120 . "#eba0ac")
+                  (140 . "#fab387")
+                  (160 . "#f9e2af")
+                  (180 . "#a6e3a1")
+                  (200 . "#94e2d5")
+                  (220 . "#89dceb")
+                  (240 . "#74c7ec")
+                  (260 . "#89b4fa")
+                  (280 . "#b4befe"))))
 
 (use-package smerge-mode
 :straight nil
@@ -316,11 +311,12 @@
   :ensure nil)
 
 (use-package org
-    :straight nil
-    :ensure nil     
-    :defer t
+  :straight nil
+  :ensure nil     
+  :defer t
   :config
   (require 'org-tempo)
+
   (custom-set-faces
    '(org-document-title ((t (:height 1.6))))
    '(outline-1          ((t (:height 1.25))))
@@ -332,11 +328,12 @@
    '(outline-7          ((t (:height 1.2))))
    '(outline-8          ((t (:height 1.2))))
    '(outline-9          ((t (:height 1.2)))))
-  
+
   (setq org-startup-folded 'nil)
-  (setq org-adapt-indentation nil
+  (setq org-adapt-indentation t
         org-hide-leading-stars t
         org-pretty-entities t
+        org-startup-truncated t
         org-ellipsis "  ")
   (setq org-src-fontify-natively t
         org-src-tab-acts-natively t
@@ -347,9 +344,13 @@
         org-fold-catch-invisible-edits     'show-and-error
         org-special-ctrl-a/e               t
         org-insert-heading-respect-content t)
-   
+
   (add-hook 'org-mode-hook 'variable-pitch-mode)
   (add-hook 'org-mode-hook 'org-indent-mode)
+  (add-hook 'org-mode-hook 'visual-line-mode)
+  (add-hook 'org-mode-hook (lambda () (electric-indent-local-mode -1)))
+
+
   (add-to-list 'font-lock-extra-managed-props 'display)
   (font-lock-add-keywords 'org-mode
                           `(("^.*?\( \)\(:[[:alnum:]_@#%:]+:\)$"
@@ -365,6 +366,17 @@
   (setq org-appear-autoemphasis   t   ;; Show bold, italics, verbatim, etc.
         org-appear-autolinks      t   ;; Show links
         org-appear-autosubmarkers t)) ;; Show sub- and superscripts
+
+(use-package org-modern
+  :ensure t
+  :straight t
+  )
+(with-eval-after-load 'org (global-org-modern-mode))
+
+(setq org-modern-star 'fold)
+(setq org-modern-fold-stars '(("◉" . "○")))
+(setq org-modern-star 'replace)
+(setq org-modern-replace-stars "◉○◉○◉")
 
 (setq org-agenda-start-on-weekday nil
       org-agenda-block-separator  nil
@@ -398,8 +410,6 @@
                ((agenda "" ((org-agenda-span 3)
                             (org-agenda-start-on-weekday nil)
                             (org-deadline-warning-days 0))))))
-
-
 
 (use-package ox-typst
   :straight (:host github :repo "jmpunkt/ox-typst")
@@ -435,10 +445,6 @@ denote-directory (expand-file-name "~/org/")))
   (after-init . which-key-mode)
   :custom
   (which-key-idle-delay 0.3))
-
-(use-package gcmh
-  :config
-  (gcmh-mode 1))
 
 (use-package vertico
     :ensure t
@@ -525,6 +531,8 @@ denote-directory (expand-file-name "~/org/")))
   :defer t
   :custom
   (corfu-auto t)                        ;; Only completes when hitting TAB
+  (corfu-cycle t)                   
+  (text-mode-ispell-word-completion nil)  
   (corfu-auto-delay 0.08)                ;; Delay before popup (enable if corfu-auto is t)
   (corfu-auto-prefix 1)                  ;; Trigger completion after typing 1 character
   (corfu-quit-no-match t)                ;; Quit popup if no match
@@ -608,6 +616,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 (use-package nix-mode
   :ensure t
+  :defer t
   :mode "\\.nix\\'")
 
 (use-package typst-ts-mode
@@ -615,6 +624,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :mode "\\.typ\\'"
   :hook (typst-ts-mode . eglot-ensure)
   :config
+  :defer t
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
                  `(typst-ts-mode . ,(eglot-alternatives '("tinymist" "typst-lsp"))))))
@@ -627,34 +637,34 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 ;; Make sure rustic gets activated in the org-src block and add the original file's source code.
 (defun my-read-file-to-string (file)
-  (with-temp-buffer
-    (insert-file-contents file)
-    (buffer-string)))
+(with-temp-buffer
+(insert-file-contents file)
+(buffer-string)))
 
 (defun org-babel-edit-prep:rust (babel-info)
-  (setq-local src-code (nth 1 babel-info))
-  (setq-local buffer-file-name (expand-file-name (->> babel-info caddr (alist-get :tangle))))
-  (setq-local buffer-src-code (replace-regexp-in-string src-code "" (my-read-file-to-string (buffer-file-name))))
-  (goto-char (point-max))
-  (insert buffer-src-code)
-  (narrow-to-region (point-min) (+ (point-min) (length src-code)))
-  (rustic-mode)
-  (org-src-mode))
+(setq-local src-code (nth 1 babel-info))
+(setq-local buffer-file-name (expand-file-name (->> babel-info caddr (alist-get :tangle))))
+(setq-local buffer-src-code (replace-regexp-in-string src-code "" (my-read-file-to-string (buffer-file-name))))
+(goto-char (point-max))
+(insert buffer-src-code)
+(narrow-to-region (point-min) (+ (point-min) (length src-code)))
+(rustic-mode)
+(org-src-mode))
 
 (defun my-delete-hidden-text ()
-  (-let [p-start (point-max)]
-    (widen)
-    (delete-region p-start (point-max))))
+(-let [p-start (point-max)]
+(widen)
+(delete-region p-start (point-max))))
 
 (define-advice org-edit-src-exit
-    (:before (&rest _args) remove-src-block)
-  (when (eq major-mode 'rustic-mode)
-    (my-delete-hidden-text)))
+(:before (&rest _args) remove-src-block)
+(when (eq major-mode 'rustic-mode)
+(my-delete-hidden-text)))
 
 (define-advice org-edit-src-save
-    (:before (&rest _args) remove-src-block)
-  (when (eq major-mode 'rustic-mode)
-    (my-delete-hidden-text)))
+(:before (&rest _args) remove-src-block)
+(when (eq major-mode 'rustic-mode)
+(my-delete-hidden-text)))
 
 (use-package eglot
   :ensure nil
@@ -689,6 +699,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :after (consult eglot))
 
 (use-package olivetti
+  :ensure t
   :defer t)
 
 (use-package eldoc-box
@@ -702,23 +713,23 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :ensure t
   :hook
   (find-file . (lambda ()
- (global-diff-hl-mode)           ;; Enable Diff-HL mode for all files.
- (diff-hl-flydiff-mode)          ;; Automatically refresh diffs.
- (diff-hl-margin-mode)))         ;; Show diff indicators in the margin.
+                                 (global-diff-hl-mode)           ;; Enable Diff-HL mode for all files.
+                                 (diff-hl-flydiff-mode)          ;; Automatically refresh diffs.
+                                 (diff-hl-margin-mode)))         ;; Show diff indicators in the margin.
   :custom
   (diff-hl-side 'left)                           ;; Set the side for diff indicators.
   (diff-hl-margin-symbols-alist '((insert . "┃") ;; Customize symbols for each change type.
-  (delete . "-")
-  (change . "┃")
-  (unknown . "┆")
-  (ignored . "i"))))
+                                                                  (delete . "-")
+                                                                  (change . "┃")
+                                                                  (unknown . "┆")
+                                                                  (ignored . "i"))))
 
 (use-package magit
   :ensure t
   :straight t
   :config
   (if ek-use-nerd-fonts   ;; Check if nerd fonts are being used
-  (setopt magit-format-file-function #'magit-format-file-nerd-icons)) ;; Turns on magit nerd-icons
+          (setopt magit-format-file-function #'magit-format-file-nerd-icons)) ;; Turns on magit nerd-icons
   :defer t)
 
 (use-package indent-guide
@@ -729,22 +740,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (prog-mode . indent-guide-mode)  ;; Activate indent-guide in programming modes.
   :config
   (setq indent-guide-char "│"))    ;; Set the character used for the indent guide.
-
-;;  (u se-package add-node-modules-path
-  ;; :ensure t
-  ;; :straight t
-  ;; :defer t
-  ;; :custom
-  ;; ;; Makes sure you are using the local bin for your
-  ;; ;; node project. Local eslint, typescript server...
-  ;; (eval-after-load 'typescript-ts-mode
-  ;;   '(add-hook 'typescript-ts-mode-hook #'add-node-modules-path))
-  ;; (eval-after-load 'tsx-ts-mode
-  ;;   '(add-hook 'tsx-ts-mode-hook #'add-node-modules-path))
-  ;; (eval-after-load 'typescriptreact-mode
-  ;;   '(add-hook 'typescriptreact-mode-hook #'add-node-modules-path))
-  ;; (eval-after-load 'js-mode
-  ;;   '(add-hook 'js-mode-hook #'add-node-modules-path)))
 
 (use-package general
   :straight t
@@ -768,22 +763,20 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :init
   (setq evil-want-integration t)
   (setq evil-want-keybinding nil)
-  (setq evil-want-C-u-delete t)       ;; Makes C-u delete on insert mode
-  (setq evil-want-C-u-scroll t)       ;; Makes C-u delete on insert mode
-
+  (setq evil-want-C-u-delete t)
+  (setq evil-want-C-u-scroll t)
+  (setq evil-undo-system 'undo-tree)  
   :config
-  (evil-mode 1))
+  (evil-mode 1)
+  (define-key evil-normal-state-map "u" 'undo-tree-undo)
+  (define-key evil-normal-state-map (kbd "C-r") 'undo-tree-redo))
 
 (use-package smartparens
   :ensure t
-  :hook ((emacs-lisp-mode . smartparens-strict-mode)
-         (lisp-mode . smartparens-strict-mode)
-         (scheme-mode . smartparens-strict-mode)
-         (clojure-mode . smartparens-strict-mode))
+  :init
+  (smartparens-global-mode 1)  
   :config
-  (require 'smartparens-config)
-  (smartparens-mode))
-
+  (require 'smartparens-config))
 (use-package evil-smartparens
   :ensure t
   :after evil-collection
@@ -841,32 +834,25 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
         avy-case-fold-search t
         avy-timeout-seconds 0.3
         avy-style 'at-full
-        avy-keys '(?a ?s ?d ?f ?g ?h ?j ?k ?l ?q ?w ?e ?r ?t ?y ?u ?i ?o ?p))
+        avy-keys '(?a ?s ?d ?f ?g ?h ?j ?k ?l))
 
   (evil-define-avy-motion evil-avy-goto-char-timer inclusive))
-
-
 
 (use-package undo-tree
   :defer t
   :ensure t
   :straight t
-  :hook
-  (after-init . global-undo-tree-mode)
+  :hook (after-init . global-undo-tree-mode)
   :init
   (setq undo-tree-visualizer-timestamps t
-undo-tree-visualizer-diff t
-;; Increase undo limits to avoid losing history due to Emacs' garbage collection.
-;; These values can be adjusted based on your needs.
-;; 10X bump of the undo limits to avoid issues with premature
-;; Emacs GC which truncates the undo history very aggressively.
-undo-limit 800000                     ;; Limit for undo entries.
-undo-strong-limit 12000000            ;; Strong limit for undo entries.
-undo-outer-limit 120000000)           ;; Outer limit for undo entries.
+        undo-tree-visualizer-diff t
+        undo-tree-auto-save-history nil  
+        undo-tree-history-directory-alist nil  
+        undo-limit 800000
+        undo-strong-limit 12000000
+        undo-outer-limit 120000000)
   :config
-  ;; Set the directory where `undo-tree' will save its history files.
-  ;; This keeps undo history across sessions, stored in a cache directory.
-  (setq undo-tree-history-directory-alist '(("." . "~/.emacs.d/.cache/undo"))))
+  (setq undo-tree-mode-lighter ""))
 
 (use-package rainbow-delimiters
   :defer t
@@ -906,26 +892,6 @@ undo-outer-limit 120000000)           ;; Outer limit for undo entries.
   (add-to-list 'pulsar-pulse-functions 'evil-jump-item)
   (add-to-list 'pulsar-pulse-functions 'diff-hl-next-hunk)
   (add-to-list 'pulsar-pulse-functions 'diff-hl-previous-hunk))
-
-;;; DOOM MODELINE
-;; The `doom-modeline' package provides a sleek, modern mode-line that is visually appealing
-;; and functional. It integrates well with various Emacs features, enhancing the overall user
-;; experience by displaying relevant information in a compact format.
-;; (use-package doom-modeline
-;;   :ensure t
-;;   :straight t
-;;   :defer t
-;;   :custom
-;;   (doom-modeline-buffer-file-name-style 'buffer-name)  ;; Set the buffer file name style to just the buffer name (without path).
-;;   (doom-modeline-project-detection 'project)           ;; Enable project detection for displaying the project name.
-;;   (doom-modeline-buffer-name t)                        ;; Show the buffer name in the mode line.
-;;   (doom-modeline-vcs-max-length 25)                    ;; Limit the version control system (VCS) branch name length to 25 characters.
-;;   :config
-;;   (if ek-use-nerd-fonts                                ;; Check if nerd fonts are being used.
-;;       (setq doom-modeline-icon t)                      ;; Enable icons in the mode line if nerd fonts are used.
-;;     (setq doom-modeline-icon nil))                     ;; Disable icons if nerd fonts are not being used.
-;;   :hook
-;;   (after-init . doom-modeline-mode))
 
 (use-package evil-org
   :ensure t
@@ -1009,17 +975,6 @@ undo-outer-limit 120000000)           ;; Outer limit for undo entries.
   (kill-emacs))                                      ;; Close Emacs after installation is complete.
 
 ;;; init.el ends here
-
-(use-package org-modern
-  :ensure t
-  :straight t
-  )
-(with-eval-after-load 'org (global-org-modern-mode))
-
-(setq org-modern-star 'fold)
-(setq org-modern-fold-stars '(("◉" . "○")))
-(setq org-modern-star 'replace)
-(setq org-modern-replace-stars "◉○◉○◉")
 
 (require 'battery)
 (require 'nerd-icons)
@@ -1173,28 +1128,18 @@ mode-line-buffer-identification
   :bind (:map custom-bindings-map ("C-c h m" . hide-mode-line-mode)))
 
 (use-package adaptive-wrap
-  :defer t
-  :hook (visual-line-mode . adaptive-wrap-prefix-mode))
+  :ensure t
+  :hook ((text-mode . adaptive-wrap-prefix-mode))
+  :config
+  (add-hook 'org-mode-hook 
+    (lambda () 
+      (when (bound-and-true-p adaptive-wrap-prefix-mode)
+        (adaptive-wrap-prefix-mode -1)))))
 
 (setq package-gnupghome-dir "~/.gnupg")
 
-(blink-cursor-mode        0)
+(blink-cursor-mode 0)
 (setq-default cursor-type 'bar)
-
-;; (setq my-whitespace-style '(face tabs lines-tail) ;; ⚠️ DEAKTIVIERT
-;;       whitespace-style my-whitespace-style ;; ⚠️ DEAKTIVIERT
-;;       whitespace-line-column 120 ;; ⚠️ DEAKTIVIERT
-;;       fill-column 120 ;; ⚠️ DEAKTIVIERT
-;;       whitespace-display-mappings ;; ⚠️ DEAKTIVIERT
-;;       '((space-mark 32 [183] [46]) ;; ⚠️ DEAKTIVIERT
-;;         (newline-mark 10 [36 10]) ;; ⚠️ DEAKTIVIERT
-;;         (tab-mark 9 [9655 9] [92 9]))) ;; ⚠️ DEAKTIVIERT
-
-;; in e.g. clojure-mode-hook
-;; (whitespace-mode 1)
-;; or globally
-;; (global-whitespace-mode 1)
-;; (add-hook 'prog-mode 'whitespace-mode) ;; ⚠️ KOMPLETT DEAKTIVIERT - verursacht org-mode Probleme
 
 (defvar cashmere/font-height 170)
 
@@ -1265,7 +1210,12 @@ mode-line-buffer-identification
 (setq-default olivetti-body-width 100)
 (define-globalized-minor-mode my-global-olivetti-mode olivetti-mode
   (lambda () (olivetti-mode 1)))
+(my/centered-cursor)
 (my-global-olivetti-mode)
+
+(use-package org-modern-indent
+  :straight (:host github :repo "jdtsmith/org-modern-indent")
+  :hook (org-mode . org-modern-indent-mode))
 
 (setq ibuffer-never-show-predicates
       '(;; System buffers
@@ -1283,9 +1233,6 @@ mode-line-buffer-identification
         "^\\*clojure-lsp::stderr\\*$"
         "^\\*ts-ls\\*$"
         "^\\*ts-ls::stderr\\*$"))
-
-(use-package bufler
-  :defer t)
 
 (use-package eat
   :ensure t
@@ -1328,22 +1275,19 @@ mode-line-buffer-identification
   :defer t)
 
 (use-package pdf-tools
-  :ensure t)
+:ensure t
+:magic ("%PDF" . pdf-view-mode)
+:config
+(pdf-tools-install :no-query)
+:hook (pdf-view-mode . (lambda () (display-line-numbers-mode -1))))
 
 ;; (setq )
-
-(defun my/smart-find-file ()
-  (interactive)
-  (if (projectile-project-p)
-      (projectile-find-file)
-    (consult-buffer)))
 
 (my-leader
   "sp" '(consult-ripgrep :wk "search project")
   "/" '(consult-line :wk "search buffer")
   "." '(find-file :wk "find file")
   "," '(bufler-switch-buffer :wk "switch buffer")
-  "SPC" '(my/smart-find-file :wk "find file/buffer")
   ":" (lambda () (interactive) (execute-extended-command nil))
 
 "d" '(:ignore t :wk "denote")
