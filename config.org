@@ -1,3 +1,4 @@
+#+title: My Emacs configuration
 #+PROPERTY: header-args :tangle yes
 #+startup: content
 
@@ -13,13 +14,12 @@
 
 ;; (setq package-enable-at-startup nil)
 
-(set-language-environment    "UTF-8")
-(setq locale-coding-system   'utf-8)
-(prefer-coding-system        'utf-8)
-(set-default-coding-systems  'utf-8)
-(set-terminal-coding-system  'utf-8)
-(set-keyboard-coding-system  'utf-8)
-(set-selection-coding-system 'utf-8)
+(prefer-coding-system 'utf-8-unix)
+(set-default-coding-systems 'utf-8-unix)
+(set-terminal-coding-system 'utf-8-unix)
+(set-keyboard-coding-system 'utf-8-unix)
+(setq default-buffer-file-coding-system 'utf-8-unix)
+(setq-default buffer-file-coding-system 'utf-8-unix)
 
 (setq create-lockfiles nil)
 (setq make-backup-files nil)
@@ -39,18 +39,6 @@
 * Visual Optimizations
 
 Let's define some visual optimizations to change the appearnce of Emacs.
-
-** Opacity
-
-To change the appearance of Emacs, lets start with the opacity. Setting it to 90% changes Emacs to a whole new level, as the colors of your theme and your background image harmonize with each otherd.
-
-#+begin_src emacs-lisp
-
-(setq default-frame-alist 
-      '((alpha-background . 90)
-	(undecorated . t)))
-
-#+end_src
 
 * emacs
 
@@ -90,8 +78,6 @@ To change the appearance of Emacs, lets start with the opacity. Setting it to 90
   :hook ;; Add hooks to enable specific features in certain modes.
   (prog-mode . display-line-numbers-mode)
   (org-mode . display-line-numbers-mode)
-  ;; (org-mode . (lambda () (display-line-numbers-mode -1)))
-
 
   :config
   (add-to-list 'custom-theme-load-path user-emacs-directory)
@@ -170,7 +156,7 @@ To change the appearance of Emacs, lets start with the opacity. Setting it to 90
     :group 'appearance)
 #+end_src
 
-* window
+* Window
 
 #+begin_src emacs-lisp
 
@@ -356,6 +342,23 @@ To change the appearance of Emacs, lets start with the opacity. Setting it to 90
     (global-eldoc-mode))
 #+end_src
 
+** eldoc-box
+
+#+begin_src emacs-lisp
+(use-package eldoc-box
+  :ensure t
+  :straight t
+  :defer t
+  :config
+  (setq eldoc-box-clear-with-C-g t)
+  (setq eldoc-box-only-multiline-doc nil)
+  (setq eldoc-box-frame-parameters
+                '((internal-border-width . 2)
+          (border-width . 1)
+          (left-fringe . 8)
+          (right-fringe . 8))))
+#+end_src
+
 * flymake
 
 Disabled because nix is managing the flymake configuration.
@@ -458,7 +461,6 @@ Disabled because nix is managing the flymake configuration.
 #+begin_src emacs-lisp
  (use-package org-modern
    :ensure t
-   :straight t
    )
  (with-eval-after-load 'org (global-org-modern-mode))
 
@@ -482,7 +484,7 @@ We will start of with setting some sane configuration for org agenda.
 
 #+begin_src emacs-lisp
 (use-package org-super-agenda
-  :after org
+  :defer t
   :config
   (setq org-super-agenda-header-prefix "\n ")
   ;; Hide the thin width char glyph
@@ -578,8 +580,7 @@ Denote fitself focused on the last versions to have a core for note taking and t
 #+begin_src emacs-lisp
 
 (use-package which-key
-  :straight nil
-  :ensure nil
+  :ensure t
   :defer t
   :hook
   (after-init . which-key-mode)
@@ -645,8 +646,8 @@ Denote fitself focused on the last versions to have a core for note taking and t
   :init
   (advice-add #'register-preview :override #'consult-register-window)
 
-  ;; (setq xref-show-xrefs-function #'consult-xref
-  ;;       xref-show-definitions-function #'consult-xref)
+  (setq xref-show-xrefs-function #'consult-xref
+        xref-show-definitions-function #'consult-xref)
 
   :config
   (setq consult-buffer-filter
@@ -814,15 +815,15 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ** typst-mode
 
    #+begin_src emacs-lisp
-(use-package typst-ts-mode
-  :straight t
-  :mode "\\.typ\\'"
-  :hook (typst-ts-mode . eglot-ensure)
-  :config
-  :defer t
-  (with-eval-after-load 'eglot
-    (add-to-list 'eglot-server-programs
-                 `(typst-ts-mode . ,(eglot-alternatives '("tinymist" "typst-lsp"))))))
+   (use-package typst-ts-mode
+     :straight t
+     :mode "\\.typ\\'"
+     :hook (typst-ts-mode . eglot-ensure)
+     :config
+     ;; :defer t
+     (with-eval-after-load 'eglot
+       (add-to-list 'eglot-server-programs
+                    `(typst-ts-mode . ,(eglot-alternatives '("tinymist" "typst-lsp"))))))
    #+end_src
    
 ** rust mode
@@ -870,6 +871,20 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (my-delete-hidden-text)))
 #+end_src
     
+*** yasnippet
+
+#+begin_src emacs-lisp
+(use-package yasnippet
+  :ensure t
+  :after eglot
+  :hook ((prog-mode . yas-minor-mode)
+         (org-mode . yas-minor-mode)))
+
+(use-package yasnippet-snippets
+  :ensure t
+  :after yasnippet)
+#+end_src
+
 * eglot
 
 #+begin_src emacs-lisp
@@ -877,25 +892,23 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :ensure nil
   :straight nil
   :hook ((rustic-mode . eglot-ensure)
-		 (nix-mode . eglot-ensure)
-		 (python-mode . eglot-ensure)
-		 ;; (eglot-managed-mode . (lambda () (eldoc-mode -1)))
-		 )
+         (nix-mode . eglot-ensure)
+         (python-mode . eglot-ensure)
+         (eglot-managed-mode . (lambda () (eglot-inlay-hints-mode -1)))
+         )
   :bind (:map eglot-mode-map
-			  ("M-<return>" . eglot-code-actions)
-			  ("C-M-." . xref-find-references)
-			  ("C-c r" . eglot-rename))
+              ("M-<return>" . eglot-code-actions)
+              ("C-M-." . xref-find-references)
+              ("C-c r" . eglot-rename))
   :config
   (add-to-list 'eglot-server-programs
-			   `(python-mode
-				 . ,(eglot-alternatives '(("basedpyright-langserver" "--stdio")
-										  ("pyright-langserver" "--stdio")
-										  "jedi-language-server"
-										  "pylsp"))))
-  (setq eldoc-echo-area-use-multiline-p nil
-		eglot-inlay-hints-mode -1)
+               `(python-mode
+                 . ,(eglot-alternatives '(("basedpyright-langserver" "--stdio")
+                                          ("pyright-langserver" "--stdio")
+                                          "jedi-language-server"
+                                          "pylsp"))))
+  (setq eldoc-echo-area-use-multiline-p nil)
   (add-to-list 'eglot-server-programs '(nix-mode . ("nixd"))))
-
 #+end_src
 
 ** eglot-booster
@@ -921,15 +934,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (use-package olivetti
   :ensure t
   :defer t)
-#+end_src
-
-* eldoc
-
-#+begin_src emacs-lisp
-  (use-package eldoc-box
-    :ensure t
-    :straight t
-    :defer t)
 #+end_src
 
 * diff-hl
@@ -983,22 +987,22 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 * general
 
 #+begin_src emacs-lisp
-  (use-package general
-    :straight t
-    :ensure t
-    :demand t
-    :config
-    (general-evil-setup)
+(use-package general
+  :straight t
+  :ensure t
+  :demand t
+  :config
+  (general-evil-setup)
 
-    (general-create-definer my-leader
-      :states '(normal visual)
-      :keymaps 'override
-      :prefix "SPC")
+  (general-create-definer my-leader
+    :states '(normal visual)
+    :keymaps 'override
+    :prefix "SPC")
 
-    (general-create-definer my-local-leader
-      :states '(normal visual)
-      :keymaps 'override
-      :prefix ","))
+  (general-create-definer my-local-leader
+    :states '(normal visual)
+    :keymaps 'override
+    :prefix ","))
 #+end_src
 
 * evil
@@ -1068,15 +1072,42 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
      (define-key evil-inner-text-objects-map "b" 'evil-textobj-anyblock-inner-block)
      (define-key evil-outer-text-objects-map "b" 'evil-textobj-anyblock-a-block)
      
-     (define-key evil-inner-text-objects-map "q" 'evil-textobj-anyblock-inner-quote)
-     (define-key evil-outer-text-objects-map "q" 'evil-textobj-anyblock-a-quote)
+     ;; (define-key evil-inner-text-objects-map "q" 'evil-textobj-anyblock-inner-quote)
+     ;; (define-key evil-outer-text-objects-map "q" 'evil-textobj-anyblock-a-quote)
      
      (setq evil-textobj-anyblock-blocks
-	   '(("(" . ")")
-	     ("{" . "}")
-	     ("\\[" . "\\]")
-	     ("<" . ">"))))
+   	   '(("(" . ")")
+   	     ("{" . "}")
+   	     ("\\[" . "\\]")
+   	     ("<" . ">"))))
    #+end_src
+
+** add quotes
+
+#+begin_src emacs-lisp
+(evil-define-text-object my-evil-textobj-anyblock-inner-quote
+  (count &optional beg end type)
+  "Select the closest outer quote."
+  (let ((evil-textobj-anyblock-blocks
+         '(("'" . "'")
+           ("\"" . "\"")
+           ("`" . "'")
+           ("“" . "”"))))
+    (evil-textobj-anyblock--make-textobj beg end type count nil)))
+
+(evil-define-text-object my-evil-textobj-anyblock-a-quote
+  (count &optional beg end type)
+  "Select the closest outer quote."
+  (let ((evil-textobj-anyblock-blocks
+         '(("'" . "'")
+           ("\"" . "\"")
+           ("`" . "'")
+           ("“" . "”"))))
+    (evil-textobj-anyblock--make-textobj beg end type count t)))
+
+(define-key evil-inner-text-objects-map "q" 'my-evil-textobj-anyblock-inner-quote)
+(define-key evil-outer-text-objects-map "q" 'my-evil-textobj-anyblock-a-quote)
+#+end_src
 
 * avy
 
@@ -1680,17 +1711,16 @@ mode-line-buffer-identification
   :hook (pdf-view-mode . (lambda () (display-line-numbers-mode -1))))
   #+end_src
   
-
 * keybindings
    
-** global leader (SPC) kill ring
+** global leader 
 
 #+begin_src emacs-lisp
 (my-leader
   "sp" '(consult-ripgrep :wk "search project")
   "/" '(consult-line :wk "search buffer")
   "." '(find-file :wk "find file")
-  "," '(bufler-switch-buffer :wk "switch buffer")
+  "," '(consult-buffer :wk "switch buffer")
   ":" (lambda () (interactive) (execute-extended-command nil))
 
 "d" '(:ignore t :wk "denote")
@@ -1778,6 +1808,51 @@ mode-line-buffer-identification
   "a" '(embark-act :wk "embark")
   "u" '(undo-tree-visualize :wk "undo tree")
   "P" '(consult-yank-from-kill-ring :wk "paste history"))
+#+end_src
+
+** evil lookup
+
+#+begin_src emacs-lisp
+(defun my/evil-eldoc-box-lookup ()
+  "Show documentation using eldoc-box."
+  (interactive)
+  (cond
+   ((and (fboundp 'eglot-managed-p) (eglot-managed-p))
+    (eldoc-box-help-at-point))
+   (t
+    (call-interactively 'describe-symbol))))
+
+(general-def 'normal 'override
+  "K" 'my/evil-eldoc-box-lookup)
+#+end_src
+
+** ibuffer
+
+#+begin_src emacs-lisp
+(defun my/ibuffer-smart ()
+  (interactive)
+  (ibuffer)
+  (local-set-key (kbd "RET") 
+                 (lambda () 
+                   (interactive)
+                   (ibuffer-visit-buffer)
+                   (kill-buffer "*Ibuffer*")))
+  (local-set-key (kbd "q") 
+                 (lambda () 
+                   (interactive)
+                   (kill-buffer "*Ibuffer*"))))
+
+(my-leader
+  "bi" 'my/ibuffer-smart)
+#+end_src
+
+*** better display buffer
+
+#+begin_src 
+(add-to-list 'display-buffer-alist
+             '("\\*Ibuffer\\*"
+               (display-buffer-same-window)
+               (inhibit-same-window . nil)))
 #+end_src
 
 ** local leader (,)
@@ -1894,28 +1969,9 @@ Here we configure the keymaps for keymaps in normal state.
      "C-l" 'eat-reset)
    #+end_src
 
-*** focus headline
-
-    #+begin_src emacs-lisp
-    ;; (defun my-toggle-org-tree-indirect-buffer ()
-    ;;   (interactive)
-    ;;   (if (and (boundp 'my-org-indirect-buffer)
-    ;;            my-org-indirect-buffer
-    ;;            (buffer-live-p my-org-indirect-buffer))
-    ;;       (progn
-    ;;         (kill-buffer my-org-indirect-buffer)
-    ;;         (setq my-org-indirect-buffer nil))
-    ;;     (org-tree-to-indirect-buffer)
-    ;;     (setq my-org-indirect-buffer (current-buffer))
-    ;;     (delete-other-windows)))
-
-    ;; (evil-define-key 'normal 'org (kbd "z n") 'my-toggle-org-tree-indirect-buffer)
-    #+end_src
-
 ** minibuffer
 
 #+begin_src emacs-lisp
-
 (define-key minibuffer-local-map [escape] 'abort-recursive-edit)
 (define-key minibuffer-local-ns-map [escape] 'abort-recursive-edit)
 (define-key minibuffer-local-completion-map [escape] 'abort-recursive-edit)
@@ -1923,7 +1979,7 @@ Here we configure the keymaps for keymaps in normal state.
 (define-key minibuffer-local-isearch-map [escape] 'abort-recursive-edit)
 #+end_src
 
-** scroll
+** text scaling
 
    #+begin_src emacs-lisp
    (global-set-key (kbd "C-=") 'text-scale-increase)
@@ -1933,5 +1989,5 @@ Here we configure the keymaps for keymaps in normal state.
 ** provide init
 
    #+begin_src emacs-lisp
-  (provide 'init)
+   (provide 'init)
    #+end_src

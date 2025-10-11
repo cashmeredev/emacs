@@ -1,6 +1,5 @@
 ;; -*- lexical-binding: t; -*-
 
-;; Bootstrap straight.el (bestehender Code beibehalten)
 (setq straight-check-for-modifications nil)
 (defvar bootstrap-version)
 (let ((bootstrap-file
@@ -18,15 +17,10 @@
       (eval-print-last-sexp)))
   (load bootstrap-file nil 'nomessage))
 
-;; Configure straight.el
 (straight-use-package '(project :type built-in))
 (straight-use-package '(xref :type built-in))
 (straight-use-package 'use-package)
 
 (setq straight-use-package-by-default t)
 
-;; WICHTIG: Org vor org-babel-load-file laden
-(straight-use-package 'org)
-
-;; Jetzt kann die literate config sicher geladen werden
-(org-babel-load-file (expand-file-name "config.org" user-emacs-directory))
+(load (expand-file-name "config.el" user-emacs-directory))

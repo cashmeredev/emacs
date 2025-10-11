@@ -1,19 +1,13 @@
 ;;; config.el --- Emacs-Kick --- A feature rich Emacs config for (neo)vi(m)mers -*- lexical-binding: t; -*-
 ;; (setenv "LSP_USE_PLISTS" "true")
-(setq gc-cons-threshold #x40000000)
+;; (setq debug-on-error '(wrong-type-argument))
+;; (setq gc-cons-threshold #x40000000)
+;; (setq gc-cons-threshold 50000000)
+;; (setenv "LSP_USE_PLISTS" "true")
+(setq gc-cons-threshold 100000000)
 
-;; (setq read-process-output-max (* 1024 1024 4))
-
-;; (setq package-enable-at-startup nil)
-
-(set-language-environment    "UTF-8")
-(setq locale-coding-system   'utf-8)
-(prefer-coding-system        'utf-8)
-(set-default-coding-systems  'utf-8)
-(set-terminal-coding-system  'utf-8)
-(set-keyboard-coding-system  'utf-8)
-(set-selection-coding-system 'utf-8)
-
+(add-hook 'emacs-startup-hook
+          (lambda () (setq gc-cons-threshold (* 50 1024 1024))))
 (setq create-lockfiles nil)
 (setq make-backup-files nil)
 
@@ -28,16 +22,13 @@
 (setq kept-new-versions             5)
 (setq kept-old-versions             5)
 
-(setq default-frame-alist 
-      '((alpha-background . 90)
-	(undecorated . t)))
-
 ;;; EMACS
 ;;  This is biggest one. Keep going, plugins (oops, I mean packages) will be shorter :)
 (use-package emacs
   :straight nil
   :ensure nil
   :custom                                         ;; Set custom variables to configure Emacs behavior.
+  (setq modify-coding-system-alist 'file "" 'utf-8)
   (column-number-mode t)                          ;; Display the column number in the mode line.
   (auto-save-default nil)                         ;; Disable automatic saving of buffers.
   (create-lockfiles nil)                          ;; Prevent the creation of lock files when editing.
@@ -66,8 +57,6 @@
   :hook ;; Add hooks to enable specific features in certain modes.
   (prog-mode . display-line-numbers-mode)
   (org-mode . display-line-numbers-mode)
-  ;; (org-mode . (lambda () (display-line-numbers-mode -1)))
-
 
   :config
   (add-to-list 'custom-theme-load-path user-emacs-directory)
@@ -150,40 +139,40 @@
 ;; Note: I have left some commented-out code below that may facilitate your
 ;; Emacs journey later on. These configurations can be useful for displaying
 ;; other types of buffers in side windows, allowing for a more organized workspace.
-(use-package window
-  :straight nil
-  :ensure nil       ;; This is built-in, no need to fetch it.
-  :custom
-  (display-buffer-alist
-   '(
- ;; ("\\*.*e?shell\\*"
- ;;  (display-buffer-in-side-window)
- ;;  (window-height . 0.25)
- ;;  (side . bottom)
- ;;  (slot . -1))
+  (use-package window
+    :straight nil
+    :ensure nil       ;; This is built-in, no need to fetch it.
+    :custom
+    (display-buffer-alist
+     '(
+   ;; ("\\*.*e?shell\\*"
+   ;;  (display-buffer-in-side-window)
+   ;;  (window-height . 0.25)
+   ;;  (side . bottom)
+   ;;  (slot . -1))
 
- ("\\*\\(Backtrace\\|Warnings\\|Compile-Log\\|[Hh]elp\\|Messages\\|Bookmark List\\|Ibuffer\\|Occur\\|eldoc.*\\)\\*"
-  (display-buffer-in-side-window)
-  (window-height . 0.25)
-  (side . bottom)
-  (slot . 0))
+   ("\\*\\(Backtrace\\|Warnings\\|Compile-Log\\|[Hh]elp\\|Messages\\|Bookmark List\\|Ibuffer\\|Occur\\|eldoc.*\\)\\*"
+    (display-buffer-in-side-window)
+    (window-height . 0.25)
+    (side . bottom)
+    (slot . 0))
 
- ;; Example configuration for the LSP help buffer,
- ;; keeps it always on bottom using 25% of the available space:
- ("\\*\\(lsp-help\\)\\*"
-  (display-buffer-in-side-window)
-  (window-height . 0.25)
-  (side . bottom)
-  (slot . 0))
+   ;; Example configuration for the LSP help buffer,
+   ;; keeps it always on bottom using 25% of the available space:
+   ("\\*\\(lsp-help\\)\\*"
+    (display-buffer-in-side-window)
+    (window-height . 0.25)
+    (side . bottom)
+    (slot . 0))
 
- ;; Configuration for displaying various diagnostic buffers on
- ;; bottom 25%:
- ("\\*\\(Flymake diagnostics\\|xref\\|ivy\\|Swiper\\|Completions\\)"
-  (display-buffer-in-side-window)
-  (window-height . 0.25)
-  (side . bottom)
-  (slot . 1))
- )))
+   ;; Configuration for displaying various diagnostic buffers on
+   ;; bottom 25%:
+   ("\\*\\(Flymake diagnostics\\|xref\\|ivy\\|Swiper\\|Completions\\)"
+    (display-buffer-in-side-window)
+    (window-height . 0.25)
+    (side . bottom)
+    (slot . 1))
+   )))
 
 (use-package dired
 :straight nil
@@ -282,15 +271,28 @@
 (use-package eldoc
 :straight nil
     :ensure nil                                ;; This is built-in, no need to fetch it.
-	:after eglot
+    :after lsp-mode
     :config
-    (setq eldoc-idle-delay 0.0001)                  ;; Automatically fetch doc help
+    (setq eldoc-idle-delay 0.001)                  ;; Automatically fetch doc help
     (setq eldoc-echo-area-use-multiline-p t) ;; We use the "K" floating help instead
 ;; set to t if you want docs on the echo area
 (setq eldoc-help-at-pt t)
 (setq eldoc-echo-area-display-truncation-message nil)
     :init
     (global-eldoc-mode))
+
+(use-package eldoc-box
+  :ensure t
+  :straight t
+  :defer t
+  :config
+  (setq eldoc-box-clear-with-C-g t)
+  (setq eldoc-box-only-multiline-doc nil)
+  (setq eldoc-box-frame-parameters
+                '((internal-border-width . 2)
+          (border-width . 1)
+          (left-fringe . 8)
+          (right-fringe . 8))))
 
 (use-package flymake
   :straight nil
@@ -301,6 +303,10 @@
     (flymake-margin-indicators-string
     '((error "!»" compilation-error) (warning "»" compilation-warning)
 (note "»" compilation-info))))
+
+(setq trusted-content
+      '("~/.emacs.d/config.el"
+        "~/.emacs.d/init.el"))
 
 (use-package xref
   :straight nil
@@ -369,7 +375,6 @@
 
 (use-package org-modern
   :ensure t
-  :straight t
   )
 (with-eval-after-load 'org (global-org-modern-mode))
 
@@ -383,7 +388,7 @@
       org-agenda-remove-tags      t)
 
 (use-package org-super-agenda
-  :after org
+  :defer t
   :config
   (setq org-super-agenda-header-prefix "\n ")
   ;; Hide the thin width char glyph
@@ -438,8 +443,7 @@ denote-directory (expand-file-name "~/org/")))
     :ensure t)
 
 (use-package which-key
-  :straight nil
-  :ensure nil
+  :ensure t
   :defer t
   :hook
   (after-init . which-key-mode)
@@ -486,6 +490,7 @@ denote-directory (expand-file-name "~/org/")))
 ;; It integrates well with other completion frameworks like Vertico, enabling
 ;; features like previews and enhanced register management. It's useful for
 ;; navigating buffers, files, and xrefs with ease.
+
 (use-package consult
   :ensure t
   :straight t
@@ -493,8 +498,8 @@ denote-directory (expand-file-name "~/org/")))
   :init
   (advice-add #'register-preview :override #'consult-register-window)
 
-  ;; (setq xref-show-xrefs-function #'consult-xref
-  ;;       xref-show-definitions-function #'consult-xref)
+  (setq xref-show-xrefs-function #'consult-xref
+        xref-show-definitions-function #'consult-xref)
 
   :config
   (setq consult-buffer-filter
@@ -622,18 +627,20 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (use-package typst-ts-mode
   :straight t
   :mode "\\.typ\\'"
-  :hook (typst-ts-mode . eglot-ensure)
+  ;; :hook (typst-ts-mode . eglot-ensure)
   :config
   :defer t
-  (with-eval-after-load 'eglot
-    (add-to-list 'eglot-server-programs
-                 `(typst-ts-mode . ,(eglot-alternatives '("tinymist" "typst-lsp"))))))
+  ;; (with-eval-after-load 'eglot
+  ;;   (add-to-list 'eglot-server-programs
+  ;;                `(typst-ts-mode . ,(eglot-alternatives '("tinymist" "typst-lsp")))))
+  )
 
 (use-package rustic
   :ensure t
   :defer t
-  :custom
-  (rustic-lsp-client 'eglot))
+  ;; :custom
+  ;; (rustic-lsp-client 'eglot)
+  )
 
 ;; Make sure rustic gets activated in the org-src block and add the original file's source code.
 (defun my-read-file-to-string (file)
@@ -666,45 +673,105 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (when (eq major-mode 'rustic-mode)
 (my-delete-hidden-text)))
 
-(use-package eglot
-  :ensure nil
-  :straight nil
-  :hook ((rustic-mode . eglot-ensure)
-		 (nix-mode . eglot-ensure)
-		 (python-mode . eglot-ensure)
-		 ;; (eglot-managed-mode . (lambda () (eldoc-mode -1)))
-		 )
-  :bind (:map eglot-mode-map
-			  ("M-<return>" . eglot-code-actions)
-			  ("C-M-." . xref-find-references)
-			  ("C-c r" . eglot-rename))
-  :config
-  (add-to-list 'eglot-server-programs
-			   `(python-mode
-				 . ,(eglot-alternatives '(("basedpyright-langserver" "--stdio")
-										  ("pyright-langserver" "--stdio")
-										  "jedi-language-server"
-										  "pylsp"))))
-  (setq eldoc-echo-area-use-multiline-p nil
-		eglot-inlay-hints-mode -1)
-  (add-to-list 'eglot-server-programs '(nix-mode . ("nixd"))))
+(use-package yasnippet
+  :ensure t
+  :after lsp-mode
+  :hook ((prog-mode . yas-minor-mode)
+         (org-mode . yas-minor-mode)))
 
-(use-package eglot-booster
-:straight ( eglot-booster :type git :host nil :repo "https://github.com/jdtsmith/eglot-booster")
-:after eglot
-:config (eglot-booster-mode))
+(use-package yasnippet-snippets
+  :ensure t
+  :after yasnippet)
 
-(use-package consult-eglot
+;; (use-package eglot
+;;   :ensure nil
+;;   :straight nil
+;;   :hook ((rustic-mode . eglot-ensure)
+;;          (nix-mode . eglot-ensure)
+;;          (python-mode . eglot-ensure)
+;;          (eglot-managed-mode . (lambda () (eglot-inlay-hints-mode -1)))
+;;          )
+;;   :bind (:map eglot-mode-map
+;;               ("M-<return>" . eglot-code-actions)
+;;               ("C-M-." . xref-find-references)
+;;               ("C-c r" . eglot-rename))
+;;   :config
+;;   (add-to-list 'eglot-server-programs
+;;                `(python-mode
+;;                  . ,(eglot-alternatives '(("basedpyright-langserver" "--stdio")
+;;                                           ("pyright-langserver" "--stdio")
+;;                                           "jedi-language-server"
+;;                                           "pylsp"))))
+;;   (setq eldoc-echo-area-use-multiline-p nil)
+;;   (add-to-list 'eglot-server-programs '(nix-mode . ("nixd"))))
+
+;; (use-package consult-eglot
+;;   :straight t
+;;   :after (consult eglot))
+(use-package lsp-mode
+  :ensure t
   :straight t
-  :after (consult eglot))
+  :defer t
+  :hook (;; Replace XXX-mode with concrete major mode (e.g. python-mode)
+         (lsp-mode . lsp-enable-which-key-integration)  ;; Integrate with Which Key
+         ((js-mode                                      ;; Enable LSP for JavaScript
+           tsx-ts-mode                                  ;; Enable LSP for TSX
+           typescript-ts-base-mode                      ;; Enable LSP for TypeScript
+           css-mode                                     ;; Enable LSP for CSS
+           go-ts-mode                                   ;; Enable LSP for Go
+           js-ts-mode                                   ;; Enable LSP for JavaScript (TS mode)
+           prisma-mode                                  ;; Enable LSP for Prisma
+           python-base-mode                             ;; Enable LSP for Python
+           ruby-base-mode                               ;; Enable LSP for Ruby
+           rust-ts-mode                                 ;; Enable LSP for Rust
+		   nix-mode
+           web-mode) . lsp-deferred))                   ;; Enable LSP for Web (HTML)
+  :commands lsp
+  :custom
+  (lsp-keymap-prefix "C-c l")                           ;; Set the prefix for LSP commands.
+  (lsp-inlay-hint-enable nil)                           ;; Usage of inlay hints.
+  (lsp-completion-provider :none)                       ;; Disable the default completion provider.
+  (lsp-session-file (locate-user-emacs-file ".lsp-session")) ;; Specify session file location.
+  (lsp-log-io nil)                                      ;; Disable IO logging for speed.
+  (lsp-idle-delay 0.5)                                  ;; Set the delay for LSP to 0 (debouncing).
+  (lsp-keep-workspace-alive nil)                        ;; Disable keeping the workspace alive.
+  ;; Core settings
+  (lsp-enable-xref t)                                   ;; Enable cross-references.
+  (lsp-auto-configure t)                                ;; Automatically configure LSP.
+  (lsp-enable-links nil)                                ;; Disable links.
+  (lsp-eldoc-enable-hover t)                            ;; Enable ElDoc hover.
+  (lsp-enable-file-watchers nil)                        ;; Disable file watchers.
+  (lsp-enable-folding nil)                              ;; Disable folding.
+  (lsp-enable-imenu t)                                  ;; Enable Imenu support.
+  (lsp-enable-indentation nil)                          ;; Disable indentation.
+  (lsp-enable-on-type-formatting nil)                   ;; Disable on-type formatting.
+  (lsp-enable-suggest-server-download t)                ;; Enable server download suggestion.
+  (lsp-enable-symbol-highlighting t)                    ;; Enable symbol highlighting.
+  (lsp-enable-text-document-color t)                    ;; Enable text document color.
+  ;; Modeline settings
+  (lsp-modeline-code-actions-enable nil)                ;; Keep modeline clean.
+  (lsp-modeline-diagnostics-enable nil)                 ;; Use `flymake' instead.
+  (lsp-modeline-workspace-status-enable t)              ;; Display "LSP" in the modeline when enabled.
+  (lsp-signature-doc-lines 1)                           ;; Limit echo area to one line.
+  (lsp-eldoc-render-all t)                              ;; Render all ElDoc messages.
+  ;; Completion settings
+  (lsp-completion-enable t)                             ;; Enable completion.
+  (lsp-completion-enable-additional-text-edit t)        ;; Enable additional text edits for completions.
+  (lsp-enable-snippet nil)                              ;; Disable snippets
+  (lsp-completion-show-kind t)                          ;; Show kind in completions.
+  ;; Lens settings
+  (lsp-lens-enable t)                                   ;; Enable lens support.
+  ;; Headerline settings
+  (lsp-headerline-breadcrumb-enable-symbol-numbers nil)   ;; Enable symbol numbers in the headerline.
+  (lsp-headerline-breadcrumb-enable nil)
+  ;; (lsp-headerline-arrow "▶")                            ;; Set arrow for headerline.
+  (lsp-headerline-breadcrumb-enable-diagnostics nil)    ;; Disable diagnostics in headerline.
+  (lsp-headerline-breadcrumb-icons-enable nil)          ;; Disable icons in breadcrumb.
+  ;; Semantic settings
+  (lsp-semantic-tokens-enable nil))                     ;; Disable semantic tokens.
 
 (use-package olivetti
   :ensure t
-  :defer t)
-
-(use-package eldoc-box
-  :ensure t
-  :straight t
   :defer t)
 
 (use-package diff-hl
@@ -810,14 +877,37 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (define-key evil-inner-text-objects-map "b" 'evil-textobj-anyblock-inner-block)
   (define-key evil-outer-text-objects-map "b" 'evil-textobj-anyblock-a-block)
   
-  (define-key evil-inner-text-objects-map "q" 'evil-textobj-anyblock-inner-quote)
-  (define-key evil-outer-text-objects-map "q" 'evil-textobj-anyblock-a-quote)
+  ;; (define-key evil-inner-text-objects-map "q" 'evil-textobj-anyblock-inner-quote)
+  ;; (define-key evil-outer-text-objects-map "q" 'evil-textobj-anyblock-a-quote)
   
   (setq evil-textobj-anyblock-blocks
 	   '(("(" . ")")
 	     ("{" . "}")
 	     ("\\[" . "\\]")
 	     ("<" . ">"))))
+
+(evil-define-text-object my-evil-textobj-anyblock-inner-quote
+  (count &optional beg end type)
+  "Select the closest outer quote."
+  (let ((evil-textobj-anyblock-blocks
+         '(("'" . "'")
+           ("\"" . "\"")
+           ("`" . "'")
+           ("“" . "”"))))
+    (evil-textobj-anyblock--make-textobj beg end type count nil)))
+
+(evil-define-text-object my-evil-textobj-anyblock-a-quote
+  (count &optional beg end type)
+  "Select the closest outer quote."
+  (let ((evil-textobj-anyblock-blocks
+         '(("'" . "'")
+           ("\"" . "\"")
+           ("`" . "'")
+           ("“" . "”"))))
+    (evil-textobj-anyblock--make-textobj beg end type count t)))
+
+(define-key evil-inner-text-objects-map "q" 'my-evil-textobj-anyblock-inner-quote)
+(define-key evil-outer-text-objects-map "q" 'my-evil-textobj-anyblock-a-quote)
 
 (use-package avy
   :ensure t
@@ -1143,9 +1233,9 @@ mode-line-buffer-identification
 
 (defvar cashmere/font-height 170)
 
-(when (member "Maple Mono NF" (font-family-list))
-  (set-face-attribute 'default nil :font "Maple Mono NF" :height cashmere/font-height)
-  (set-face-attribute 'fixed-pitch nil :family "Maple Mono NF" :height cashmere/font-height))
+(when (member "Fragment Mono" (font-family-list))
+  (set-face-attribute 'default nil :font "Fragment Mono" :height cashmere/font-height)
+  (set-face-attribute 'fixed-pitch nil :family "Fragment Mono" :height cashmere/font-height))
 
 (when (member "Maple Mono NF" (font-family-list))
   (set-face-attribute 'variable-pitch nil :family "Maple Mono NF" :height cashmere/font-height))
@@ -1274,6 +1364,14 @@ mode-line-buffer-identification
   :ensure t
   :defer t)
 
+(defun my/lsp-describe-and-jump ()
+  "Show hover documentation and jump to *lsp-help* buffer."
+  (interactive)
+  (lsp-describe-thing-at-point)
+  (let ((help-buffer "*lsp-help*"))
+	(when (get-buffer help-buffer)
+	  (switch-to-buffer-other-window help-buffer))))
+
 (use-package pdf-tools
 :ensure t
 :magic ("%PDF" . pdf-view-mode)
@@ -1281,13 +1379,12 @@ mode-line-buffer-identification
 (pdf-tools-install :no-query)
 :hook (pdf-view-mode . (lambda () (display-line-numbers-mode -1))))
 
-;; (setq )
-
 (my-leader
+  "SPC" '(projectile-switch-project :wk "switch project")
   "sp" '(consult-ripgrep :wk "search project")
   "/" '(consult-line :wk "search buffer")
   "." '(find-file :wk "find file")
-  "," '(bufler-switch-buffer :wk "switch buffer")
+  "," '(consult-buffer :wk "switch buffer")
   ":" (lambda () (interactive) (execute-extended-command nil))
 
 "d" '(:ignore t :wk "denote")
@@ -1326,7 +1423,7 @@ mode-line-buffer-identification
   "g" '(:ignore t :wk "git/goto")
   "gg" '(magit-status :wk "status")
   "gl" '(magit-log-current :wk "log")
-  "gd" '(xref-find-definitions :wk "go to definition")  ; sowohl hier als auch unter code
+  "gd" '(xref-find-definitions :wk "go to definition") 
   "gs" '(magit-status :wk "status")
   "gb" '(vc-annotate :wk "blame")
 
@@ -1348,17 +1445,17 @@ mode-line-buffer-identification
   "wo" '(delete-other-windows :wk "delete others")
 
   "c" '(:ignore t :wk "code")
-  "ca" '(eglot-code-actions :wk "code actions")
-  "cd" '(xref-find-definitions :wk "go to definition")  ; sowohl hier als auch unter g
-  "cD" '(xref-find-references :wk "find references")
-  "cr" '(eglot-rename :wk "lsp rename")
-  "ch" '(eglot-help-at-point :wk "help at point")
-  "cf" '(eglot-format :wk "format")
-  "ci" '(eglot-find-implementation :wk "implementation")
-  "ct" '(eglot-find-typeDefinition :wk "type definition")
-  "cs" '(consult-eglot-symbols :wk "workspace symbols")
-  "cS" '(eglot-shutdown :wk "shutdown lsp")
-  "cR" '(eglot-reconnect :wk "restart lsp")
+  "ca" '(lsp-code-action :wk "code actions")
+  ;; "cd" '(xref-find-definitions :wk "go to definition")  
+  ;; "cD" '(xref-find-references :wk "find references")
+  "cr" '(lsp-rename :wk "lsp rename")
+  ;; "ch" '(eglot-help-at-point :wk "help at point")
+  "cf" '(lsp-format-buffer :wk "format")
+  ;; "ci" '(eglot-find-implementation :wk "implementation")
+  ;; "ct" '(eglot-find-typeDefinition :wk "type definition")
+  ;; "cs" '(consult-eglot-symbols :wk "workspace symbols")
+  ;; "cS" '(eglot-shutdown :wk "shutdown lsp")
+  ;; "cR" '(eglot-reconnect :wk "restart lsp")
 
   "m" '(:ignore t :wk "mode")
   "mp" (list (lambda ()
@@ -1375,6 +1472,34 @@ mode-line-buffer-identification
   "a" '(embark-act :wk "embark")
   "u" '(undo-tree-visualize :wk "undo tree")
   "P" '(consult-yank-from-kill-ring :wk "paste history"))
+
+;; (defun my/evil-eldoc-box-lookup ()
+;;   "Show documentation using eldoc-box."
+;;   (interactive)
+;;   (cond
+;;    ((and (fboundp 'eglot-managed-p) (eglot-managed-p))
+;;     (eldoc-box-help-at-point))
+;;    (t
+;;     (call-interactively 'describe-symbol))))
+
+(general-def 'normal 'override
+  "K" 'my/lsp-describe-and-jump)
+
+(defun my/ibuffer-smart ()
+  (interactive)
+  (ibuffer)
+  (local-set-key (kbd "RET") 
+                 (lambda () 
+                   (interactive)
+                   (ibuffer-visit-buffer)
+                   (kill-buffer "*Ibuffer*")))
+  (local-set-key (kbd "q") 
+                 (lambda () 
+                   (interactive)
+                   (kill-buffer "*Ibuffer*"))))
+
+(my-leader
+  "bi" 'my/ibuffer-smart)
 
 (my-local-leader
   "a" '(org-agenda :wk "org agenda")
@@ -1455,20 +1580,6 @@ mode-line-buffer-identification
 
 (general-def 'normal eat-mode-map
   "C-l" 'eat-reset)
-
-;; (defun my-toggle-org-tree-indirect-buffer ()
-;;   (interactive)
-;;   (if (and (boundp 'my-org-indirect-buffer)
-;;            my-org-indirect-buffer
-;;            (buffer-live-p my-org-indirect-buffer))
-;;       (progn
-;;         (kill-buffer my-org-indirect-buffer)
-;;         (setq my-org-indirect-buffer nil))
-;;     (org-tree-to-indirect-buffer)
-;;     (setq my-org-indirect-buffer (current-buffer))
-;;     (delete-other-windows)))
-
-;; (evil-define-key 'normal 'org (kbd "z n") 'my-toggle-org-tree-indirect-buffer)
 
 (define-key minibuffer-local-map [escape] 'abort-recursive-edit)
 (define-key minibuffer-local-ns-map [escape] 'abort-recursive-edit)
