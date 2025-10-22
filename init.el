@@ -23,4 +23,6 @@
 
 (setq straight-use-package-by-default t)
 
-(load (expand-file-name "config.el" user-emacs-directory))
+(straight-use-package 'org)
+
+(org-babel-load-file (expand-file-name "config.org" user-emacs-directory))
