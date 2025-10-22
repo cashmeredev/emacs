@@ -4,6 +4,8 @@
 ;; (setq gc-cons-threshold #x40000000)
 ;; (setq gc-cons-threshold 50000000)
 ;; (setenv "LSP_USE_PLISTS" "true")
+(setq lsp-use-plists t)
+(setq default-frame-alist '((undecorated . t)))
 (setq gc-cons-threshold 100000000)
 
 (add-hook 'emacs-startup-hook
@@ -74,7 +76,7 @@
   ;; Configure font settings based on the operating system.
   ;; Ok, this kickstart is meant to be used on the terminal, not on GUI.
   ;; But without this, I fear you could start Graphical Emacs and be sad :(
-  (set-face-attribute 'default nil :family "Maple Mono NF"  :height 160)
+  (set-face-attribute 'default nil :family "MonoLisa"  :height 150)
   ;; (when (eq system-type 'darwin)       ;; Check if the system is macOS.
   ;; (setq mac-command-modifier 'meta)  ;; Set the Command key to act as the Meta key.
   ;; (set-face-attribute 'default nil :family "Fragment Mono" :height 130))
@@ -95,7 +97,8 @@
   (scroll-bar-mode -1)
   (add-to-list 'default-frame-alist '(vertical-scroll-bars . nil))
   (add-to-list 'default-frame-alist '(horizontal-scroll-bars . nil))
-
+  (set-frame-parameter (selected-frame) 'alpha-background 60)
+  (add-to-list 'default-frame-alist '(alpha-background . 60))
   (global-hl-line-mode -1)     ;; Disable highlight of the current line
   (global-auto-revert-mode 1)  ;; Enable global auto-revert mode to keep buffers up to date with their corresponding files.
   (indent-tabs-mode -1)        ;; Disable the use of tabs for indentation (use spaces instead).
@@ -175,21 +178,27 @@
    )))
 
 (use-package dired
-:straight nil
-    :ensure nil                                                ;; This is built-in, no need to fetch it.
-    :custom
-    (dired-listing-switches "-lah --group-directories-first")  ;; Display files in a human-readable format and group directories first.
-    (dired-dwim-target t)                                      ;; Enable "do what I mean" for target directories.
-    (dired-guess-shell-alist-user
-    '(("\\.\\(png\\|jpe?g\\|tiff\\)" "feh" "xdg-open" "open") ;; Open image files with `feh' or the default viewer.
-("\\.\\(mp[34]\\|m4a\\|ogg\\|flac\\|webm\\|mkv\\)" "mpv" "xdg-open" "open") ;; Open audio and video files with `mpv'.
-(".*" "open" "xdg-open")))                              ;; Default opening command for other files.
-    (dired-kill-when-opening-new-dired-buffer t)               ;; Close the previous buffer when opening a new `dired' instance.
-    :config
-    (when (eq system-type 'darwin)
-    (let ((gls (executable-find "gls")))                     ;; Use GNU ls on macOS if available.
-(when gls
-(setq insert-directory-program gls)))))
+  :straight nil
+  :ensure nil
+  :custom
+  (dired-listing-switches "-lah --group-directories-first")
+  (dired-dwim-target t)
+  (dired-guess-shell-alist-user
+   '(("\\.\\(png\\|jpe?g\\|tiff\\)" "feh" "xdg-open" "open")
+	 ("\\.\\(mp[34]\\|m4a\\|ogg\\|flac\\|webm\\|mkv\\)" "mpv" "xdg-open" "open")
+	 (".*" "open" "xdg-open")))
+  (dired-kill-when-opening-new-dired-buffer t)
+  :config
+  ;; (dired-async-mode 1)
+  (when (eq system-type 'darwin)
+	(let ((gls (executable-find "gls")))
+	  (when gls
+		(setq insert-directory-program gls)))))
+
+(use-package async
+  :ensure t
+  :defer t)
+
 
 (use-package erc
 :straight nil
@@ -271,7 +280,7 @@
 (use-package eldoc
 :straight nil
     :ensure nil                                ;; This is built-in, no need to fetch it.
-    :after lsp-mode
+    :after lspce-mode
     :config
     (setq eldoc-idle-delay 0.001)                  ;; Automatically fetch doc help
     (setq eldoc-echo-area-use-multiline-p t) ;; We use the "K" floating help instead
@@ -283,12 +292,10 @@
 
 (use-package eldoc-box
   :ensure t
-  :straight t
-  :defer t
   :config
-  (setq eldoc-box-clear-with-C-g t)
-  (setq eldoc-box-only-multiline-doc nil)
-  (setq eldoc-box-frame-parameters
+  (eldoc-box-clear-with-C-g t)
+  (eldoc-box-only-multiline-doc nil)
+  (eldoc-box-frame-parameters
                 '((internal-border-width . 2)
           (border-width . 1)
           (left-fringe . 8)
@@ -388,33 +395,56 @@
       org-agenda-remove-tags      t)
 
 (use-package org-super-agenda
-  :defer t
+  :after org-agenda
+  :init
+  (setq org-agenda-skip-scheduled-if-done t
+        org-agenda-skip-deadline-if-done t
+        org-agenda-include-deadlines t
+        org-agenda-block-separator nil
+        org-agenda-compact-blocks t
+        org-agenda-start-day nil
+        org-agenda-span 1
+        org-agenda-start-on-weekday nil
+        org-agenda-hide-tags-regexp "task"
+        org-agenda-prefix-format
+        '((agenda . " %i %?-12t% s")
+          (todo . " %i ")
+          (tags . " %i ")
+          (search . " %i ")))
+  (setq org-agenda-custom-commands
+        '(("c" "Super view"
+           ((agenda "" ((org-agenda-overriding-header "")
+                        (org-super-agenda-groups
+                         '((:name "Today"
+                            :time-grid t
+                            :date t
+                            :deadline today
+                            :scheduled future
+                            :order 1)))))
+            (alltodo "" ((org-agenda-overriding-header "")
+                         (org-super-agenda-groups
+                          '((:discard (:todo "FUN"))  ; <- HIER ist die korrekte Position
+                            (:log t)
+                            (:name "ACTIVE"
+                             :todo "ACTIVE")
+                            (:name "NEXT"
+                             :todo "NEXT")
+                            (:name "TODO"
+                             :todo "TODO")
+                            (:name "WAIT"
+                             :todo "WAIT"))))))
+           ((org-agenda-exporter-settings
+             '((ps-number-of-columns 2)
+               (ps-landscape-mode t)
+               (org-agenda-add-entry-text-maxlines 5)
+               (htmlize-output-type 'css)))))))
   :config
-  (setq org-super-agenda-header-prefix "\n ")
-  ;; Hide the thin width char glyph
-  (add-hook 'org-agenda-mode-hook
-            #'(lambda () (setq-local nobreak-char-display nil)))
   (org-super-agenda-mode))
 
-(use-package org-ql
-  :ensure t
-  :after org)
-
-(add-to-list 'org-agenda-custom-commands
-  '("d" "Day View"
- ((agenda "" ((org-agenda-overriding-header "Day View")
-                      (org-agenda-span 'day)
-                      (org-super-agenda-groups regular-view-groups)))
-  (org-ql-block '(todo "PROG") ((org-ql-block-header "\n In Progress")))
-  (org-ql-block '(todo "NEXT") ((org-ql-block-header "\n Next Up")))
-          (org-ql-block '(todo "WAIT") ((org-ql-block-header "\n Backlog")))
-  (org-ql-block '(priority "A") ((org-ql-block-header "\n Important"))))))
-
-(add-to-list 'org-agenda-custom-commands
-'("e" "Three-Day View"
-               ((agenda "" ((org-agenda-span 3)
-                            (org-agenda-start-on-weekday nil)
-                            (org-deadline-warning-days 0))))))
+(setq org-todo-keywords
+	  '((sequence "WAIT(w@/!)" "HABIT(h)" "TODO(t)" "NEXT(n)" "|" "DONE(d!)")
+		(sequence "BACKLOG(b)" "PLAN(p)" "READY(r)" "ACTIVE(a)" "REVIEW(v)"
+				  "FUN(f)" "|" "COMPLETED(c)" "CANC(k@)")))
 
 (use-package ox-typst
   :straight (:host github :repo "jmpunkt/ox-typst")
@@ -441,6 +471,10 @@ denote-directory (expand-file-name "~/org/")))
 
 (use-package denote-org
     :ensure t)
+
+(use-package denote-explore
+  :ensure t
+  :defer t)
 
 (use-package which-key
   :ensure t
@@ -530,27 +564,27 @@ denote-directory (expand-file-name "~/org/")))
   :mode ("README\\.md\\'" . gfm-mode)            ;; Use gfm-mode for README.md files.
   :init (setq markdown-command "multimarkdown")) ;; Set the Markdown processing command.
 
-(use-package corfu
-  :ensure t
-  :straight t
-  :defer t
-  :custom
-  (corfu-auto t)                        ;; Only completes when hitting TAB
-  (corfu-cycle t)                   
-  (text-mode-ispell-word-completion nil)  
-  (corfu-auto-delay 0.08)                ;; Delay before popup (enable if corfu-auto is t)
-  (corfu-auto-prefix 1)                  ;; Trigger completion after typing 1 character
-  (corfu-quit-no-match t)                ;; Quit popup if no match
-  (corfu-scroll-margin 5)                ;; Margin when scrolling completions
-  (corfu-max-width 50)                   ;; Maximum width of completion popup
-  (corfu-min-width 50)                   ;; Minimum width of completion popup
-  (corfu-popupinfo-delay 0.12)            ;; Delay before showing documentation popup
-  :config
-  (if ek-use-nerd-fonts
-    (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
-  :init
-  (global-corfu-mode)
-  (corfu-popupinfo-mode t))
+;; (use-package corfu
+;;   :ensure t
+;;   :straight t
+;;   :defer t
+;;   :custom
+;;   (corfu-auto t)                        ;; Only completes when hitting TAB
+;;   (corfu-cycle t)                   
+;;   (text-mode-ispell-word-completion nil)  
+;;   (corfu-auto-delay 0.08)                ;; Delay before popup (enable if corfu-auto is t)
+;;   (corfu-auto-prefix 1)                  ;; Trigger completion after typing 1 character
+;;   (corfu-quit-no-match t)                ;; Quit popup if no match
+;;   (corfu-scroll-margin 5)                ;; Margin when scrolling completions
+;;   (corfu-max-width 50)                   ;; Maximum width of completion popup
+;;   (corfu-min-width 50)                   ;; Minimum width of completion popup
+;;   (corfu-popupinfo-delay 0.12)            ;; Delay before showing documentation popup
+;;   :config
+;;   (if ek-use-nerd-fonts
+;;     (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
+;;   :init
+;;   (global-corfu-mode)
+;;   (corfu-popupinfo-mode t))
 
 (use-package treesit-auto
   :ensure t
@@ -576,12 +610,12 @@ denote-directory (expand-file-name "~/org/")))
 
 ;;; NERD-ICONS-CORFU
 ;; Provides Nerd Icons to be used with CORFU.
-(use-package nerd-icons-corfu
-  :if ek-use-nerd-fonts
-  :ensure t
-  :straight t
-  :defer t
-  :after (:all corfu))
+;; (use-package nerd-icons-corfu
+;;   :if ek-use-nerd-fonts
+;;   :ensure t
+;;   :straight t
+;;   :defer t
+;;   :after (:all corfu))
 
 ;;; EMBARK-CONSULT
 ;; Embark-Consult provides a bridge between Embark and Consult, ensuring
@@ -612,17 +646,13 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :hook
   (after-init . marginalia-mode))
 
-(use-package nerd-icons-corfu
-    :if ek-use-nerd-fonts
-    :ensure t
-    :straight t
-    :defer t
-    :after (:all corfu))
+;; (use-package nerd-icons-corfu
+;;     :if ek-use-nerd-fonts
+;;     :ensure t
+;;     :straight t
+;;     :defer t
+;;     :after (:all corfu))
 
-(use-package nix-mode
-  :ensure t
-  :defer t
-  :mode "\\.nix\\'")
 
 (use-package typst-ts-mode
   :straight t
@@ -635,140 +665,131 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   ;;                `(typst-ts-mode . ,(eglot-alternatives '("tinymist" "typst-lsp")))))
   )
 
-(use-package rustic
-  :ensure t
-  :defer t
-  ;; :custom
-  ;; (rustic-lsp-client 'eglot)
-  )
+;; (use-package rustic
+;;   :ensure t
+;;   :defer t
+;;   ;; :custom
+;;   ;; (rustic-lsp-client 'eglot)
+;;   )
 
-;; Make sure rustic gets activated in the org-src block and add the original file's source code.
-(defun my-read-file-to-string (file)
-(with-temp-buffer
-(insert-file-contents file)
-(buffer-string)))
 
-(defun org-babel-edit-prep:rust (babel-info)
-(setq-local src-code (nth 1 babel-info))
-(setq-local buffer-file-name (expand-file-name (->> babel-info caddr (alist-get :tangle))))
-(setq-local buffer-src-code (replace-regexp-in-string src-code "" (my-read-file-to-string (buffer-file-name))))
-(goto-char (point-max))
-(insert buffer-src-code)
-(narrow-to-region (point-min) (+ (point-min) (length src-code)))
-(rustic-mode)
-(org-src-mode))
-
-(defun my-delete-hidden-text ()
-(-let [p-start (point-max)]
-(widen)
-(delete-region p-start (point-max))))
-
-(define-advice org-edit-src-exit
-(:before (&rest _args) remove-src-block)
-(when (eq major-mode 'rustic-mode)
-(my-delete-hidden-text)))
-
-(define-advice org-edit-src-save
-(:before (&rest _args) remove-src-block)
-(when (eq major-mode 'rustic-mode)
-(my-delete-hidden-text)))
+(use-package f
+  :ensure t)
 
 (use-package yasnippet
   :ensure t
-  :after lsp-mode
-  :hook ((prog-mode . yas-minor-mode)
-         (org-mode . yas-minor-mode)))
+  :config
+  (yas-global-mode 1))
 
 (use-package yasnippet-snippets
   :ensure t
   :after yasnippet)
 
-;; (use-package eglot
-;;   :ensure nil
-;;   :straight nil
-;;   :hook ((rustic-mode . eglot-ensure)
-;;          (nix-mode . eglot-ensure)
-;;          (python-mode . eglot-ensure)
-;;          (eglot-managed-mode . (lambda () (eglot-inlay-hints-mode -1)))
-;;          )
-;;   :bind (:map eglot-mode-map
-;;               ("M-<return>" . eglot-code-actions)
-;;               ("C-M-." . xref-find-references)
-;;               ("C-c r" . eglot-rename))
-;;   :config
-;;   (add-to-list 'eglot-server-programs
-;;                `(python-mode
-;;                  . ,(eglot-alternatives '(("basedpyright-langserver" "--stdio")
-;;                                           ("pyright-langserver" "--stdio")
-;;                                           "jedi-language-server"
-;;                                           "pylsp"))))
-;;   (setq eldoc-echo-area-use-multiline-p nil)
-;;   (add-to-list 'eglot-server-programs '(nix-mode . ("nixd"))))
-
-;; (use-package consult-eglot
-;;   :straight t
-;;   :after (consult eglot))
-(use-package lsp-mode
-  :ensure t
+(use-package company
   :straight t
-  :defer t
-  :hook (;; Replace XXX-mode with concrete major mode (e.g. python-mode)
-         (lsp-mode . lsp-enable-which-key-integration)  ;; Integrate with Which Key
-         ((js-mode                                      ;; Enable LSP for JavaScript
-           tsx-ts-mode                                  ;; Enable LSP for TSX
-           typescript-ts-base-mode                      ;; Enable LSP for TypeScript
-           css-mode                                     ;; Enable LSP for CSS
-           go-ts-mode                                   ;; Enable LSP for Go
-           js-ts-mode                                   ;; Enable LSP for JavaScript (TS mode)
-           prisma-mode                                  ;; Enable LSP for Prisma
-           python-base-mode                             ;; Enable LSP for Python
-           ruby-base-mode                               ;; Enable LSP for Ruby
-           rust-ts-mode                                 ;; Enable LSP for Rust
-		   nix-mode
-           web-mode) . lsp-deferred))                   ;; Enable LSP for Web (HTML)
-  :commands lsp
-  :custom
-  (lsp-keymap-prefix "C-c l")                           ;; Set the prefix for LSP commands.
-  (lsp-inlay-hint-enable nil)                           ;; Usage of inlay hints.
-  (lsp-completion-provider :none)                       ;; Disable the default completion provider.
-  (lsp-session-file (locate-user-emacs-file ".lsp-session")) ;; Specify session file location.
-  (lsp-log-io nil)                                      ;; Disable IO logging for speed.
-  (lsp-idle-delay 0.5)                                  ;; Set the delay for LSP to 0 (debouncing).
-  (lsp-keep-workspace-alive nil)                        ;; Disable keeping the workspace alive.
-  ;; Core settings
-  (lsp-enable-xref t)                                   ;; Enable cross-references.
-  (lsp-auto-configure t)                                ;; Automatically configure LSP.
-  (lsp-enable-links nil)                                ;; Disable links.
-  (lsp-eldoc-enable-hover t)                            ;; Enable ElDoc hover.
-  (lsp-enable-file-watchers nil)                        ;; Disable file watchers.
-  (lsp-enable-folding nil)                              ;; Disable folding.
-  (lsp-enable-imenu t)                                  ;; Enable Imenu support.
-  (lsp-enable-indentation nil)                          ;; Disable indentation.
-  (lsp-enable-on-type-formatting nil)                   ;; Disable on-type formatting.
-  (lsp-enable-suggest-server-download t)                ;; Enable server download suggestion.
-  (lsp-enable-symbol-highlighting t)                    ;; Enable symbol highlighting.
-  (lsp-enable-text-document-color t)                    ;; Enable text document color.
-  ;; Modeline settings
-  (lsp-modeline-code-actions-enable nil)                ;; Keep modeline clean.
-  (lsp-modeline-diagnostics-enable nil)                 ;; Use `flymake' instead.
-  (lsp-modeline-workspace-status-enable t)              ;; Display "LSP" in the modeline when enabled.
-  (lsp-signature-doc-lines 1)                           ;; Limit echo area to one line.
-  (lsp-eldoc-render-all t)                              ;; Render all ElDoc messages.
-  ;; Completion settings
-  (lsp-completion-enable t)                             ;; Enable completion.
-  (lsp-completion-enable-additional-text-edit t)        ;; Enable additional text edits for completions.
-  (lsp-enable-snippet nil)                              ;; Disable snippets
-  (lsp-completion-show-kind t)                          ;; Show kind in completions.
-  ;; Lens settings
-  (lsp-lens-enable t)                                   ;; Enable lens support.
-  ;; Headerline settings
-  (lsp-headerline-breadcrumb-enable-symbol-numbers nil)   ;; Enable symbol numbers in the headerline.
-  (lsp-headerline-breadcrumb-enable nil)
-  ;; (lsp-headerline-arrow "▶")                            ;; Set arrow for headerline.
-  (lsp-headerline-breadcrumb-enable-diagnostics nil)    ;; Disable diagnostics in headerline.
-  (lsp-headerline-breadcrumb-icons-enable nil)          ;; Disable icons in breadcrumb.
-  ;; Semantic settings
-  (lsp-semantic-tokens-enable nil))                     ;; Disable semantic tokens.
+  :hook (after-init . global-company-mode)
+  :bind (:map company-active-map
+              ("C-n" . company-select-next)
+              ("C-p" . company-select-previous)
+              ("C-j" . company-select-next-or-abort)
+              ("C-k" . company-select-previous-or-abort)
+              ("M-j" . company-select-next)
+              ("M-k" . company-select-previous)
+              ("<tab>" . company-complete-selection)
+              ("TAB" . company-complete-selection))
+  :config
+  (setq company-minimum-prefix-length 1)
+  (setq company-idle-delay 0.1)
+  (setq company-show-numbers t)
+  (setq company-tooltip-align-annotations t)
+  (setq company-require-match nil)
+  (setq company-backends '((company-capf :with company-yasnippet)
+                           company-files
+                           company-dabbrev-code))
+  (setq company-dabbrev-code-everywhere t)
+  (setq company-dabbrev-code-ignore-case t))
+
+(defun lspce-nixd-initializationOptions ()
+  (let ((flake-path "/home/cashmere/nix")
+        (config-name "x12"))
+    `(:nixpkgs (:expr ,(format "import (builtins.getFlake \"%s\").inputs.nixpkgs { }" flake-path))
+      :formatting (:command ["nixfmt"])
+      :options (:nixos (:expr ,(format "(builtins.getFlake \"%s\").nixosConfigurations.%s.options" flake-path config-name))
+                :home-manager (:expr ,(format "(builtins.getFlake \"%s\").nixosConfigurations.%s.config.home-manager.users.cashmere.options" flake-path config-name))))))
+
+(use-package envrc
+  :ensure t
+  :config
+  (envrc-global-mode))
+
+
+(straight-use-package
+ `(lspce :type git :host github :repo "zbelial/lspce"
+         :files (:defaults ,(pcase system-type
+                              ('gnu/linux "lspce-module.so")
+                              ('darwin "lspce-module.dylib")))
+         :pre-build ,(pcase system-type
+                       ('gnu/linux '(("cargo" "build" "--release")
+                                     ("cp" "./target/release/liblspce_module.so" "./lspce-module.so")))
+                       ('darwin '(("cargo" "build" "--release")
+                                  ("cp" "./target/release/liblspce_module.dylib" "./lspce-module.dylib"))))))
+
+(use-package lspce
+  :after (f yasnippet markdown-mode envrc)
+  :config
+  (setq lspce-send-changes-idle-time 0.05)
+  (setq lspce-idle-delay 0.05)
+  (setq lspce-show-log-level-in-modeline t)
+  (setq lspce-enable-eldoc t)
+  (setq lspce-eldoc-enable-hover t)
+  (setq lspce-eldoc-enable-signature t)
+  (setq lspce--doc-max-height 10)
+  (setq eldoc-echo-area-use-multiline-p 2)
+  (setq eldoc-echo-area-display-truncation-message nil)
+  (setq lspce-log-level 5)
+  
+  (setq lspce-envs-pass-to-subprocess '("PATH" "PYTHON_PATH" "NIX_PATH" "NIX_PROFILES"))
+  
+  (setq lspce-server-programs 
+        `(("rust"  "rust-analyzer" "" lspce-ra-initializationOptions)
+		  ("python" "pylsp" "" )
+          ("nix" "nixd" "" lspce-nixd-initializationOptions)
+          ("nushell" "nu" "--lsp" ""))))
+
+(use-package python-mode
+  :ensure t
+  :mode "\\.py\\'"
+  :hook ((python-mode python-ts-mode) . lspce-mode))
+
+(use-package flymake-pyrefly
+  :ensure t
+  :hook (python-base-mode . pyrefly-setup-flymake-backend))
+
+(use-package python-black
+  :ensure t
+  :demand t
+  :after python)
+
+(use-package rust-mode
+  :ensure t
+  :mode "\\.rs\\'"
+  :hook (rust-mode . lspce-mode))
+
+(use-package nix-mode
+  :ensure t
+  :mode "\\.nix\\'"
+  :hook (nix-mode . lspce-mode))
+
+(use-package nushell-mode
+  :ensure t
+  :mode "\\.nu\\'"
+  :hook (nushell-mode . lspce-mode))
+
+(use-package vterm
+  :ensure t
+  :defer t)
+(setq vterm-shell "nu")
+
 
 (use-package olivetti
   :ensure t
@@ -1032,20 +1053,19 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;   :ensure t
 ;;   :straight t
 ;;   :config
+;;   (setq catppuccin-flavor 'frappe)
+  
+;;   (load-theme 'catppuccin :no-confirm)
+
 ;;   (custom-set-faces
-;;    ;; Set the color for changes in the diff highlighting to blue.
 ;;    `(diff-hl-change ((t (:background unspecified :foreground ,(catppuccin-get-color 'blue))))))
 
 ;;   (custom-set-faces
-;;    ;; Set the color for deletions in the diff highlighting to red.
 ;;    `(diff-hl-delete ((t (:background unspecified :foreground ,(catppuccin-get-color 'red))))))
 
 ;;   (custom-set-faces
-;;    ;; Set the color for insertions in the diff highlighting to green.
-;;    `(diff-hl-insert ((t (:background unspecified :foreground ,(catppuccin-get-color 'green))))))
+;;    `(diff-hl-insert ((t (:background unspecified :foreground ,(catppuccin-get-color 'green)))))))
 
-;;   ;; Load the Catppuccin theme without prompting for confirmation.
-;;   (load-theme 'catppuccin :no-confirm))
 
 ;;; UTILITARY FUNCTION TO INSTALL EMACS-KICK
 (defun ek/first-install ()
@@ -1179,38 +1199,101 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (display-time-mode 1)
 (display-battery-mode 1)
 
-(defvar lsp-modeline--code-actions-string nil)
+(defun my-lspce-diagnostics-string ()
+  (when (and (bound-and-true-p lspce-mode)
+             (bound-and-true-p flymake-mode))
+    (let* ((diags (flymake-diagnostics))
+           (error-count 0)
+           (warning-count 0)
+           (note-count 0))
+      (dolist (diag diags)
+        (let ((severity (flymake-diagnostic-type diag)))
+          (cond
+           ((eq severity :error) (setq error-count (1+ error-count)))
+           ((eq severity :warning) (setq warning-count (1+ warning-count)))
+           ((eq severity :note) (setq note-count (1+ note-count))))))
+      (when (or (> error-count 0) (> warning-count 0) (> note-count 0))
+        (concat
+         (when (> error-count 0)
+           (propertize (format " %d" error-count)
+                       'face 'error
+                       'help-echo (format "%d error(s)" error-count)))
+         (when (> warning-count 0)
+           (propertize (format " %d" warning-count)
+                       'face 'warning
+                       'help-echo (format "%d warning(s)" warning-count)))
+         (when (> note-count 0)
+           (propertize (format " %d" note-count)
+                       'face 'success
+                       'help-echo (format "%d note(s)" note-count))))))))
 
 (setq-default header-line-format
   '("%e"
-(:propertize " " display (raise +0.4))
-(:propertize " " display (raise -0.4))
-
-(:propertize "λ " face font-lock-comment-face)
-mode-line-frame-identification
-mode-line-buffer-identification
-
-(:eval (when-let (vc vc-mode)
- (list (propertize "   " 'face 'font-lock-comment-face)
-   (propertize (truncate-string-to-width
+    (:propertize " " display (raise +0.4))
+    (:propertize " " display (raise -0.4))
+    
+    (:propertize "λ " face font-lock-comment-face)
+    mode-line-frame-identification
+    mode-line-buffer-identification
+    
+    (:eval (when-let (vc vc-mode)
+             (list (propertize "   " 'face 'font-lock-comment-face)
+                   (propertize (truncate-string-to-width
                                 (substring vc 5) 50)
-   'face 'font-lock-comment-face))))
-
-(:propertize "  %4l:%c" face mode-line-buffer-id)
-
-(:eval (propertize
- " " 'display
- `((space :align-to
-  (-  (+ right right-fringe right-margin)
- ,(+ 3
-                             (string-width (or my-battery-string ""))
-                             (string-width (or display-time-string ""))))))))
-
+                               'face 'font-lock-comment-face))))
+    
+    (:eval (my-lspce-diagnostics-string))
+    
+    (:propertize "  %4l:%c" face mode-line-buffer-id)
+    
+    (:eval (propertize
+            " " 'display
+            `((space :align-to
+                     (- (+ right right-fringe right-margin)
+                        ,(+ 3
+                            (string-width (or my-battery-string ""))
+                            (string-width (or display-time-string ""))))))))
+    
     (:eval my-battery-string)
-" "
-(:eval display-time-string)))
+    " "
+    (:eval display-time-string)))
 
 (setq-default mode-line-format nil)
+
+(defun my-lspce-diagnostics-string ()
+  (when (and (bound-and-true-p lspce-mode)
+             (bound-and-true-p flymake-mode))
+    (let* ((diags (flymake-diagnostics))
+           (error-count 0)
+           (warning-count 0)
+           (note-count 0))
+      (dolist (diag diags)
+        (let ((severity (flymake-diagnostic-type diag)))
+          (cond
+           ((eq severity :error) (setq error-count (1+ error-count)))
+           ((eq severity :warning) (setq warning-count (1+ warning-count)))
+           ((eq severity :note) (setq note-count (1+ note-count))))))
+      (when (or (> error-count 0) (> warning-count 0) (> note-count 0))
+        (concat
+         " "
+         (when (> error-count 0)
+           (concat
+            (nerd-icons-mdicon "nf-md-close_circle" :face 'error)
+            (propertize (format " %d " error-count)
+                        'face 'error
+                        'help-echo (format "%d error(s)" error-count))))
+         (when (> warning-count 0)
+           (concat
+            (nerd-icons-mdicon "nf-md-alert" :face 'warning)
+            (propertize (format " %d " warning-count)
+                        'face 'warning
+                        'help-echo (format "%d warning(s)" warning-count))))
+         (when (> note-count 0)
+           (concat
+            (nerd-icons-mdicon "nf-md-information" :face 'success)
+            (propertize (format " %d" note-count)
+                        'face 'success
+                        'help-echo (format "%d note(s)" note-count)))))))))
 
 (use-package hide-mode-line
   :straight t
@@ -1231,14 +1314,18 @@ mode-line-buffer-identification
 (blink-cursor-mode 0)
 (setq-default cursor-type 'bar)
 
-(defvar cashmere/font-height 170)
+(defvar cashmere/font-height 150)
 
-(when (member "Fragment Mono" (font-family-list))
-  (set-face-attribute 'default nil :font "Fragment Mono" :height cashmere/font-height)
-  (set-face-attribute 'fixed-pitch nil :family "Fragment Mono" :height cashmere/font-height))
+;; (when (member "Fragment Mono" (font-family-list))
+;;   (set-face-attribute 'default nil :font "Fragment Mono" :height cashmere/font-height)
+;;   (set-face-attribute 'fixed-pitch nil :family "Fragment Mono" :height cashmere/font-height))
 
-(when (member "Maple Mono NF" (font-family-list))
-  (set-face-attribute 'variable-pitch nil :family "Maple Mono NF" :height cashmere/font-height))
+;; (when (member "Maple Mono NF" (font-family-list))
+;;   (set-face-attribute 'variable-pitch nil :family "Maple Mono NF" :height cashmere/font-height))
+
+(set-face-attribute 'default nil :family "MonoLisa" :weight 'semi-bold :height cashmere/font-height)
+(set-face-attribute 'fixed-pitch nil :family "MonoLisa" :weight 'regular)
+(set-face-attribute 'variable-pitch nil :family "MonoLisa" :weight 'regular :height 1.1)
 
 (use-package mixed-pitch
   :straight t
@@ -1249,27 +1336,29 @@ mode-line-buffer-identification
 (use-package autothemer
   :straight t
   :defer t)
+ (use-package doom-themes
+   :straight t
+   :ensure t
+   :custom
+   ;; Global settings (defaults)
+   (doom-themes-enable-bold t)   ; if nil, bold is universally disabled
+   (doom-themes-enable-italic t) ; if nil, italics is universally disabled
+   ;; for treemacs users
+   (doom-themes-treemacs-theme "doom-nord-light") ; use "doom-colors" for less minimal icon theme
+   :config
+   (load-theme 'doom-nord-light t)
 
-(use-package doom-themes
-:straight t
-:ensure t
-:custom
-;; Global settings (defaults)
-(doom-themes-enable-bold t)   ; if nil, bold is universally disabled
-(doom-themes-enable-italic t) ; if nil, italics is universally disabled
-;; for treemacs users
-(doom-themes-treemacs-theme "doom-nord-light") ; use "doom-colors" for less minimal icon theme
-:config
-(load-theme 'doom-nord-light t)
+   ;; Enable flashing mode-line on errors
+   (doom-themes-visual-bell-config)
+   ;; Enable custom neotree theme (nerd-icons must be installed!)
+   ;; or for treemacs users
+   (doom-themes-treemacs-config)
+   ;; Corrects (and improves) org-mode's native fontification.
+   (doom-themes-org-config))
 
-;; Enable flashing mode-line on errors
-(doom-themes-visual-bell-config)
-;; Enable custom neotree theme (nerd-icons must be installed!)
-;; or for treemacs users
-(doom-themes-treemacs-config)
-;; Corrects (and improves) org-mode's native fontification.
-(doom-themes-org-config))
-
+;; (use-package nord-theme
+;;   :ensure t)
+;; (load-theme 'nord t)
 (use-package dirvish
   :straight t
   :init
@@ -1298,10 +1387,10 @@ mode-line-buffer-identification
   (setq dired-mouse-drag-files t))
 
 (setq-default olivetti-body-width 100)
-(define-globalized-minor-mode my-global-olivetti-mode olivetti-mode
+(define-globalized-minor-mode my/global-olivetti-mode olivetti-mode
   (lambda () (olivetti-mode 1)))
 (my/centered-cursor)
-(my-global-olivetti-mode)
+;; (my/global-olivetti-mode)
 
 (use-package org-modern-indent
   :straight (:host github :repo "jdtsmith/org-modern-indent")
@@ -1364,13 +1453,13 @@ mode-line-buffer-identification
   :ensure t
   :defer t)
 
-(defun my/lsp-describe-and-jump ()
-  "Show hover documentation and jump to *lsp-help* buffer."
+
+(defun my/eldoc-box-describe-and-jump ()
   (interactive)
-  (lsp-describe-thing-at-point)
-  (let ((help-buffer "*lsp-help*"))
-	(when (get-buffer help-buffer)
-	  (switch-to-buffer-other-window help-buffer))))
+  (eldoc-box-help-at-point)
+  (let ((eldoc-buffer "*eldoc-box*"))
+    (when (get-buffer eldoc-buffer)
+      (switch-to-buffer-other-window eldoc-buffer))))
 
 (use-package pdf-tools
 :ensure t
@@ -1379,19 +1468,36 @@ mode-line-buffer-identification
 (pdf-tools-install :no-query)
 :hook (pdf-view-mode . (lambda () (display-line-numbers-mode -1))))
 
+
+(defun my/format-buffer ()
+  "Format buffer based on major mode"
+  (interactive)
+  (cond
+   ((eq major-mode 'rust-mode) (rust-format-buffer))
+   ((eq major-mode 'nix-mode) (nix-format-buffer))  
+   ((or (eq major-mode 'python-mode) 
+        (eq major-mode 'python-ts-mode)) (python-black-buffer))
+   ((eq major-mode 'c-mode) (c-indent-region (point-min) (point-max)))
+   (t (message "No formatter for %s" major-mode))))
+
 (my-leader
-  "SPC" '(projectile-switch-project :wk "switch project")
+  "SPC" '((lambda () 
+            (interactive)
+            (if (projectile-project-p)
+                (projectile-find-file)
+              (projectile-switch-project)))
+          :wk "find file/switch project")
   "sp" '(consult-ripgrep :wk "search project")
-  "/" '(consult-line :wk "search buffer")
+  "/" '(consult-ripgrep :wk "search project")
   "." '(find-file :wk "find file")
   "," '(consult-buffer :wk "switch buffer")
   ":" (lambda () (interactive) (execute-extended-command nil))
 
-"d" '(:ignore t :wk "denote")
-"dd" '(denote-menu-list-notes t :wk "List all notes")
-"dg" '(denote-grep t :wk "Search")
-"dn" '(denote t :wk "Create a new note")
-"dr" '(denote-rename-file t :wk "Rename Note")
+  "d" '(:ignore t :wk "denote")
+  "dd" '(denote-menu-list-notes t :wk "List all notes")
+  "dg" '(denote-grep t :wk "Search")
+  "dn" '(denote t :wk "Create a new note")
+  "dr" '(denote-rename-file t :wk "Rename Note")
 
   "f" '(:ignore t :wk "files")
   "fd" '(dired :wk "dired")
@@ -1411,9 +1517,7 @@ mode-line-buffer-identification
   "pp" '(projectile-switch-project :wk "switch project")
   "pf" '(projectile-find-file :wk "find file")
   "ps" '(consult-ripgrep :wk "search")
-  "pb" '(consult-projectile-buffer :wk "buffers")
-  "pk" '(projectile-kill-buffers :wk "kill buffers")
-  "pd" '(projectile-dired :wk "root dir")
+  "pb" '(consult-projectile-buffer :wk "buffers") "pk" '(projectile-kill-buffers :wk "kill buffers") "pd" '(projectile-dired :wk "root dir")
   "pr" '(projectile-recentf :wk "recent files")
   "pa" '(projectile-add-known-project :wk "add project")
   "pc" '(projectile-compile-project :wk "compile")
@@ -1421,16 +1525,17 @@ mode-line-buffer-identification
   "pi" '(projectile-invalidate-cache :wk "invalidate cache")
 
   "g" '(:ignore t :wk "git/goto")
+  "gc" '(magit-clone :wk "clone")
   "gg" '(magit-status :wk "status")
   "gl" '(magit-log-current :wk "log")
   "gd" '(xref-find-definitions :wk "go to definition") 
-  "gs" '(magit-status :wk "status")
+  "gs" '(magit-file-stage :wk "stage file")
   "gb" '(vc-annotate :wk "blame")
 
   "o" '(:ignore t :wk "open")
-  "op" '(neotree-toggle :wk "neotree")
-  "oP" '(dired-jump :wk "dired")
-  "od" '(dirvish :wk "dirvish")
+  ;; "op" '(neotree-toggle :wk "neotree")
+  ;; "oP" '(dired-jump :wk "dired")
+  ;; "od" '(dirvish :wk "dirvish")
 
   "h" '(:ignore t :wk "help")
   "hm" '(describe-mode :wk "mode")
@@ -1438,24 +1543,27 @@ mode-line-buffer-identification
   "hv" '(describe-variable :wk "variable")
   "hk" '(describe-key :wk "key")
 
-  "w" '(:ignore t :wk "windows")
-  "wv" '(split-window-right :wk "split right")
-  "ws" '(split-window-below :wk "split below")
-  "wd" '(delete-window :wk "delete")
-  "wo" '(delete-other-windows :wk "delete others")
+    "w c" '(evil-window-delete :wk "Close window")
+    "w n" '(evil-window-new :wk "New window")
+    "w s" '(evil-window-split :wk "Horizontal split window")
+    "w v" '(evil-window-vsplit :wk "Vertical split window")
+    ;; Window motions
+    "w h" '(evil-window-left :wk "Window left")
+    "w j" '(evil-window-down :wk "Window down")
+    "w k" '(evil-window-up :wk "Window up")
+    "w l" '(evil-window-right :wk "Window right")
+    "w w" '(evil-window-next :wk "Goto next window")
+    ;; Move Windows
+    "w H" '(buf-move-left :wk "Buffer move left")
+    "w J" '(buf-move-down :wk "Buffer move down")
+    "w K" '(buf-move-up :wk "Buffer move up")
+    "w L" '(buf-move-right :wk "Buffer move right")
 
   "c" '(:ignore t :wk "code")
-  "ca" '(lsp-code-action :wk "code actions")
-  ;; "cd" '(xref-find-definitions :wk "go to definition")  
-  ;; "cD" '(xref-find-references :wk "find references")
-  "cr" '(lsp-rename :wk "lsp rename")
-  ;; "ch" '(eglot-help-at-point :wk "help at point")
-  "cf" '(lsp-format-buffer :wk "format")
-  ;; "ci" '(eglot-find-implementation :wk "implementation")
-  ;; "ct" '(eglot-find-typeDefinition :wk "type definition")
-  ;; "cs" '(consult-eglot-symbols :wk "workspace symbols")
-  ;; "cS" '(eglot-shutdown :wk "shutdown lsp")
-  ;; "cR" '(eglot-reconnect :wk "restart lsp")
+  "ca" '(lspce-code-actions :wk "code actions")
+  "cx" '(consult-flymake :wk "code actions")
+  "cr" '(lspce-rename :wk "lsp rename")
+"cf" '(my/format-buffer :wk "format buffer")
 
   "m" '(:ignore t :wk "mode")
   "mp" (list (lambda ()
@@ -1473,17 +1581,107 @@ mode-line-buffer-identification
   "u" '(undo-tree-visualize :wk "undo tree")
   "P" '(consult-yank-from-kill-ring :wk "paste history"))
 
-;; (defun my/evil-eldoc-box-lookup ()
-;;   "Show documentation using eldoc-box."
-;;   (interactive)
-;;   (cond
-;;    ((and (fboundp 'eglot-managed-p) (eglot-managed-p))
-;;     (eldoc-box-help-at-point))
-;;    (t
-;;     (call-interactively 'describe-symbol))))
+(defun my/avy-enabled-p ()
+  (and (not (derived-mode-p 'magit-mode 'dired-mode 'ibuffer-mode))
+       (not (eq major-mode 'dirvish-mode))))
+
+(general-def '(normal visual) 'override
+  "s" (lambda ()
+        (interactive)
+        (when (my/avy-enabled-p)
+          (let ((avy-all-windows t)
+                (avy-background t)
+                (scroll-margin 0)
+                (maximum-scroll-margin 0))
+            (call-interactively 'evil-avy-goto-char-2)))))
+
+(use-package elfeed
+  :ensure t
+  :defer t
+  :custom
+  (elfeed-db-directory "~/.emacs.d/elfeed")
+  :config
+  (setq elfeed-search-filter "@2-weeks-ago +unread"
+		elfeed-search-title-max-width 110))
+ 
+
+(use-package elfeed-org
+  :ensure t
+  :after elfeed
+  :custom
+  (rmh-elfeed-org-files (list "~/org/rss.org"))
+  :config
+  (elfeed-org))
+
+(use-package mu4e
+  :straight nil
+  :ensure nil
+  :config
+  
+  (setq mu4e-mu-binary (executable-find "mu"))
+  (setq mu4e-maildir "~/Mails")
+  (setq mu4e-get-mail-command (concat (executable-find "mbsync") " -a"))
+  (setq mu4e-update-interval 300)
+  (setq mu4e-attachment-dir "~/Downloads")
+  (setq mu4e-change-filenames-when-moving t)
+  
+  (setq mu4e-user-mail-address-list 
+        '("cashmeresamurai@autistici.org"
+          "cashmere@cashmere.rs"))
+  
+  (setq mu4e-contexts
+        `(,(make-mu4e-context
+            :name "autistici"
+            :match-func
+            (lambda (msg)
+              (when msg
+                (string-prefix-p "/autistici" (mu4e-message-field msg :maildir))))
+            :vars '((user-mail-address . "cashmeresamurai@autistici.org")
+                    (user-full-name . "cashmere")
+                    (mu4e-drafts-folder . "/autistici/Drafts")
+                    (mu4e-sent-folder . "/autistici/Sent")
+                    (mu4e-trash-folder . "/autistici/Trash")
+                    (mu4e-refile-folder . "/autistici/Archive")))
+          
+          ,(make-mu4e-context
+            :name "cashmere"
+            :match-func
+            (lambda (msg)
+              (when msg
+                (string-prefix-p "/cashmere/cashmere" (mu4e-message-field msg :maildir))))
+            :vars '((user-mail-address . "cashmere@cashmere.rs")
+                    (user-full-name . "cashmere")
+                    (mu4e-drafts-folder . "/cashmere/cashmere/Drafts")
+                    (mu4e-sent-folder . "/cashmere/cashmere/Sent")
+                    (mu4e-trash-folder . "/cashmere/cashmere/Trash")
+                    (mu4e-refile-folder . "/cashmere/cashmere/Archive")))))
+  
+  (setq mu4e-context-policy 'pick-first)
+  (setq mu4e-compose-context-policy 'ask)
+  
+  (setq sendmail-program (executable-find "msmtp"))
+  (setq send-mail-function 'sendmail-send-it)
+  (setq message-send-mail-function 'sendmail-send-it)
+  (setq message-sendmail-envelope-from 'header)
+  (setq message-kill-buffer-on-exit t)
+  
+  (defun mu4e-set-msmtp-account ()
+    (if (message-mail-p)
+        (save-excursion
+          (let* ((from (save-restriction
+                         (message-narrow-to-headers)
+                         (message-fetch-field "from")))
+                 (account
+                  (cond
+                   ((string-match "cashmeresamurai@autistici.org" from) "autistici")
+                   ((string-match "cashmere@cashmere.rs" from) "cashmere/cashmere"))))
+            (setq message-sendmail-extra-arguments (list '"-a" account))))))
+  
+  (add-hook 'message-send-mail-hook 'mu4e-set-msmtp-account))
+
 
 (general-def 'normal 'override
-  "K" 'my/lsp-describe-and-jump)
+  "K" 'my/eldoc-box-describe-and-jump)
 
 (defun my/ibuffer-smart ()
   (interactive)
@@ -1503,9 +1701,10 @@ mode-line-buffer-identification
 
 (my-local-leader
   "a" '(org-agenda :wk "org agenda")
-  "t" '(eat :wk "terminal")
+  "t" '(vterm :wk "terminal")
   "c" '(my/centered-cursor :wk "center cursor")
-  "d" '(dirvish :wk "dired"))
+  "d" '(dirvish :wk "dired")
+  "z" '(zoom-mode :wk "zoom/golden ratio"))
 
 (general-def 'normal 'override
   "]d" 'flymake-goto-next-error
@@ -1524,8 +1723,6 @@ mode-line-buffer-identification
              (line-beginning-position)
              (line-end-position)))))
 
-;; Global K binding für alle Modi mit eglot
-
 (general-def 'visual 'override
   "gc" (lambda ()
          (interactive)
@@ -1533,15 +1730,6 @@ mode-line-buffer-identification
            (comment-or-uncomment-region
             (region-beginning)
             (region-end)))))
-
-(general-def '(normal visual) 'override
-  "s" (lambda ()
-        (interactive)
-        (let ((avy-all-windows t)
-              (avy-background t)
-              (scroll-margin 0)
-              (maximum-scroll-margin 0))
-          (call-interactively 'evil-avy-goto-char-2 ))))
 
 (general-def 'normal dirvish-mode-map
   "?" 'dirvish-dispatch
@@ -1587,7 +1775,43 @@ mode-line-buffer-identification
 (define-key minibuffer-local-must-match-map [escape] 'abort-recursive-edit)
 (define-key minibuffer-local-isearch-map [escape] 'abort-recursive-edit)
 
+(defun delete-word (arg)
+  (interactive "p")
+  (delete-region (point) (progn (forward-word arg) (point))))
+
+(defun backward-delete-word (arg)
+  (interactive "p")
+  (delete-word (- arg)))
+
+(global-set-key (kbd "M-<delete>") 'delete-word)
+(global-set-key (kbd "M-<backspace>") 'backward-delete-word)
+(global-set-key (kbd "C-<delete>") 'delete-word)
+(global-set-key (kbd "C-<backspace>") 'backward-delete-word)
 (global-set-key (kbd "C-=") 'text-scale-increase)
 (global-set-key (kbd "C--") 'text-scale-decrease)
+
+(defun my/convert-all-denote-links-in-directory (directory)
+  "Converts all denote: links to file: links in a specific directory."
+  (interactive "DDirectory: ")
+  (let ((org-files (directory-files directory t "\\.org$")))
+    (dolist (file org-files)
+      (with-current-buffer (find-file-noselect file)
+        (save-excursion
+          (goto-char (point-min))
+          (while (re-search-forward "\\[\\[denote:\\([0-9T]+\\)\\]\\(?:\\[\\([^]]*\\)\\]\\)?\\]" nil t)
+            (let* ((id (match-string 1))
+                   (description (match-string 2))
+                   (target-file (seq-find 
+                                (lambda (f) 
+                                  (string-match-p (regexp-quote id) (file-name-nondirectory f)))
+                                org-files)))
+              (when target-file
+                (let* ((target-filename (file-name-nondirectory target-file))
+                       (new-link (if description
+                                     (format "[[file:./%s][%s]]" target-filename description)
+                                   (format "[[file:./%s]]" target-filename))))
+                  (replace-match new-link t t))))))
+        (save-buffer)
+        (kill-buffer)))))
 
 (provide 'init)
