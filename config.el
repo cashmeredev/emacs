@@ -24,8 +24,6 @@
 (setq kept-new-versions             5)
 (setq kept-old-versions             5)
 
-;;; EMACS
-;;  This is biggest one. Keep going, plugins (oops, I mean packages) will be shorter :)
 (use-package emacs
   :straight nil
   :ensure nil
@@ -76,7 +74,7 @@
   ;; Configure font settings based on the operating system.
   ;; Ok, this kickstart is meant to be used on the terminal, not on GUI.
   ;; But without this, I fear you could start Graphical Emacs and be sad :(
-  (set-face-attribute 'default nil :family "MonoLisa"  :height 150)
+  ;; (set-face-attribute 'default nil :family "Maple Mono NF"  :height 150)
   ;; (when (eq system-type 'darwin)       ;; Check if the system is macOS.
   ;; (setq mac-command-modifier 'meta)  ;; Set the Command key to act as the Meta key.
   ;; (set-face-attribute 'default nil :family "Fragment Mono" :height 130))
@@ -93,12 +91,13 @@
 
   :init                        ;; Initialization settings that apply before the package is loaded.
   (tool-bar-mode -1)
+
   (menu-bar-mode -1)
   (scroll-bar-mode -1)
   (add-to-list 'default-frame-alist '(vertical-scroll-bars . nil))
   (add-to-list 'default-frame-alist '(horizontal-scroll-bars . nil))
-  (set-frame-parameter (selected-frame) 'alpha-background 60)
-  (add-to-list 'default-frame-alist '(alpha-background . 60))
+  (set-frame-parameter (selected-frame) 'alpha-background 80)
+  (add-to-list 'default-frame-alist '(alpha-background . 80))
   (global-hl-line-mode -1)     ;; Disable highlight of the current line
   (global-auto-revert-mode 1)  ;; Enable global auto-revert mode to keep buffers up to date with their corresponding files.
   (indent-tabs-mode -1)        ;; Disable the use of tabs for indentation (use spaces instead).
@@ -129,53 +128,43 @@
 						 (length (hash-table-keys straight--recipe-cache))))))))
 
 (defcustom ek-use-nerd-fonts t
-    "Configuration for using Nerd Fonts Symbols."
-    :type 'boolean
-    :group 'appearance)
+  "Configuration for using Nerd Fonts Symbols."
+  :type 'boolean
+  :group 'appearance)
 
-;;; WINDOW
-;; This section configures window management in Emacs, enhancing the way buffers
-;; are displayed for a more efficient workflow. The `window' use-package helps
-;; streamline how various buffers are shown, especially those related to help,
-;; diagnostics, and completion.
-;;
-;; Note: I have left some commented-out code below that may facilitate your
-;; Emacs journey later on. These configurations can be useful for displaying
-;; other types of buffers in side windows, allowing for a more organized workspace.
-  (use-package window
-    :straight nil
-    :ensure nil       ;; This is built-in, no need to fetch it.
-    :custom
-    (display-buffer-alist
-     '(
-   ;; ("\\*.*e?shell\\*"
-   ;;  (display-buffer-in-side-window)
-   ;;  (window-height . 0.25)
-   ;;  (side . bottom)
-   ;;  (slot . -1))
+(use-package window
+  :straight nil
+  :ensure nil       ;; This is built-in, no need to fetch it.
+  :custom
+  (display-buffer-alist
+   '(
+     ;; ("\\*.*e?shell\\*"
+     ;;  (display-buffer-in-side-window)
+     ;;  (window-height . 0.25)
+     ;;  (side . bottom)
+     ;;  (slot . -1))
 
-   ("\\*\\(Backtrace\\|Warnings\\|Compile-Log\\|[Hh]elp\\|Messages\\|Bookmark List\\|Ibuffer\\|Occur\\|eldoc.*\\)\\*"
-    (display-buffer-in-side-window)
-    (window-height . 0.25)
-    (side . bottom)
-    (slot . 0))
+     ("\\*\\(Backtrace\\|Warnings\\|Compile-Log\\|[Hh]elp\\|Messages\\|Bookmark List\\|Occur\\|eldoc.*\\)\\*"
+      (display-buffer-in-side-window)
+      (window-height . 0.25)
+      (side . bottom)
+      (slot . 0))
 
-   ;; Example configuration for the LSP help buffer,
-   ;; keeps it always on bottom using 25% of the available space:
-   ("\\*\\(lsp-help\\)\\*"
-    (display-buffer-in-side-window)
-    (window-height . 0.25)
-    (side . bottom)
-    (slot . 0))
+	 ;; Example configuration for the LSP help buffer,
+	 ;; keeps it always on bottom using 25% of the available space:
+	 ("\\*\\(lsp-help\\)\\*"
+	  (display-buffer-in-side-window)
+	  (window-height . 0.25)
+	  (side . bottom)
+	  (slot . 0))
 
-   ;; Configuration for displaying various diagnostic buffers on
-   ;; bottom 25%:
-   ("\\*\\(Flymake diagnostics\\|xref\\|ivy\\|Swiper\\|Completions\\)"
-    (display-buffer-in-side-window)
-    (window-height . 0.25)
-    (side . bottom)
-    (slot . 1))
-   )))
+	 ;; Configuration for displaying various diagnostic buffers on
+	 ;; bottom 25%:
+	 ("\\*\\(Flymake diagnostics\\|xref\\|ivy\\|Swiper\\|Completions\\)"
+	  (display-buffer-in-side-window)
+	  (window-height . 0.25)
+	  (side . bottom)
+	  (slot . 1)))))
 
 (use-package dired
   :straight nil
@@ -185,29 +174,24 @@
   (dired-dwim-target t)
   (dired-guess-shell-alist-user
    '(("\\.\\(png\\|jpe?g\\|tiff\\)" "feh" "xdg-open" "open")
-	 ("\\.\\(mp[34]\\|m4a\\|ogg\\|flac\\|webm\\|mkv\\)" "mpv" "xdg-open" "open")
-	 (".*" "open" "xdg-open")))
+     ("\\.\\(mp[34]\\|m4a\\|ogg\\|flac\\|webm\\|mkv\\)" "mpv" "xdg-open" "open")
+     (".*" "open" "xdg-open")))
   (dired-kill-when-opening-new-dired-buffer t)
   :config
   ;; (dired-async-mode 1)
   (when (eq system-type 'darwin)
-	(let ((gls (executable-find "gls")))
-	  (when gls
-		(setq insert-directory-program gls)))))
-
-(use-package async
-  :ensure t
-  :defer t)
-
+    (let ((gls (executable-find "gls")))
+      (when gls
+        (setq insert-directory-program gls)))))
 
 (use-package erc
-:straight nil
-    :defer t ;; Load ERC when needed rather than at startup. (Load it with `M-x erc RET')
-    :custom
-    (erc-join-buffer 'window)                                        ;; Open a new window for joining channels.
-    (erc-hide-list '("JOIN" "PART" "QUIT"))                          ;; Hide messages for joins, parts, and quits to reduce clutter.
-    (erc-timestamp-format "[%H:%M]")                                 ;; Format for timestamps in messages.
-    (erc-autojoin-channels-alist '((".*\\.libera\\.chat" "#emacs"))));; Automatically join the #emacs channel on Libera.Chat.
+  :straight nil
+  :defer t ;; Load ERC when needed rather than at startup. (Load it with `M-x erc RET')
+  :custom
+  (erc-join-buffer 'window)                                        ;; Open a new window for joining channels.
+  (erc-hide-list '("JOIN" "PART" "QUIT"))                          ;; Hide messages for joins, parts, and quits to reduce clutter.
+  (erc-timestamp-format "[%H:%M]")                                 ;; Format for timestamps in messages.
+  (erc-autojoin-channels-alist '((".*\\.libera\\.chat" "#emacs"))));; Automatically join the #emacs channel on Libera.Chat.
 
 (defvar my/centered-cursor-enabled nil)
 
@@ -230,15 +214,15 @@
       (message "centered-cursor on"))))
 
 (use-package isearch
-:straight nil
-    :ensure nil                                  ;; This is built-in, no need to fetch it.
-    :config
-    (setq isearch-lazy-count t)                  ;; Enable lazy counting to show current match information.
-    (setq lazy-count-prefix-format "(%s/%s) ")   ;; Format for displaying current match count.
-    (setq lazy-count-suffix-format nil)          ;; Disable suffix formatting for match count.
-    (setq search-whitespace-regexp ".*?")        ;; Allow searching across whitespace.
-    :bind (("C-s" . isearch-forward)             ;; Bind C-s to forward isearch.
-    ("C-r" . isearch-backward)))          ;; Bind C-r to backward isearch.
+  :straight nil
+  :ensure nil                                  ;; This is built-in, no need to fetch it.
+  :config
+  (setq isearch-lazy-count t)                  ;; Enable lazy counting to show current match information.
+  (setq lazy-count-prefix-format "(%s/%s) ")   ;; Format for displaying current match count.
+  (setq lazy-count-suffix-format nil)          ;; Disable suffix formatting for match count.
+  (setq search-whitespace-regexp ".*?")        ;; Allow searching across whitespace.
+  :bind (("C-s" . isearch-forward)             ;; Bind C-s to forward isearch.
+                 ("C-r" . isearch-backward)))          ;; Bind C-r to backward isearch.
 
 (use-package vc
   :straight nil
@@ -252,43 +236,43 @@
   :config
   ;; Better colors for <leader> g b  (blame file)
   (setq vc-annotate-color-map
-                '((20 . "#f5e0dc")
-                  (40 . "#f2cdcd")
-                  (60 . "#f5c2e7")
-                  (80 . "#cba6f7")
-                  (100 . "#f38ba8")
-                  (120 . "#eba0ac")
-                  (140 . "#fab387")
-                  (160 . "#f9e2af")
-                  (180 . "#a6e3a1")
-                  (200 . "#94e2d5")
-                  (220 . "#89dceb")
-                  (240 . "#74c7ec")
-                  (260 . "#89b4fa")
-                  (280 . "#b4befe"))))
+        '((20 . "#f5e0dc")
+          (40 . "#f2cdcd")
+          (60 . "#f5c2e7")
+          (80 . "#cba6f7")
+          (100 . "#f38ba8")
+          (120 . "#eba0ac")
+          (140 . "#fab387")
+          (160 . "#f9e2af")
+          (180 . "#a6e3a1")
+          (200 . "#94e2d5")
+          (220 . "#89dceb")
+          (240 . "#74c7ec")
+          (260 . "#89b4fa")
+          (280 . "#b4befe"))))
 
 (use-package smerge-mode
-:straight nil
-    :ensure nil                                  ;; This is built-in, no need to fetch it.
-    :defer t
-    :bind (:map smerge-mode-map
-("C-c ^ u" . smerge-keep-upper)  ;; Keep the changes from the upper version.
-("C-c ^ l" . smerge-keep-lower)  ;; Keep the changes from the lower version.
-("C-c ^ n" . smerge-next)        ;; Move to the next conflict.
-("C-c ^ p" . smerge-previous)))  ;; Move to the previous conflict.
+  :straight nil
+  :ensure nil                                  ;; This is built-in, no need to fetch it.
+  :defer t
+  :bind (:map smerge-mode-map
+                          ("C-c ^ u" . smerge-keep-upper)  ;; Keep the changes from the upper version.
+                          ("C-c ^ l" . smerge-keep-lower)  ;; Keep the changes from the lower version.
+                          ("C-c ^ n" . smerge-next)        ;; Move to the next conflict.
+                          ("C-c ^ p" . smerge-previous)))  ;; Move to the previous conflict.
 
 (use-package eldoc
-:straight nil
-    :ensure nil                                ;; This is built-in, no need to fetch it.
-    :after lspce-mode
-    :config
-    (setq eldoc-idle-delay 0.001)                  ;; Automatically fetch doc help
-    (setq eldoc-echo-area-use-multiline-p t) ;; We use the "K" floating help instead
-;; set to t if you want docs on the echo area
-(setq eldoc-help-at-pt t)
-(setq eldoc-echo-area-display-truncation-message nil)
-    :init
-    (global-eldoc-mode))
+  :straight nil
+  :ensure nil                                ;; This is built-in, no need to fetch it.
+  :after lspce-mode
+  :config
+  (setq eldoc-idle-delay 0.001)                  ;; Automatically fetch doc help
+  (setq eldoc-echo-area-use-multiline-p t) ;; We use the "K" floating help instead
+  ;; set to t if you want docs on the echo area
+  (setq eldoc-help-at-pt t)
+  (setq eldoc-echo-area-display-truncation-message nil)
+  :init
+  (global-eldoc-mode))
 
 (use-package eldoc-box
   :ensure t
@@ -303,17 +287,26 @@
 
 (use-package flymake
   :straight nil
-    :ensure nil          ;; This is built-in, no need to fetch it.
-    :defer t
-    :hook (prog-mode . flymake-mode)
-    :custom
-    (flymake-margin-indicators-string
-    '((error "!»" compilation-error) (warning "»" compilation-warning)
-(note "»" compilation-info))))
+  :ensure nil          ;; This is built-in, no need to fetch it.
+  :defer t
+  ;; :hook (prog-mode . flymake-mode)
+  :custom
+  (flymake-margin-indicators-string
+   '((error "!»" compilation-error) (warning "»" compilation-warning)
+         (note "»" compilation-info))))
 
 (setq trusted-content
       '("~/.emacs.d/config.el"
         "~/.emacs.d/init.el"))
+
+(use-package flycheck
+  :ensure t
+  :config
+  (add-hook 'after-init-hook #'global-flycheck-mode))
+
+(use-package flycheck-rust
+  :ensure t
+  :hook (flycheck-mode . flycheck-rust-setup))
 
 (use-package xref
   :straight nil
@@ -323,10 +316,10 @@
   :straight nil
   :ensure nil)
 
+(setq org-directory "~/org/")
 (use-package org
   :straight nil
   :ensure nil     
-  :defer t
   :config
   (require 'org-tempo)
 
@@ -380,9 +373,15 @@
         org-appear-autolinks      t   ;; Show links
         org-appear-autosubmarkers t)) ;; Show sub- and superscripts
 
+(setq org-agenda-inhibit-startup t
+      org-agenda-use-tag-inheritance nil
+      org-agenda-dim-blocked-tasks nil
+      org-startup-indented nil
+      org-startup-folded 'overview)
+
 (use-package org-modern
-  :ensure t
-  )
+  :ensure t)
+
 (with-eval-after-load 'org (global-org-modern-mode))
 
 (setq org-modern-star 'fold)
@@ -390,91 +389,329 @@
 (setq org-modern-star 'replace)
 (setq org-modern-replace-stars "◉○◉○◉")
 
-(setq org-agenda-start-on-weekday nil
-      org-agenda-block-separator  nil
-      org-agenda-remove-tags      t)
+;; (setq org-agenda-start-on-weekday nil
+;;       org-agenda-block-separator  nil
+;;       org-agenda-remove-tags      t)
+
+;;   (setq org-agenda-skip-scheduled-if-done t
+;;         org-agenda-skip-deadline-if-done t
+;;         org-agenda-include-deadlines t
+;;         org-agenda-block-separator nil
+;;         org-agenda-compact-blocks t
+;;         org-agenda-start-day nil
+;;         org-agenda-span 1
+;;         org-agenda-start-on-weekday nil
+;;         org-agenda-hide-tags-regexp "task"
+;;         org-agenda-prefix-format
+;;         '((agenda . " %i %?-12t% s")
+;;           (todo . " %i ")
+;;           (tags . " %i ")
+;;           (search . " %i ")))
+
+(use-package yequake
+  :custom
+  (yequake-frames
+   '(("org-capture"
+      (buffer-fns . (yequake-org-capture))
+      (width . 0.75)
+      (height . 0.5)
+      ;; (alpha . 0.95)
+      (frame-parameters . ((undecorated . t)
+                           (skip-taskbar . t)
+                           (sticky . t)))))))
+
+(defun my/org-capture-denote-deadline ()
+  (let* ((context (read-string "Task with deadline: "))
+         (deadline (org-read-date t nil nil "Deadline: "))
+         (file-name (denote nil '("task"))))
+    (find-file file-name)
+    (goto-char (point-min))
+    (forward-line 4)
+    (insert (format "* %s\nDEADLINE: <%s>\n\n" context deadline))
+    (current-buffer)))
+
+(defun my/org-capture-denote-scheduled ()
+  (let* ((context (read-string "Scheduled task: "))
+         (schedule (org-read-date t nil nil "Schedule: "))
+         (file-name (denote nil '("task"))))
+    (find-file file-name)
+    (goto-char (point-min))
+    (forward-line 4)
+    (insert (format "* %s\nSCHEDULED: <%s>\n\n" context schedule))
+    (current-buffer)))
+
+(defun my/org-capture-denote-task ()
+  (let* ((context (read-string "Task: "))
+         (todo-state (completing-read "TODO state: "
+                                      '("ACTIVE" "NEXT" "TODO" "WAIT" "PLAN" "FUN")))
+         (file-name (denote nil '("task"))))
+    (find-file file-name)
+    (goto-char (point-min))
+    (forward-line 4)
+    (insert (format "\n* %s %s\n\n" todo-state context))
+    (point)))
+
+(with-eval-after-load 'org
+  (setq org-capture-templates
+        '(("t" "Task" plain
+           (function my/org-capture-denote-task)
+           "" :immediate-finish t :jump-to-captured t)
+          ("d" "Deadline" plain
+           (function my/org-capture-denote-deadline)
+           "" :immediate-finish t :jump-to-captured t)
+          ("s" "Scheduled" plain
+           (function my/org-capture-denote-scheduled)
+           "" :immediate-finish t :jump-to-captured t))))
+
+(setq org-agenda-span 'day)
 
 (use-package org-super-agenda
   :after org-agenda
   :init
-  (setq org-agenda-skip-scheduled-if-done t
-        org-agenda-skip-deadline-if-done t
-        org-agenda-include-deadlines t
-        org-agenda-block-separator nil
-        org-agenda-compact-blocks t
-        org-agenda-start-day nil
-        org-agenda-span 1
-        org-agenda-start-on-weekday nil
-        org-agenda-hide-tags-regexp "task"
-        org-agenda-prefix-format
-        '((agenda . " %i %?-12t% s")
-          (todo . " %i ")
-          (tags . " %i ")
-          (search . " %i ")))
-  (setq org-agenda-custom-commands
-        '(("c" "Super view"
-           ((agenda "" ((org-agenda-overriding-header "")
-                        (org-super-agenda-groups
-                         '((:name "Today"
-                            :time-grid t
-                            :date t
-                            :deadline today
-                            :scheduled future
-                            :order 1)))))
-            (alltodo "" ((org-agenda-overriding-header "")
-                         (org-super-agenda-groups
-                          '((:discard (:todo "FUN"))  ; <- HIER ist die korrekte Position
-                            (:log t)
-                            (:name "ACTIVE"
-                             :todo "ACTIVE")
-                            (:name "NEXT"
-                             :todo "NEXT")
-                            (:name "TODO"
-                             :todo "TODO")
-                            (:name "WAIT"
-                             :todo "WAIT"))))))
-           ((org-agenda-exporter-settings
-             '((ps-number-of-columns 2)
-               (ps-landscape-mode t)
-               (org-agenda-add-entry-text-maxlines 5)
-               (htmlize-output-type 'css)))))))
   :config
   (org-super-agenda-mode))
 
+(use-package org-ql
+  :ensure t
+  :after org-super-agenda
+  :config
+  (setq org-agenda-custom-commands
+        '(("w" "Weekly Overview"
+           ((org-ql-block '(and (or (deadline auto)
+                                    (scheduled :to 7))
+                                (not (done))
+                                (not (habit)))
+                          ((org-ql-block-header "Weekly Tasks")
+                           (org-super-agenda-groups
+                            '((:name "Deadlines"
+                                     :deadline t
+                                     :order 1)
+                              (:name "Schedule"
+                                     :scheduled t
+                                     :order 2)
+                              (:discard (:anything t))))))
+            (org-ql-block '(and (ts-active :from today :to 7 :with-time t)
+                                (not (done))
+                                (not (habit)))
+                          ((org-ql-block-header "Appointments")
+                           (org-super-agenda-groups
+                            '((:name "This Week"
+                                     :anything t
+                                     :order 1)))))
+            (org-ql-block '(and (habit)
+                                (not (done)))
+                          ((org-ql-block-header "Habits")
+                           (org-super-agenda-groups
+                            '((:name "Daily Habits"
+                                     :habit t
+                                     :order 1)
+                              (:discard (:anything t)))))))))))
+
 (setq org-todo-keywords
-	  '((sequence "WAIT(w@/!)" "HABIT(h)" "TODO(t)" "NEXT(n)" "|" "DONE(d!)")
-		(sequence "BACKLOG(b)" "PLAN(p)" "READY(r)" "ACTIVE(a)" "REVIEW(v)"
-				  "FUN(f)" "|" "COMPLETED(c)" "CANC(k@)")))
+      '((sequence "WAIT(w@/!)" "HABIT(h)" "TODO(t)" "NEXT(n)" "|" "DONE(d!)")
+        (sequence "BACKLOG(b)" "PLAN(p)" "READY(r)" "ACTIVE(a)" "REVIEW(v)"
+                  "FUN(f)" "|" "COMPLETED(c)" "CANC(k@)")))
 
 (use-package ox-typst
   :straight (:host github :repo "jmpunkt/ox-typst")
   :after org)
 
+(use-package org-cliplink
+  :ensure t
+  :defer t)
+
+(use-package org-download
+  :ensure t
+  :hook (org-mode . org-download-enable)
+  :config
+  (setq-default org-download-image-dir "~/org/attachments/")
+  (setq org-download-method 'directory)
+  (setq org-download-timestamp "%Y%m%d-%H%M%S_")
+  (setq org-download-heading-lvl nil))
+
+(setq org-publish-project-alist
+      '(("wiki"
+         :author "cashmere"
+         :email "cashmere@cashmere.rs"
+         :preserve-breaks t
+         :preserve-indent t
+         :with-title t
+         :base-directory "/home/cashmere/wiki/"
+         :base-extension "org"
+         :publishing-directory "/home/cashmere/wiki/html/"
+         :recursive t
+         :publishing-function org-html-publish-to-html
+         :with-toc nil
+         :section-numbers nil
+         :html-head "<link rel=\"stylesheet\" href=\"/style.css\" type=\"text/css\"/>"
+         :preparation-function (lambda (_)
+                                  (require 'denote-org)
+                                  (dolist (file (directory-files-recursively 
+                                                "/home/cashmere/wiki/" "\\.org$"))
+                                    (with-current-buffer (find-file-noselect file)
+                                      (ignore-errors
+                                        (denote-org-extras-convert-links-to-file-type))
+                                      (save-buffer)))))))
+
+(setq org-export-with-broken-links t)
+
 (use-package denote
-     :ensure t
-     :hook (dired-mode . denote-dired-mode)
-     :config
-     (setq denote-rename-buffer-mode 1
-denote-directory (expand-file-name "~/org/")))
+  :ensure t
+  :hook (dired-mode . denote-dired-mode)
+  :config
+  (setq denote-rename-buffer-mode 1
+                denote-directory (expand-file-name "~/org/")))
 
 (use-package denote-agenda
   :ensure t
+  :after org
   :config
   (setq denote-agenda-include-regexp "task")
   (denote-agenda-insinuate))
 
+(defcustom my/denote-task-filename-component-regexp
+  "\\(?:[-_.]\\|:\\)task\\(?:[-_.]\\|:\\|$\\)"
+  "Regexp matching a filename component that denotes the 'task' tag.
+Works on the base filename (without extension), e.g. matches \"-task\", \":task:\", \"_task_\"."
+  :type 'string)
+
+(defun my/denote--make-unique-filename (dir base ext)
+  "Return a unique filepath in DIR for BASE+EXT by adding -1, -2... if needed."
+  (let* ((extstr (if (and ext (not (string-empty-p ext))) (concat "." ext) ""))
+         (candidate (expand-file-name (concat base extstr) dir))
+         (count 1))
+    (while (file-exists-p candidate)
+      (setq candidate (expand-file-name (format "%s-%d%s" base count extstr) dir))
+      (setq count (1+ count)))
+    candidate))
+
+(defun my/denote-remove-task-filetag-and-silent-rename ()
+  "If current headline became DONE in a Denote note, remove :task: filetag and remove 'task' from filename silently.
+- Only acts if there are no other non-DONE TODOs in the same file.
+- Does not call Denote's interactive rename command (no buffers opened)."
+  (when (and (derived-mode-p 'org-mode)
+             (string= (org-get-todo-state) "DONE")
+             (buffer-file-name)
+             ;; detect Denote note by presence of #+identifier:
+             (save-excursion
+               (goto-char (point-min))
+               (re-search-forward "^#\\+identifier:" nil t)))
+    ;; only proceed if no other active TODOs remain in the file
+    (let ((has-other
+           (catch 'has
+             (org-map-entries
+              (lambda ()
+                (let ((s (org-get-todo-state)))
+                  (when (and s (not (string= s "DONE")))
+                    (throw 'has t))))
+              nil 'file)
+             nil)))
+      (unless has-other
+        ;; 1) Remove :task: from #+filetags:
+        (save-excursion
+          (goto-char (point-min))
+          (when (re-search-forward "^#\\+filetags:\\s-*\\(.*\\)$" nil t)
+            (let* ((tags (match-string 1))
+                   (clean (replace-regexp-in-string ":task:" "" tags))
+                   (clean (replace-regexp-in-string "::+" ":" clean))
+                   (clean (replace-regexp-in-string "^:\\|:$" "" clean)))
+              (if (string-empty-p clean)
+                  (delete-region (line-beginning-position) (1+ (line-end-position)))
+                (beginning-of-line)
+                (kill-line)
+                (insert (concat "#+filetags: :" clean ":"))))))
+        ;; 2) Compute new filename (silent, non-interactive)
+        (let* ((file (buffer-file-name))
+               (dir  (file-name-directory file))
+               (name (file-name-nondirectory file))
+               (ext  (file-name-extension name)) ;; "org"
+               (base (file-name-sans-extension name))
+               ;; remove the task component from the base
+               (new-base (replace-regexp-in-string my/denote-task-filename-component-regexp
+                                                   ""
+                                                   base)))
+          (when (and new-base (not (string= new-base base)))
+            ;; cleanup repeated separators: convert multiple '-'/'_'/'..' to single '-'
+            (setq new-base (replace-regexp-in-string "[-_.:]+"
+                                                     "-"
+                                                     new-base))
+            ;; strip leading/trailing separators
+            (setq new-base (replace-regexp-in-string "\\`[-_.:-]+" "" new-base))
+            (setq new-base (replace-regexp-in-string "[-_.:-]+\\'" "" new-base))
+            ;; ensure unique filename to avoid overwrite without prompt
+            (let ((target (my/denote--make-unique-filename dir new-base ext)))
+              (condition-case err
+                  (progn
+                    (rename-file file target 1) ;; 1 = ok to overwrite, but we avoid collisions by uniqueness
+                    ;; update current buffer to visit the new filename silently
+                    (set-visited-file-name target t t)
+                    ;; save changes (filetags update + new filename)
+                    (save-buffer)
+                    (message "Denote: removed 'task' component from filename -> %s" (file-name-nondirectory target)))
+                (error
+                 (message "Denote rename failed: %s" (error-message-string err)))))))))))
+
+(add-hook 'org-after-todo-state-change-hook #'my/denote-remove-task-filetag-and-silent-rename)
+
+
+
 (use-package denote-menu
   :ensure t
+  :defer t
   :config
   (setq denote-menu-title-column-width 40
-		denote-menu-show-file-type nil))
+        denote-menu-show-file-type nil))
 
 (use-package denote-org
     :ensure t)
 
-(use-package denote-explore
+(use-package consult-denote
+  :straight (:host github :repo "protesilaos/consult-denote")
   :ensure t
   :defer t)
+
+(defun my/convert-all-denote-links-in-directory (directory)
+  "Converts all denote: links to file: links in a specific directory."
+  (interactive "DDirectory: ")
+  (let ((org-files (directory-files directory t "\\.org$")))
+    (dolist (file org-files)
+      (with-current-buffer (find-file-noselect file)
+        (save-excursion
+          (goto-char (point-min))
+          (while (re-search-forward "\\[\\[denote:\\([0-9T]+\\)\\]\\(?:\\[\\([^]]*\\)\\]\\)?\\]" nil t)
+            (let* ((id (match-string 1))
+                   (description (match-string 2))
+                   (target-file (seq-find 
+                                (lambda (f) 
+                                  (string-match-p (regexp-quote id) (file-name-nondirectory f)))
+                                org-files)))
+              (when target-file
+                (let* ((target-filename (file-name-nondirectory target-file))
+                       (new-link (if description
+                                     (format "[[file:./%s][%s]]" target-filename description)
+                                   (format "[[file:./%s]]" target-filename))))
+                  (replace-match new-link t t))))))
+        (save-buffer)
+        (kill-buffer)))))
+
+(defvar my-org-export-output-directory-prefix "./export_")
+
+(defun my-org-export-create-directory (fn extension &rest args)
+  (let ((export-dir (format "%s%s" my-org-export-output-directory-prefix extension)))
+    (unless (file-directory-p export-dir)
+      (make-directory export-dir)))
+  (apply fn extension args))
+
+(advice-add #'org-export-output-file-name :around #'my-org-export-create-directory)
+(setq denote-excluded-directories-regexp "export_.*")
+
+(use-package ox-json
+  :ensure t
+  )
+
+(use-package denote-explore
+  :ensure t
+  )
 
 (use-package which-key
   :ensure t
@@ -485,45 +722,41 @@ denote-directory (expand-file-name "~/org/")))
   (which-key-idle-delay 0.3))
 
 (use-package vertico
-    :ensure t
-    :straight t
-    :hook
-    (after-init . vertico-mode)
-    :custom
-    (vertico-count 10)
-    (vertico-resize nil)
-    (vertico-cycle nil)
-    :bind (:map vertico-map
-           ("C-j" . vertico-next)
-           ("C-k" . vertico-previous))
-    :config
-    (advice-add #'vertico--format-candidate :around
-(lambda (orig cand prefix suffix index _start)
-(setq cand (funcall orig cand prefix suffix index _start))
-(concat
-    (if (= vertico--index index)
-(propertize "» " 'face '(:foreground "#80adf0" :weight bold))
-    "  ")
-    cand))))
+  :ensure t
+  :straight t
+  :hook
+  (after-init . vertico-mode)
+  :custom
+  (vertico-count 10)
+  (vertico-resize nil)
+  (vertico-cycle nil)
+  :bind (:map vertico-map
+                          ("C-j" . vertico-next)
+                          ("C-k" . vertico-previous))
+  :config
+  (advice-add #'vertico--format-candidate :around
+                          (lambda (orig cand prefix suffix index _start)
+                                (setq cand (funcall orig cand prefix suffix index _start))
+                                (concat
+                                 (if (= vertico--index index)
+                                         (propertize "» " 'face '(:foreground "#80adf0" :weight bold))
+                                   "  ")
+                                 cand))))
 
-;; (use-package vertico-posframe
-;;   :init
-;;   (setq vertico-posframe-parameters   '((left-fringe  . 12)    ;; Fringes
-;;                                         (right-fringe . 12)
-;;                                         (undecorated  . nil))) ;; Rounded frame
-;;   :config
-;;   (vertico-posframe-mode 1)
-;;   (setq vertico-posframe-width        96                       ;; Narrow frame
-;;         vertico-posframe-height       vertico-count            ;; Default height
-;;         ;; Don't create posframe for these commands
-;;         vertico-multiform-commands    '((consult-line    (:not posframe))
-;;                                         (consult-ripgrep (:not posframe)))))
-
-;;; CONSULT
-;; Consult provides powerful completion and narrowing commands for Emacs.
-;; It integrates well with other completion frameworks like Vertico, enabling
-;; features like previews and enhanced register management. It's useful for
-;; navigating buffers, files, and xrefs with ease.
+(use-package vertico-posframe
+  :init
+  (setq vertico-posframe-parameters   '((left-fringe  . 12)    ;; Fringes
+                                        (right-fringe . 12)
+										(accept-focus . t)))
+                                        ;; (undecorated  . nil) ;; Rounded frame
+										 
+  :config
+  (vertico-posframe-mode 1)
+  (setq vertico-posframe-width        96                       ;; Narrow frame
+        vertico-posframe-height       vertico-count            ;; Default height
+        ;; Don't create posframe for these commands
+        vertico-multiform-commands    '((consult-line    (:not posframe))
+                                        (consult-ripgrep (:not posframe)))))
 
 (use-package consult
   :ensure t
@@ -552,39 +785,13 @@ denote-directory (expand-file-name "~/org/")))
           "\\`\\*Native-compile-Log\\*\\'"
           "\\`\\*Async-native-compile-log\\*\\'")))
 
-;;; MARKDOWN-MODE
-;; Markdown Mode provides support for editing Markdown files in Emacs,
-;; enabling features like syntax highlighting, previews, and more.
-;; It’s particularly useful for README files, as it can be set
-;; to use GitHub Flavored Markdown for enhanced compatibility.
 (use-package markdown-mode
   :defer t
   :straight t
   :ensure t
   :mode ("README\\.md\\'" . gfm-mode)            ;; Use gfm-mode for README.md files.
-  :init (setq markdown-command "multimarkdown")) ;; Set the Markdown processing command.
-
-;; (use-package corfu
-;;   :ensure t
-;;   :straight t
-;;   :defer t
-;;   :custom
-;;   (corfu-auto t)                        ;; Only completes when hitting TAB
-;;   (corfu-cycle t)                   
-;;   (text-mode-ispell-word-completion nil)  
-;;   (corfu-auto-delay 0.08)                ;; Delay before popup (enable if corfu-auto is t)
-;;   (corfu-auto-prefix 1)                  ;; Trigger completion after typing 1 character
-;;   (corfu-quit-no-match t)                ;; Quit popup if no match
-;;   (corfu-scroll-margin 5)                ;; Margin when scrolling completions
-;;   (corfu-max-width 50)                   ;; Maximum width of completion popup
-;;   (corfu-min-width 50)                   ;; Minimum width of completion popup
-;;   (corfu-popupinfo-delay 0.12)            ;; Delay before showing documentation popup
-;;   :config
-;;   (if ek-use-nerd-fonts
-;;     (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
-;;   :init
-;;   (global-corfu-mode)
-;;   (corfu-popupinfo-mode t))
+  :init 
+  (setq markdown-command "multimarkdown")) ;; Set the Markdown processing command.
 
 (use-package treesit-auto
   :ensure t
@@ -596,30 +803,11 @@ denote-directory (expand-file-name "~/org/")))
   (treesit-auto-add-to-auto-mode-alist 'all)
   (global-treesit-auto-mode t))
 
-;;; EMBARK
-;; Embark provides a powerful contextual action menu for Emacs, allowing
-;; you to perform various operations on completion candidates and other items.
-;; It extends the capabilities of completion frameworks by offering direct
-;; actions on the candidates.
-;; Just `<leader> .' over any text, explore it :)
 (use-package embark
   :ensure t
   :straight t
   :defer t)
 
-
-;;; NERD-ICONS-CORFU
-;; Provides Nerd Icons to be used with CORFU.
-;; (use-package nerd-icons-corfu
-;;   :if ek-use-nerd-fonts
-;;   :ensure t
-;;   :straight t
-;;   :defer t
-;;   :after (:all corfu))
-
-;;; EMBARK-CONSULT
-;; Embark-Consult provides a bridge between Embark and Consult, ensuring
-;; that Consult commands, like previews, are available when using Embark.
 (use-package embark-consult
   :ensure t
   :straight t
@@ -636,23 +824,11 @@ denote-directory (expand-file-name "~/org/")))
 completion-category-defaults nil      ;; Clear default category settings.
 completion-category-overrides '((file (styles partial-completion))))) ;; Customize file completion styles.
 
-;; Marginalia enhances the completion experience in Emacs by adding
-;; additional context to the completion candidates. This includes
-;; helpful annotations such as documentation and other relevant
-;; information, making it easier to choose the right option.
 (use-package marginalia
   :ensure t
   :straight t
   :hook
   (after-init . marginalia-mode))
-
-;; (use-package nerd-icons-corfu
-;;     :if ek-use-nerd-fonts
-;;     :ensure t
-;;     :straight t
-;;     :defer t
-;;     :after (:all corfu))
-
 
 (use-package typst-ts-mode
   :straight t
@@ -665,14 +841,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   ;;                `(typst-ts-mode . ,(eglot-alternatives '("tinymist" "typst-lsp")))))
   )
 
-;; (use-package rustic
-;;   :ensure t
-;;   :defer t
-;;   ;; :custom
-;;   ;; (rustic-lsp-client 'eglot)
-;;   )
-
-
 (use-package f
   :ensure t)
 
@@ -684,6 +852,17 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (use-package yasnippet-snippets
   :ensure t
   :after yasnippet)
+
+(straight-use-package
+ `(lspce :type git :host github :repo "zbelial/lspce"
+         :files (:defaults ,(pcase system-type
+                              ('gnu/linux "lspce-module.so")
+                              ('darwin "lspce-module.dylib")))
+         :pre-build ,(pcase system-type
+                       ('gnu/linux '(("cargo" "build" "--release")
+                                     ("cp" "./target/release/liblspce_module.so" "./lspce-module.so")))
+                       ('darwin '(("cargo" "build" "--release")
+                                  ("cp" "./target/release/liblspce_module.dylib" "./lspce-module.dylib"))))))
 
 (use-package company
   :straight t
@@ -705,9 +884,36 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (setq company-require-match nil)
   (setq company-backends '((company-capf :with company-yasnippet)
                            company-files
-                           company-dabbrev-code))
+                           company-dabbrev-code
+                           ))
   (setq company-dabbrev-code-everywhere t)
   (setq company-dabbrev-code-ignore-case t))
+
+(use-package lspce
+  :ensure nil
+  :config
+  (setq lspce-send-changes-idle-time 0.05)
+  (setq lspce-idle-delay 0.05)
+  (setq lspce-show-log-level-in-modeline t)
+  (setq lspce-enable-eldoc t)
+  (setq lspce-eldoc-enable-hover t)
+  (setq lspce-eldoc-enable-signature nil)
+  (setq lspce-enable-flymake nil)
+  (setq lspce--doc-max-height 10)
+  (setq eldoc-echo-area-use-multiline-p 0)
+  (setq eldoc-echo-area-display-truncation-message nil)
+  (setq lspce-xref-append-implementations-to-definitions t)
+  (setq lspce-envs-pass-to-subprocess '("PATH" "PYTHON_PATH" "NIX_PATH" "NIX_PROFILES"))
+  (setq lspce-server-programs 
+        `(("rust"  "rust-analyzer" "" lspce-ra-initializationOptions)
+          ("python" "pylsp" "" )
+          ("nix" "nixd" "" lspce-nixd-initializationOptions)
+          ("nushell" "nu" "--lsp" ""))))
+
+(use-package nix-mode
+  :ensure t
+  :mode "\\.nix\\'"
+  :hook (nix-mode . lspce-mode))
 
 (defun lspce-nixd-initializationOptions ()
   (let ((flake-path "/home/cashmere/nix")
@@ -722,48 +928,16 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :config
   (envrc-global-mode))
 
-
-(straight-use-package
- `(lspce :type git :host github :repo "zbelial/lspce"
-         :files (:defaults ,(pcase system-type
-                              ('gnu/linux "lspce-module.so")
-                              ('darwin "lspce-module.dylib")))
-         :pre-build ,(pcase system-type
-                       ('gnu/linux '(("cargo" "build" "--release")
-                                     ("cp" "./target/release/liblspce_module.so" "./lspce-module.so")))
-                       ('darwin '(("cargo" "build" "--release")
-                                  ("cp" "./target/release/liblspce_module.dylib" "./lspce-module.dylib"))))))
-
-(use-package lspce
-  :after (f yasnippet markdown-mode envrc)
-  :config
-  (setq lspce-send-changes-idle-time 0.05)
-  (setq lspce-idle-delay 0.05)
-  (setq lspce-show-log-level-in-modeline t)
-  (setq lspce-enable-eldoc t)
-  (setq lspce-eldoc-enable-hover t)
-  (setq lspce-eldoc-enable-signature t)
-  (setq lspce--doc-max-height 10)
-  (setq eldoc-echo-area-use-multiline-p 2)
-  (setq eldoc-echo-area-display-truncation-message nil)
-  (setq lspce-log-level 5)
-  
-  (setq lspce-envs-pass-to-subprocess '("PATH" "PYTHON_PATH" "NIX_PATH" "NIX_PROFILES"))
-  
-  (setq lspce-server-programs 
-        `(("rust"  "rust-analyzer" "" lspce-ra-initializationOptions)
-		  ("python" "pylsp" "" )
-          ("nix" "nixd" "" lspce-nixd-initializationOptions)
-          ("nushell" "nu" "--lsp" ""))))
-
 (use-package python-mode
   :ensure t
   :mode "\\.py\\'"
-  :hook ((python-mode python-ts-mode) . lspce-mode))
+  :hook (python-mode . lspce-mode)
+  )
 
 (use-package flymake-pyrefly
   :ensure t
-  :hook (python-base-mode . pyrefly-setup-flymake-backend))
+  ;; :hook (python-base-mode . pyrefly-setup-flymake-backend)
+  )
 
 (use-package python-black
   :ensure t
@@ -775,21 +949,28 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :mode "\\.rs\\'"
   :hook (rust-mode . lspce-mode))
 
-(use-package nix-mode
-  :ensure t
-  :mode "\\.nix\\'"
-  :hook (nix-mode . lspce-mode))
+;; (use-package rustic
+;;   :ensure t
+;;   :config
+;;   (setq rustic-format-on-save nil)
+;;   (setq rustic-lsp-client nil)
+;;   :custom
+;;   (rustic-cargo-use-last-stored-arguments t))
 
 (use-package nushell-mode
   :ensure t
   :mode "\\.nu\\'"
-  :hook (nushell-mode . lspce-mode))
+  ;; :hook (nushell-mode . lspce-mode)
+  )
 
 (use-package vterm
   :ensure t
   :defer t)
 (setq vterm-shell "nu")
 
+(use-package multi-vterm
+  :ensure t
+  :defer t)
 
 (use-package olivetti
   :ensure t
@@ -801,24 +982,30 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :ensure t
   :hook
   (find-file . (lambda ()
-                                 (global-diff-hl-mode)           ;; Enable Diff-HL mode for all files.
-                                 (diff-hl-flydiff-mode)          ;; Automatically refresh diffs.
-                                 (diff-hl-margin-mode)))         ;; Show diff indicators in the margin.
+                 (global-diff-hl-mode)           ;; Enable Diff-HL mode for all files.
+                 (diff-hl-flydiff-mode)          ;; Automatically refresh diffs.
+                 (diff-hl-margin-mode)))         ;; Show diff indicators in the margin.
   :custom
   (diff-hl-side 'left)                           ;; Set the side for diff indicators.
   (diff-hl-margin-symbols-alist '((insert . "┃") ;; Customize symbols for each change type.
-                                                                  (delete . "-")
-                                                                  (change . "┃")
-                                                                  (unknown . "┆")
-                                                                  (ignored . "i"))))
+                                  (delete . "-")
+                                  (change . "┃")
+                                  (unknown . "┆")
+                                  (ignored . "i"))))
 
 (use-package magit
   :ensure t
   :straight t
   :config
   (if ek-use-nerd-fonts   ;; Check if nerd fonts are being used
-          (setopt magit-format-file-function #'magit-format-file-nerd-icons)) ;; Turns on magit nerd-icons
-  :defer t)
+	  (setopt magit-format-file-function #'magit-format-file-nerd-icons)) ;; Turns on magit nerd-icons
+  )
+(defun my/magit-kill-buffers ()
+  "kills all magit buffers"
+  (interactive)
+  (let ((buffers (magit-mode-get-buffers)))
+	(magit-restore-window-configuration)
+	(mapc #'kill-buffer buffers)))
 
 (use-package indent-guide
   :defer t
@@ -853,11 +1040,20 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (setq evil-want-keybinding nil)
   (setq evil-want-C-u-delete t)
   (setq evil-want-C-u-scroll t)
-  (setq evil-undo-system 'undo-tree)  
+  (setq evil-undo-system 'undo-tree)
+  (setq evil-split-window-below t)
+  (setq evil-vsplit-window-right t)
   :config
   (evil-mode 1)
   (define-key evil-normal-state-map "u" 'undo-tree-undo)
-  (define-key evil-normal-state-map (kbd "C-r") 'undo-tree-redo))
+  (define-key evil-normal-state-map (kbd "C-r") 'undo-tree-redo)
+  
+  (evil-set-initial-state 'help-mode 'emacs)
+  (evil-set-initial-state 'messages-buffer-mode 'normal)
+  (evil-set-initial-state 'dired-mode 'normal)
+  (evil-set-initial-state 'ibuffer-mode 'normal))
+
+(modify-syntax-entry ?_ "w")
 
 (use-package smartparens
   :ensure t
@@ -875,7 +1071,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :ensure t
   :config
   (evil-collection-init))
-
 
 (use-package evil-surround
   :ensure t
@@ -898,14 +1093,11 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (define-key evil-inner-text-objects-map "b" 'evil-textobj-anyblock-inner-block)
   (define-key evil-outer-text-objects-map "b" 'evil-textobj-anyblock-a-block)
   
-  ;; (define-key evil-inner-text-objects-map "q" 'evil-textobj-anyblock-inner-quote)
-  ;; (define-key evil-outer-text-objects-map "q" 'evil-textobj-anyblock-a-quote)
-  
   (setq evil-textobj-anyblock-blocks
-	   '(("(" . ")")
-	     ("{" . "}")
-	     ("\\[" . "\\]")
-	     ("<" . ">"))))
+        '(("(" . ")")
+          ("{" . "}")
+          ("\\[" . "\\]")
+          ("<" . ">"))))
 
 (evil-define-text-object my-evil-textobj-anyblock-inner-quote
   (count &optional beg end type)
@@ -957,8 +1149,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :init
   (setq undo-tree-visualizer-timestamps t
         undo-tree-visualizer-diff t
-        undo-tree-auto-save-history nil  
-        undo-tree-history-directory-alist nil  
+        undo-tree-auto-save-history t
+        undo-tree-history-directory-alist '(("." . "~/.emacs.d/undo-tree-history/"))
         undo-limit 800000
         undo-strong-limit 12000000
         undo-outer-limit 120000000)
@@ -986,23 +1178,47 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :straight t
   :ensure t
   :hook
-  (after-init . pulsar-global-mode)
+  ;; (after-init . pulsar-global-mode)
+  :init
+  (setq pulsar-pulse-on-window-change nil)
   :config
   (setq pulsar-pulse t)
   (setq pulsar-delay 0.025)
   (setq pulsar-iterations 10)
   (setq pulsar-face 'evil-ex-lazy-highlight)
 
-  (add-to-list 'pulsar-pulse-functions 'evil-scroll-down)
-  (add-to-list 'pulsar-pulse-functions 'flymake-goto-next-error)
-  (add-to-list 'pulsar-pulse-functions 'flymake-goto-prev-error)
-  (add-to-list 'pulsar-pulse-functions 'evil-yank)
-  (add-to-list 'pulsar-pulse-functions 'evil-yank-line)
-  (add-to-list 'pulsar-pulse-functions 'evil-delete)
-  (add-to-list 'pulsar-pulse-functions 'evil-delete-line)
-  (add-to-list 'pulsar-pulse-functions 'evil-jump-item)
-  (add-to-list 'pulsar-pulse-functions 'diff-hl-next-hunk)
-  (add-to-list 'pulsar-pulse-functions 'diff-hl-previous-hunk))
+  (add-hook 'org-agenda-mode-hook
+            (lambda () (pulsar-mode -1)))
+
+  (setq pulsar-pulse-functions
+        '(evil-scroll-down
+          flymake-goto-next-error
+          flymake-goto-prev-error
+          evil-yank
+          evil-yank-line
+          evil-delete
+          evil-delete-line
+          evil-jump-item
+          diff-hl-next-hunk
+          diff-hl-previous-hunk
+          recenter-top-bottom
+          move-to-window-line-top-bottom
+          reposition-window
+          bookmark-jump
+          other-window
+          delete-window
+          delete-other-windows
+          forward-page
+          backward-page
+          scroll-up-command
+          scroll-down-command
+          windmove-right
+          windmove-left
+          windmove-up
+          windmove-down
+          tab-new
+          tab-close
+          tab-next)))
 
 (use-package evil-org
   :ensure t
@@ -1013,20 +1229,12 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (require 'evil-org-agenda)
   (evil-org-agenda-set-keys))
 
-;;; NERD ICONS
-;; The `nerd-icons' package provides a set of icons for use in Emacs. These icons can
-;; enhance the visual appearance of various modes and packages, making it easier to
-;; distinguish between different file types and functionalities.
 (use-package nerd-icons
   :if ek-use-nerd-fonts                   ;; Load the package only if the user has configured to use nerd fonts.
   :ensure t                               ;; Ensure the package is installed.
   :straight t
   :defer t)                               ;; Load the package only when needed to improve startup time.
 
- ;;; NERD ICONS Dired
-;; The `nerd-icons-dired' package integrates nerd icons into the Dired mode,
-;; providing visual icons for files and directories. This enhances the Dired
-;; interface by making it easier to identify file types at a glance.
 (use-package nerd-icons-dired
   :if ek-use-nerd-fonts                   ;; Load the package only if the user has configured to use nerd fonts.
   :ensure t                               ;; Ensure the package is installed.
@@ -1044,30 +1252,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (nerd-icons-completion-mode)            ;; Activate nerd icons for completion interfaces.
   (add-hook 'marginalia-mode-hook #'nerd-icons-completion-marginalia-setup)) ;; Setup icons in the marginalia mode for enhanced completion display.
 
-;;; CATPPUCCIN THEME
-;; The `catppuccin-theme' package provides a visually pleasing color theme
-;; for Emacs that is inspired by the popular Catppuccin color palette.
-;; This theme aims to create a comfortable and aesthetic coding environment
-;; with soft colors that are easy on the eyes.
-;; (use-package catppuccin-theme
-;;   :ensure t
-;;   :straight t
-;;   :config
-;;   (setq catppuccin-flavor 'frappe)
-  
-;;   (load-theme 'catppuccin :no-confirm)
-
-;;   (custom-set-faces
-;;    `(diff-hl-change ((t (:background unspecified :foreground ,(catppuccin-get-color 'blue))))))
-
-;;   (custom-set-faces
-;;    `(diff-hl-delete ((t (:background unspecified :foreground ,(catppuccin-get-color 'red))))))
-
-;;   (custom-set-faces
-;;    `(diff-hl-insert ((t (:background unspecified :foreground ,(catppuccin-get-color 'green)))))))
-
-
-;;; UTILITARY FUNCTION TO INSTALL EMACS-KICK
 (defun ek/first-install ()
   "dired"
   (interactive)                                      ;; Allow this function to be called interactively.
@@ -1083,8 +1267,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (message ">>> Emacs-Kick installed! Press any key to close the installer and open Emacs normally. First boot will compile some extra stuff :)")
   (read-key)                                         ;; Wait for the user to press any key.
   (kill-emacs))                                      ;; Close Emacs after installation is complete.
-
-;;; init.el ends here
 
 (require 'battery)
 (require 'nerd-icons)
@@ -1228,35 +1410,35 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
                        'help-echo (format "%d note(s)" note-count))))))))
 
 (setq-default header-line-format
-  '("%e"
-    (:propertize " " display (raise +0.4))
-    (:propertize " " display (raise -0.4))
-    
-    (:propertize "λ " face font-lock-comment-face)
-    mode-line-frame-identification
-    mode-line-buffer-identification
-    
-    (:eval (when-let (vc vc-mode)
-             (list (propertize "   " 'face 'font-lock-comment-face)
-                   (propertize (truncate-string-to-width
-                                (substring vc 5) 50)
-                               'face 'font-lock-comment-face))))
-    
-    (:eval (my-lspce-diagnostics-string))
-    
-    (:propertize "  %4l:%c" face mode-line-buffer-id)
-    
-    (:eval (propertize
-            " " 'display
-            `((space :align-to
-                     (- (+ right right-fringe right-margin)
-                        ,(+ 3
-                            (string-width (or my-battery-string ""))
-                            (string-width (or display-time-string ""))))))))
-    
-    (:eval my-battery-string)
-    " "
-    (:eval display-time-string)))
+			  '("%e"
+				(:propertize " " display (raise +0.4))
+				(:propertize " " display (raise -0.4))
+				
+				(:propertize "λ " face font-lock-comment-face)
+				mode-line-frame-identification
+				mode-line-buffer-identification
+				
+				(:eval (when-let (vc vc-mode)
+						 (list (propertize "   " 'face 'font-lock-comment-face)
+							   (propertize (truncate-string-to-width
+											(substring vc 5) 50)
+										   'face 'font-lock-comment-face))))
+				
+				(:eval (my-lspce-diagnostics-string))
+				
+				(:propertize "  %4l:%c" face mode-line-buffer-id)
+				
+				(:eval (propertize
+						" " 'display
+						`((space :align-to
+								 (- (+ right right-fringe right-margin)
+									,(+ 3
+										(string-width (or my-battery-string ""))
+										(string-width (or display-time-string ""))))))))
+				
+				(:eval my-battery-string)
+				" "
+				(:eval display-time-string)))
 
 (setq-default mode-line-format nil)
 
@@ -1300,32 +1482,31 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :defer t
   :bind (:map custom-bindings-map ("C-c h m" . hide-mode-line-mode)))
 
+;; (use-package doom-modeline
+;;   :ensure t
+;;   :hook (after-init . doom-modeline-mode)
+;;   :config
+;;   (setq doom-modeline-buffer-file-name-style 'buffer-name))
+
 (use-package adaptive-wrap
   :ensure t
   :hook ((text-mode . adaptive-wrap-prefix-mode))
   :config
   (add-hook 'org-mode-hook 
-    (lambda () 
-      (when (bound-and-true-p adaptive-wrap-prefix-mode)
-        (adaptive-wrap-prefix-mode -1)))))
+			(lambda () 
+			  (when (bound-and-true-p adaptive-wrap-prefix-mode)
+				(adaptive-wrap-prefix-mode -1)))))
 
 (setq package-gnupghome-dir "~/.gnupg")
 
 (blink-cursor-mode 0)
 (setq-default cursor-type 'bar)
 
-(defvar cashmere/font-height 150)
+(defvar cashmere/font-height 140)
 
-;; (when (member "Fragment Mono" (font-family-list))
-;;   (set-face-attribute 'default nil :font "Fragment Mono" :height cashmere/font-height)
-;;   (set-face-attribute 'fixed-pitch nil :family "Fragment Mono" :height cashmere/font-height))
-
-;; (when (member "Maple Mono NF" (font-family-list))
-;;   (set-face-attribute 'variable-pitch nil :family "Maple Mono NF" :height cashmere/font-height))
-
-(set-face-attribute 'default nil :family "MonoLisa" :weight 'semi-bold :height cashmere/font-height)
-(set-face-attribute 'fixed-pitch nil :family "MonoLisa" :weight 'regular)
-(set-face-attribute 'variable-pitch nil :family "MonoLisa" :weight 'regular :height 1.1)
+(set-face-attribute 'default nil :family "JetBrainsMono Nerd Font" :weight 'regular :height cashmere/font-height)
+(set-face-attribute 'fixed-pitch nil :family "RobotoMono Nerd Font" :weight 'regular)
+(set-face-attribute 'variable-pitch nil :family "RobotoMono Nerd Font" :weight 'regular :height 1.1)
 
 (use-package mixed-pitch
   :straight t
@@ -1336,29 +1517,165 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (use-package autothemer
   :straight t
   :defer t)
- (use-package doom-themes
-   :straight t
-   :ensure t
-   :custom
-   ;; Global settings (defaults)
-   (doom-themes-enable-bold t)   ; if nil, bold is universally disabled
-   (doom-themes-enable-italic t) ; if nil, italics is universally disabled
-   ;; for treemacs users
-   (doom-themes-treemacs-theme "doom-nord-light") ; use "doom-colors" for less minimal icon theme
-   :config
-   (load-theme 'doom-nord-light t)
+;; (use-package doom-themes
+;;   :straight t
+;;   :ensure t
+;;   :custom
+;;   ;; Global settings (defaults)
+;;   (doom-themes-enable-bold t)   ; if nil, bold is universally disabled
+;;   (doom-themes-enable-italic t) ; if nil, italics is universally disabled
+;;   ;; for treemacs users
+;;   (doom-themes-treemacs-theme "doom-nord-light") ; use "doom-colors" for less minimal icon theme
+;;   :config
+;;   (load-theme 'doom-nord-light t)
 
-   ;; Enable flashing mode-line on errors
-   (doom-themes-visual-bell-config)
-   ;; Enable custom neotree theme (nerd-icons must be installed!)
-   ;; or for treemacs users
-   (doom-themes-treemacs-config)
-   ;; Corrects (and improves) org-mode's native fontification.
-   (doom-themes-org-config))
+;;   ;; Enable flashing mode-line on errors
+;;   (doom-themes-visual-bell-config)
+;;   ;; Enable custom neotree theme (nerd-icons must be installed!)
+;;   ;; or for treemacs users
+;;   (doom-themes-treemacs-config)
+;;   ;; Corrects (and improves) org-mode's native fontification.
+;;   (doom-themes-org-config))
 
-;; (use-package nord-theme
-;;   :ensure t)
-;; (load-theme 'nord t)
+(use-package catppuccin-theme
+  :ensure t
+  :straight t
+  :config
+  (setq catppuccin-flavor 'mocha)
+
+  (load-theme 'catppuccin :no-confirm)
+
+  (custom-set-faces
+   `(diff-hl-change ((t (:background unspecified :foreground ,(catppuccin-get-color 'blue))))))
+
+  (custom-set-faces
+   `(diff-hl-delete ((t (:background unspecified :foreground ,(catppuccin-get-color 'red))))))
+
+  (custom-set-faces
+   `(diff-hl-insert ((t (:background unspecified :foreground ,(catppuccin-get-color 'green)))))))
+
+;; (use-package modus-themes
+;;   :ensure nil
+;;   :defer t
+;;   :custom
+;;   (modus-themes-italic-constructs t)
+;;   (modus-themes-bold-constructs t)
+;;   (modus-themes-mixed-fonts nil)
+;;   (modus-themes-prompts '(bold intense))
+;;   (modus-themes-common-palette-overrides
+;;    `((accent-0 "#1e66f5")
+;;      (accent-1 "#04a5e5")
+;;      (bg-active bg-main)
+;;      (bg-added "#d3f0d0")
+;;      (bg-added-refine "#b8e6b3")
+;;      (bg-changed "#dde5f5")
+;;      (bg-changed-refine "#c4d4f0")
+;;      (bg-completion "#ccd0da")
+;;      (bg-completion-match-0 "#eff1f5")
+;;      (bg-completion-match-1 "#eff1f5")
+;;      (bg-completion-match-2 "#eff1f5")
+;;      (bg-completion-match-3 "#eff1f5")
+;;      (bg-hl-line "#e6e9ef")
+;;      (bg-hover-secondary "#9ca0b0")
+;;      (bg-line-number-active unspecified)
+;;      (bg-line-number-inactive "#eff1f5")
+;;      (bg-main "#eff1f5")
+;;      (bg-mark-delete "#f5d9e0")
+;;      (bg-mark-select "#dde5f5")
+;;      (bg-mode-line-active "#e6e9ef")
+;;      (bg-mode-line-inactive "#e6e9ef")
+;;      (bg-prominent-err "#f5d9e0")
+;;      (bg-prompt unspecified)
+;;      (bg-prose-block-contents "#dce0e8")
+;;      (bg-prose-block-delimiter bg-prose-block-contents)
+;;      (bg-region "#9ca0b0")
+;;      (bg-removed "#f5d9e0")
+;;      (bg-removed-refine "#f0c9d1")
+;;      (bg-tab-bar      "#eff1f5")
+;;      (bg-tab-current  bg-main)
+;;      (bg-tab-other    "#eff1f5")
+;;      (border-mode-line-active nil)
+;;      (border-mode-line-inactive nil)
+;;      (builtin "#1e66f5")
+;;      (comment "#7c7f93")
+;;      (constant  "#d20f39")
+;;      (cursor  "#dc8a78")
+;;      (date-weekday "#1e66f5")
+;;      (date-weekend "#fe640b")
+;;      (docstring "#5c5f77")
+;;      (err     "#d20f39")
+;;      (fg-active fg-main)
+;;      (fg-completion "#4c4f69")
+;;      (fg-completion-match-0 "#1e66f5")
+;;      (fg-completion-match-1 "#d20f39")
+;;      (fg-completion-match-2 "#40a02b")
+;;      (fg-completion-match-3 "#fe640b")
+;;      (fg-heading-0 "#d20f39")
+;;      (fg-heading-1 "#fe640b")
+;;      (fg-heading-2 "#df8e1d")
+;;      (fg-heading-3 "#40a02b")
+;;      (fg-heading-4 "#04a5e5")
+;;      (fg-line-number-active "#7287fd")
+;;      (fg-line-number-inactive "#9ca0b0")
+;;      (fg-link  "#1e66f5")
+;;      (fg-main "#4c4f69")
+;;      (fg-mark-delete "#d20f39")
+;;      (fg-mark-select "#1e66f5")
+;;      (fg-mode-line-active "#4c4f69")
+;;      (fg-mode-line-inactive "#9ca0b0")
+;;      (fg-prominent-err "#d20f39")
+;;      (fg-prompt "#8839ef")
+;;      (fg-prose-block-delimiter "#7c7f93")
+;;      (fg-prose-verbatim "#40a02b")
+;;      (fg-region "#4c4f69")
+;;      (fnname    "#1e66f5")
+;;      (fringe "#eff1f5")
+;;      (identifier "#8839ef")
+;;      (info    "#179299")
+;;      (keyword   "#8839ef")
+;;      (keyword "#8839ef")
+;;      (name "#1e66f5")
+;;      (number "#fe640b")
+;;      (property "#1e66f5")
+;;      (string "#40a02b")
+;;      (type      "#df8e1d")
+;;      (variable  "#fe640b")
+;;      (warning "#df8e1d")))
+;;   :config
+;;   (modus-themes-with-colors
+;;     (custom-set-faces
+;;      `(change-log-acknowledgment ((,c :foreground "#7287fd")))
+;;      `(change-log-date ((,c :foreground "#40a02b")))
+;;      `(change-log-name ((,c :foreground "#fe640b")))
+;;      `(diff-context ((,c :foreground "#1e66f5")))
+;;      `(diff-file-header ((,c :foreground "#ea76cb")))
+;;      `(diff-header ((,c :foreground "#1e66f5")))
+;;      `(diff-hunk-header ((,c :foreground "#fe640b")))
+;;      `(gnus-button ((,c :foreground "#1e66f5")))
+;;      `(gnus-group-mail-3 ((,c :foreground "#1e66f5")))
+;;      `(gnus-group-mail-3-empty ((,c :foreground "#1e66f5")))
+;;      `(gnus-header-content ((,c :foreground "#04a5e5")))
+;;      `(gnus-header-from ((,c :foreground "#8839ef")))
+;;      `(gnus-header-name ((,c :foreground "#40a02b")))
+;;      `(gnus-header-subject ((,c :foreground "#1e66f5")))
+;;      `(log-view-message ((,c :foreground "#7287fd")))
+;;      `(match ((,c :background "#c4d4f0" :foreground "#4c4f69")))
+;;      `(modus-themes-search-current ((,c :background "#d20f39" :foreground "#eff1f5")))
+;;      `(modus-themes-search-lazy ((,c :background "#c4d4f0" :foreground "#4c4f69")))
+;;      `(newsticker-extra-face ((,c :foreground "#7c7f93" :height 0.8 :slant italic)))
+;;      `(newsticker-feed-face ((,c :foreground "#d20f39" :height 1.2 :weight bold)))
+;;      `(newsticker-treeview-face ((,c :foreground "#4c4f69")))
+;;      `(newsticker-treeview-selection-face ((,c :background "#c4d4f0" :foreground "#4c4f69")))
+;;      `(tab-bar ((,c :background "#eff1f5" :foreground "#4c4f69")))
+;;      `(tab-bar-tab ((,c :background "#eff1f5" :underline t)))
+;;      `(tab-bar-tab-group-current ((,c :background "#eff1f5" :foreground "#4c4f69" :underline t)))
+;;      `(tab-bar-tab-group-inactive ((,c :background "#eff1f5" :foreground "#7c7f93")))
+;;      `(tab-bar-tab-inactive ((,c :background "#eff1f5" :foreground "#5c5f77")))
+;;      `(vc-dir-file ((,c :foreground "#1e66f5")))
+;;      `(vc-dir-header-value ((,c :foreground "#7287fd")))))
+;;   :init
+;;   (load-theme 'modus-operandi t))
+
 (use-package dirvish
   :straight t
   :init
@@ -1390,7 +1707,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (define-globalized-minor-mode my/global-olivetti-mode olivetti-mode
   (lambda () (olivetti-mode 1)))
 (my/centered-cursor)
-;; (my/global-olivetti-mode)
+(my/global-olivetti-mode)
 
 (use-package org-modern-indent
   :straight (:host github :repo "jdtsmith/org-modern-indent")
@@ -1412,19 +1729,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
         "^\\*clojure-lsp::stderr\\*$"
         "^\\*ts-ls\\*$"
         "^\\*ts-ls::stderr\\*$"))
-
-(use-package eat
-  :ensure t
-  :defer t
-  :init
-  (defun my/eat-reset-key ()
-    (when (boundp 'eat-emacs-mode-map)
-      (define-key eat-emacs-mode-map (kbd "C-l") #'eat-reset)))
-  :hook (eat-mode . my/eat-reset-key)
-  :config
-  (when (fboundp 'eat-global-mode)
-    (eat-global-mode)
-    (setq eat-kill-buffer-on-exit t)))
 
 (use-package projectile
   :ensure t
@@ -1453,24 +1757,26 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :ensure t
   :defer t)
 
-
-(defun my/eldoc-box-describe-and-jump ()
-  (interactive)
-  (eldoc-box-help-at-point)
-  (let ((eldoc-buffer "*eldoc-box*"))
-    (when (get-buffer eldoc-buffer)
-      (switch-to-buffer-other-window eldoc-buffer))))
-
 (use-package pdf-tools
-:ensure t
-:magic ("%PDF" . pdf-view-mode)
-:config
-(pdf-tools-install :no-query)
-:hook (pdf-view-mode . (lambda () (display-line-numbers-mode -1))))
+  :ensure t
+  :magic ("%PDF" . pdf-view-mode)
+  :config
+  (pdf-tools-install :no-query)
+  :hook (pdf-view-mode . (lambda () (display-line-numbers-mode -1))))
 
+(defun ek/lsp-describe-and-jump ()
+  (interactive)
+  (lspce-help-at-point)
+  (let ((help-buffer "*lsp-help*"))
+    (when (get-buffer help-buffer)
+      (switch-to-buffer-other-window help-buffer))))
+
+(evil-define-key 'normal 'global (kbd "K")
+  (if (>= emacs-major-version 31)
+      #'eldoc-box-help-at-point
+      #'ek/lsp-describe-and-jump))
 
 (defun my/format-buffer ()
-  "Format buffer based on major mode"
   (interactive)
   (cond
    ((eq major-mode 'rust-mode) (rust-format-buffer))
@@ -1484,10 +1790,11 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "SPC" '((lambda () 
             (interactive)
             (if (projectile-project-p)
-                (projectile-find-file)
+                (consult-projectile-find-file)
               (projectile-switch-project)))
           :wk "find file/switch project")
-  "sp" '(consult-ripgrep :wk "search project")
+  "sp" '(consult-projectile :wk "search project")
+  "ss" '(consult-line :wk "search project")
   "/" '(consult-ripgrep :wk "search project")
   "." '(find-file :wk "find file")
   "," '(consult-buffer :wk "switch buffer")
@@ -1517,7 +1824,9 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "pp" '(projectile-switch-project :wk "switch project")
   "pf" '(projectile-find-file :wk "find file")
   "ps" '(consult-ripgrep :wk "search")
-  "pb" '(consult-projectile-buffer :wk "buffers") "pk" '(projectile-kill-buffers :wk "kill buffers") "pd" '(projectile-dired :wk "root dir")
+  "pb" '(consult-projectile-buffer :wk "buffers") 
+  "pk" '(projectile-kill-buffers :wk "kill buffers") 
+  "pd" '(projectile-dired :wk "root dir")
   "pr" '(projectile-recentf :wk "recent files")
   "pa" '(projectile-add-known-project :wk "add project")
   "pc" '(projectile-compile-project :wk "compile")
@@ -1528,14 +1837,19 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "gc" '(magit-clone :wk "clone")
   "gg" '(magit-status :wk "status")
   "gl" '(magit-log-current :wk "log")
-  "gd" '(xref-find-definitions :wk "go to definition") 
+  "gd" '(lsp-find-definition :wk "go to definition") 
+  "gD" '(lsp-find-definition-other-window :wk "definition other window")
+  "gi" '(lsp-find-implementation :wk "go to implementation")
+  "gI" '((lambda () (interactive) 
+           (let ((current-prefix-arg 4))
+             (call-interactively #'lsp-find-implementation)))
+         :wk "implementation other window")
+  "gt" '(lsp-find-type-definition :wk "go to type definition")
+  "gr" '(lsp-find-references :wk "find references")
   "gs" '(magit-file-stage :wk "stage file")
   "gb" '(vc-annotate :wk "blame")
 
   "o" '(:ignore t :wk "open")
-  ;; "op" '(neotree-toggle :wk "neotree")
-  ;; "oP" '(dired-jump :wk "dired")
-  ;; "od" '(dirvish :wk "dirvish")
 
   "h" '(:ignore t :wk "help")
   "hm" '(describe-mode :wk "mode")
@@ -1543,35 +1857,24 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "hv" '(describe-variable :wk "variable")
   "hk" '(describe-key :wk "key")
 
-    "w c" '(evil-window-delete :wk "Close window")
-    "w n" '(evil-window-new :wk "New window")
-    "w s" '(evil-window-split :wk "Horizontal split window")
-    "w v" '(evil-window-vsplit :wk "Vertical split window")
-    ;; Window motions
-    "w h" '(evil-window-left :wk "Window left")
-    "w j" '(evil-window-down :wk "Window down")
-    "w k" '(evil-window-up :wk "Window up")
-    "w l" '(evil-window-right :wk "Window right")
-    "w w" '(evil-window-next :wk "Goto next window")
-    ;; Move Windows
-    "w H" '(buf-move-left :wk "Buffer move left")
-    "w J" '(buf-move-down :wk "Buffer move down")
-    "w K" '(buf-move-up :wk "Buffer move up")
-    "w L" '(buf-move-right :wk "Buffer move right")
+  "w c" '(evil-window-delete :wk "Close window")
+  "w n" '(evil-window-new :wk "New window")
+  "w s" '(evil-window-split :wk "Horizontal split window")
+  "w v" '(evil-window-vsplit :wk "Vertical split window")
+  "w h" '(evil-window-left :wk "Window left")
+  "w j" '(evil-window-down :wk "Window down")
+  "w k" '(evil-window-up :wk "Window up")
+  "w l" '(evil-window-right :wk "Window right")
+  "w w" '(evil-window-next :wk "Goto next window")
+  "w H" '(buf-move-left :wk "Buffer move left")
+  "w J" '(buf-move-down :wk "Buffer move down")
+  "w K" '(buf-move-up :wk "Buffer move up")
+  "w L" '(buf-move-right :wk "Buffer move right")
 
   "c" '(:ignore t :wk "code")
   "ca" '(lspce-code-actions :wk "code actions")
-  "cx" '(consult-flymake :wk "code actions")
   "cr" '(lspce-rename :wk "lsp rename")
-"cf" '(my/format-buffer :wk "format buffer")
-
-  "m" '(:ignore t :wk "mode")
-  "mp" (list (lambda ()
-               (interactive)
-               (shell-command (concat "prettier --write "
-                                    (shell-quote-argument (buffer-file-name))))
-               (revert-buffer t t t))
-             :wk "format prettier")
+  "cf" '(my/format-buffer :wk "format buffer")
 
   "q" '(:ignore t :wk "quit")
   "qq" '(save-buffers-kill-terminal :wk "quit emacs")
@@ -1580,6 +1883,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "a" '(embark-act :wk "embark")
   "u" '(undo-tree-visualize :wk "undo tree")
   "P" '(consult-yank-from-kill-ring :wk "paste history"))
+
 
 (defun my/avy-enabled-p ()
   (and (not (derived-mode-p 'magit-mode 'dired-mode 'ibuffer-mode))
@@ -1595,6 +1899,104 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
                 (maximum-scroll-margin 0))
             (call-interactively 'evil-avy-goto-char-2)))))
 
+(general-def 'normal 'override
+  "]d" 'flymake-goto-next-error
+  "[d" 'flymake-goto-prev-error
+  "]c" 'diff-hl-next-hunk
+  "[c" 'diff-hl-previous-hunk
+  "]b" 'switch-to-next-buffer
+  "[b" 'switch-to-prev-buffer
+  "]t" 'tab-next
+  "[t" 'tab-previous
+  "P" 'consult-yank-from-kill-ring
+  "gcc" (lambda ()
+          (interactive)
+          (unless (use-region-p)
+            (comment-or-uncomment-region
+             (line-beginning-position)
+             (line-end-position)))))
+
+(general-def 'visual 'override
+  "gc" (lambda ()
+         (interactive)
+         (when (use-region-p)
+           (comment-or-uncomment-region
+            (region-beginning)
+            (region-end)))))
+
+(my-local-leader
+  :keymaps 'org-mode-map
+  "h" '(consult-org-heading :wk "search headings")
+  "n" '(my-toggle-org-tree-indirect-buffer :wk "toggle narrow"))
+
+(my-leader
+  :keymaps 'org-mode-map
+  "c" '(:wk "Clock" :ignore)
+
+  "cs" '(org-schedule :wk "Schedule")
+  "cd" '(org-deadline :wk "Deadline")
+
+  "l" '(:wk "Link" :ignore)
+  "lc" '(org-cliplink :wk "Cliplink")
+  "li" '(org-download-clipboard :wk "Image")
+  "ll" '(org-insert-link :wk "Link various things")
+
+  "t" '(org-todo :wk "TODO")
+
+  "RET" '(org-open-at-point))
+
+(with-eval-after-load 'denote-menu
+  (general-def 'normal denote-menu-mode-map
+    "r" 'denote-menu-filter
+    "c" 'denote-menu-clear-filters
+    "e" 'denote-menu-export-to-dired
+    "o" 'denote-menu-filter-out-keyword))
+
+(general-def 'normal dirvish-mode-map
+  "?" 'dirvish-dispatch
+  "q" 'dirvish-quit
+  "b" 'dirvish-quick-access
+  "f" 'dirvish-file-info-menu
+  "p" 'dirvish-yank
+  "S" 'dirvish-quicksort
+  "F" 'dirvish-layout-toggle
+  "z" 'dirvish-history-jump
+  "gh" 'dirvish-subtree-up
+  "gl" 'dirvish-subtree-toggle
+  "h" 'dired-up-directory
+  "l" 'dired-find-file
+  "TAB" 'dirvish-subtree-toggle
+  "[h" 'dirvish-history-go-backward
+  "]h" 'dirvish-history-go-forward)
+
+(general-def '(normal visual) dirvish-mode-map
+  :prefix "y"
+  "l" 'dirvish-copy-file-true-path
+  "n" 'dirvish-copy-file-name
+  "p" 'dirvish-copy-file-path
+  "y" 'dired-do-copy)
+
+(general-def 'normal dirvish-mode-map
+  :prefix "s"
+  "s" 'dirvish-symlink
+  "S" 'dirvish-relative-symlink
+  "h" 'dirvish-hardlink)
+
+(my-local-leader
+  "a" '(org-agenda :wk "org agenda")
+  "t" '(multi-vterm :wk "terminal")
+  "c" '(my/centered-cursor :wk "center cursor")
+  "d" '(dirvish :wk "dired")
+  "z" '(zoom-mode :wk "zoom/golden ratio")
+  "m" '(mu4e :wk "mail"))
+
+(global-set-key (kbd "M-<delete>") 'delete-word)
+(global-set-key (kbd "M-<backspace>") 'backward-delete-word)
+(global-set-key (kbd "C-<delete>") 'delete-word)
+(global-set-key (kbd "C-<backspace>") 'backward-delete-word)
+(global-set-key (kbd "C-=") 'text-scale-increase)
+(global-set-key (kbd "C--") 'text-scale-decrease)
+
 (use-package elfeed
   :ensure t
   :defer t
@@ -1603,7 +2005,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :config
   (setq elfeed-search-filter "@2-weeks-ago +unread"
 		elfeed-search-title-max-width 110))
- 
+
 
 (use-package elfeed-org
   :ensure t
@@ -1680,138 +2082,10 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (add-hook 'message-send-mail-hook 'mu4e-set-msmtp-account))
 
 
-(general-def 'normal 'override
-  "K" 'my/eldoc-box-describe-and-jump)
 
-(defun my/ibuffer-smart ()
-  (interactive)
-  (ibuffer)
-  (local-set-key (kbd "RET") 
-                 (lambda () 
-                   (interactive)
-                   (ibuffer-visit-buffer)
-                   (kill-buffer "*Ibuffer*")))
-  (local-set-key (kbd "q") 
-                 (lambda () 
-                   (interactive)
-                   (kill-buffer "*Ibuffer*"))))
-
-(my-leader
-  "bi" 'my/ibuffer-smart)
-
-(my-local-leader
-  "a" '(org-agenda :wk "org agenda")
-  "t" '(vterm :wk "terminal")
-  "c" '(my/centered-cursor :wk "center cursor")
-  "d" '(dirvish :wk "dired")
-  "z" '(zoom-mode :wk "zoom/golden ratio"))
-
-(general-def 'normal 'override
-  "]d" 'flymake-goto-next-error
-  "[d" 'flymake-goto-prev-error
-  "]c" 'diff-hl-next-hunk
-  "[c" 'diff-hl-previous-hunk
-  "]b" 'switch-to-next-buffer
-  "[b" 'switch-to-prev-buffer
-  "]t" 'tab-next
-  "[t" 'tab-previous
-  "P" 'consult-yank-from-kill-ring
-  "gcc" (lambda ()
-          (interactive)
-          (unless (use-region-p)
-            (comment-or-uncomment-region
-             (line-beginning-position)
-             (line-end-position)))))
-
-(general-def 'visual 'override
-  "gc" (lambda ()
-         (interactive)
-         (when (use-region-p)
-           (comment-or-uncomment-region
-            (region-beginning)
-            (region-end)))))
-
-(general-def 'normal dirvish-mode-map
-  "?" 'dirvish-dispatch
-  "q" 'dirvish-quit
-  "b" 'dirvish-quick-access
-  "f" 'dirvish-file-info-menu
-  "p" 'dirvish-yank
-  "S" 'dirvish-quicksort
-  "F" 'dirvish-layout-toggle
-  "z" 'dirvish-history-jump
-  "gh" 'dirvish-subtree-up
-  "gl" 'dirvish-subtree-toggle
-  "h" 'dired-up-directory
-  "l" 'dired-find-file
-  "TAB" 'dirvish-subtree-toggle
-  "[h" 'dirvish-history-go-backward
-  "]h" 'dirvish-history-go-forward)
-
-(general-def '(normal visual) dirvish-mode-map
-  :prefix "y"
-  "l" 'dirvish-copy-file-true-path
-  "n" 'dirvish-copy-file-name
-  "p" 'dirvish-copy-file-path
-  "y" 'dired-do-copy)
-
-(general-def 'normal dirvish-mode-map
-  :prefix "s"
-  "s" 'dirvish-symlink
-  "S" 'dirvish-relative-symlink
-  "h" 'dirvish-hardlink)
-
-(my-local-leader
-  :keymaps 'org-mode-map
-  "h" '(consult-org-heading :wk "search headings")
-  "n" '(my-toggle-org-tree-indirect-buffer :wk "toggle narrow"))
-
-(general-def 'normal eat-mode-map
-  "C-l" 'eat-reset)
-
-(define-key minibuffer-local-map [escape] 'abort-recursive-edit)
-(define-key minibuffer-local-ns-map [escape] 'abort-recursive-edit)
-(define-key minibuffer-local-completion-map [escape] 'abort-recursive-edit)
-(define-key minibuffer-local-must-match-map [escape] 'abort-recursive-edit)
-(define-key minibuffer-local-isearch-map [escape] 'abort-recursive-edit)
-
-(defun delete-word (arg)
-  (interactive "p")
-  (delete-region (point) (progn (forward-word arg) (point))))
-
-(defun backward-delete-word (arg)
-  (interactive "p")
-  (delete-word (- arg)))
-
-(global-set-key (kbd "M-<delete>") 'delete-word)
-(global-set-key (kbd "M-<backspace>") 'backward-delete-word)
-(global-set-key (kbd "C-<delete>") 'delete-word)
-(global-set-key (kbd "C-<backspace>") 'backward-delete-word)
-(global-set-key (kbd "C-=") 'text-scale-increase)
-(global-set-key (kbd "C--") 'text-scale-decrease)
-
-(defun my/convert-all-denote-links-in-directory (directory)
-  "Converts all denote: links to file: links in a specific directory."
-  (interactive "DDirectory: ")
-  (let ((org-files (directory-files directory t "\\.org$")))
-    (dolist (file org-files)
-      (with-current-buffer (find-file-noselect file)
-        (save-excursion
-          (goto-char (point-min))
-          (while (re-search-forward "\\[\\[denote:\\([0-9T]+\\)\\]\\(?:\\[\\([^]]*\\)\\]\\)?\\]" nil t)
-            (let* ((id (match-string 1))
-                   (description (match-string 2))
-                   (target-file (seq-find 
-                                (lambda (f) 
-                                  (string-match-p (regexp-quote id) (file-name-nondirectory f)))
-                                org-files)))
-              (when target-file
-                (let* ((target-filename (file-name-nondirectory target-file))
-                       (new-link (if description
-                                     (format "[[file:./%s][%s]]" target-filename description)
-                                   (format "[[file:./%s]]" target-filename))))
-                  (replace-match new-link t t))))))
-        (save-buffer)
-        (kill-buffer)))))
+;; (profiler-start 'cpu)
+;; (org-agenda nil "c")
+;; (profiler-report)
+;; (profiler-stop)
 
 (provide 'init)

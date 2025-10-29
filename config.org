@@ -88,7 +88,7 @@
   ;; Configure font settings based on the operating system.
   ;; Ok, this kickstart is meant to be used on the terminal, not on GUI.
   ;; But without this, I fear you could start Graphical Emacs and be sad :(
-  (set-face-attribute 'default nil :family "MonoLisa"  :height 150)
+  ;; (set-face-attribute 'default nil :family "Maple Mono NF"  :height 150)
   ;; (when (eq system-type 'darwin)       ;; Check if the system is macOS.
   ;; (setq mac-command-modifier 'meta)  ;; Set the Command key to act as the Meta key.
   ;; (set-face-attribute 'default nil :family "Fragment Mono" :height 130))
@@ -105,12 +105,13 @@
 
   :init                        ;; Initialization settings that apply before the package is loaded.
   (tool-bar-mode -1)
+
   (menu-bar-mode -1)
   (scroll-bar-mode -1)
   (add-to-list 'default-frame-alist '(vertical-scroll-bars . nil))
   (add-to-list 'default-frame-alist '(horizontal-scroll-bars . nil))
-  (set-frame-parameter (selected-frame) 'alpha-background 60)
-  (add-to-list 'default-frame-alist '(alpha-background . 60))
+  (set-frame-parameter (selected-frame) 'alpha-background 80)
+  (add-to-list 'default-frame-alist '(alpha-background . 80))
   (global-hl-line-mode -1)     ;; Disable highlight of the current line
   (global-auto-revert-mode 1)  ;; Enable global auto-revert mode to keep buffers up to date with their corresponding files.
   (indent-tabs-mode -1)        ;; Disable the use of tabs for indentation (use spaces instead).
@@ -155,17 +156,17 @@
   :custom
   (display-buffer-alist
    '(
-         ;; ("\\*.*e?shell\\*"
-         ;;  (display-buffer-in-side-window)
-         ;;  (window-height . 0.25)
-         ;;  (side . bottom)
-         ;;  (slot . -1))
+     ;; ("\\*.*e?shell\\*"
+     ;;  (display-buffer-in-side-window)
+     ;;  (window-height . 0.25)
+     ;;  (side . bottom)
+     ;;  (slot . -1))
 
-	 ("\\*\\(Backtrace\\|Warnings\\|Compile-Log\\|[Hh]elp\\|Messages\\|Bookmark List\\|Ibuffer\\|Occur\\|eldoc.*\\)\\*"
-	  (display-buffer-in-side-window)
-	  (window-height . 0.25)
-	  (side . bottom)
-	  (slot . 0))
+     ("\\*\\(Backtrace\\|Warnings\\|Compile-Log\\|[Hh]elp\\|Messages\\|Bookmark List\\|Occur\\|eldoc.*\\)\\*"
+      (display-buffer-in-side-window)
+      (window-height . 0.25)
+      (side . bottom)
+      (slot . 0))
 
 	 ;; Example configuration for the LSP help buffer,
 	 ;; keeps it always on bottom using 25% of the available space:
@@ -342,7 +343,7 @@
   :straight nil
   :ensure nil          ;; This is built-in, no need to fetch it.
   :defer t
-  :hook (prog-mode . flymake-mode)
+  ;; :hook (prog-mode . flymake-mode)
   :custom
   (flymake-margin-indicators-string
    '((error "!»" compilation-error) (warning "»" compilation-warning)
@@ -351,6 +352,23 @@
 (setq trusted-content
       '("~/.emacs.d/config.el"
         "~/.emacs.d/init.el"))
+#+end_src
+
+* flycheck
+
+#+begin_src emacs-lisp
+(use-package flycheck
+  :ensure t
+  :config
+  (add-hook 'after-init-hook #'global-flycheck-mode))
+#+end_src
+
+** flycheck-rust
+
+#+begin_src emacs-lisp
+(use-package flycheck-rust
+  :ensure t
+  :hook (flycheck-mode . flycheck-rust-setup))
 #+end_src
 
 * xref
@@ -369,13 +387,13 @@
   :ensure nil)
 #+end_src
 
-* org mode
+* org-mode
 
 #+begin_src emacs-lisp
+(setq org-directory "~/org/")
 (use-package org
   :straight nil
   :ensure nil     
-  :defer t
   :config
   (require 'org-tempo)
 
@@ -434,6 +452,16 @@
         org-appear-autosubmarkers t)) ;; Show sub- and superscripts
 #+end_src
 
+** org-agenda
+
+#+begin_src emacs-lisp
+(setq org-agenda-inhibit-startup t
+      org-agenda-use-tag-inheritance nil
+      org-agenda-dim-blocked-tasks nil
+      org-startup-indented nil
+      org-startup-folded 'overview)
+#+end_src
+
 ** org-modern
 
 #+begin_src emacs-lisp
@@ -448,12 +476,104 @@
 (setq org-modern-replace-stars "◉○◉○◉")
 #+end_src
 
-** TODO org-agenda settings
+** TODO org-agenda settings :deprecated:
+
+Old config
 
 #+begin_src emacs-lisp
-(setq org-agenda-start-on-weekday nil
-      org-agenda-block-separator  nil
-      org-agenda-remove-tags      t)
+;; (setq org-agenda-start-on-weekday nil
+;;       org-agenda-block-separator  nil
+;;       org-agenda-remove-tags      t)
+
+;;   (setq org-agenda-skip-scheduled-if-done t
+;;         org-agenda-skip-deadline-if-done t
+;;         org-agenda-include-deadlines t
+;;         org-agenda-block-separator nil
+;;         org-agenda-compact-blocks t
+;;         org-agenda-start-day nil
+;;         org-agenda-span 1
+;;         org-agenda-start-on-weekday nil
+;;         org-agenda-hide-tags-regexp "task"
+;;         org-agenda-prefix-format
+;;         '((agenda . " %i %?-12t% s")
+;;           (todo . " %i ")
+;;           (tags . " %i ")
+;;           (search . " %i ")))
+#+end_src
+
+** org-capture
+
+*** yequake
+
+#+begin_src emacs-lisp
+(use-package yequake
+  :custom
+  (yequake-frames
+   '(("org-capture"
+      (buffer-fns . (yequake-org-capture))
+      (width . 0.75)
+      (height . 0.5)
+      ;; (alpha . 0.95)
+      (frame-parameters . ((undecorated . t)
+                           (skip-taskbar . t)
+                           (sticky . t)))))))
+#+end_src
+
+
+*** org-capture combined with denote
+
+#+begin_src emacs-lisp 
+(defun my/org-capture-denote-deadline ()
+  (let* ((context (read-string "Task with deadline: "))
+         (deadline (org-read-date t nil nil "Deadline: "))
+         (file-name (denote nil '("task"))))
+    (find-file file-name)
+    (goto-char (point-min))
+    (forward-line 4)
+    (insert (format "* %s\nDEADLINE: <%s>\n\n" context deadline))
+    (current-buffer)))
+
+(defun my/org-capture-denote-scheduled ()
+  (let* ((context (read-string "Scheduled task: "))
+         (schedule (org-read-date t nil nil "Schedule: "))
+         (file-name (denote nil '("task"))))
+    (find-file file-name)
+    (goto-char (point-min))
+    (forward-line 4)
+    (insert (format "* %s\nSCHEDULED: <%s>\n\n" context schedule))
+    (current-buffer)))
+
+(defun my/org-capture-denote-task ()
+  (let* ((context (read-string "Task: "))
+         (todo-state (completing-read "TODO state: "
+                                      '("ACTIVE" "NEXT" "TODO" "WAIT" "PLAN" "FUN")))
+         (file-name (denote nil '("task"))))
+    (find-file file-name)
+    (goto-char (point-min))
+    (forward-line 4)
+    (insert (format "\n* %s %s\n\n" todo-state context))
+    (point)))
+
+(with-eval-after-load 'org
+  (setq org-capture-templates
+        '(("t" "Task" plain
+           (function my/org-capture-denote-task)
+           "" :immediate-finish t :jump-to-captured t)
+          ("d" "Deadline" plain
+           (function my/org-capture-denote-deadline)
+           "" :immediate-finish t :jump-to-captured t)
+          ("s" "Scheduled" plain
+           (function my/org-capture-denote-scheduled)
+           "" :immediate-finish t :jump-to-captured t))))
+#+end_src
+
+** org agenda settings gtd
+
+[[https://doc.norang.ca/org-mode.html#HandlingNotes][Org Mode - Organize Your Life In Plain Text!]]
+
+#+begin_src emacs-lisp
+(setq org-agenda-span 'day)
+
 #+end_src
 
 ** org-super-agenda
@@ -462,50 +582,50 @@
 (use-package org-super-agenda
   :after org-agenda
   :init
-  (setq org-agenda-skip-scheduled-if-done t
-        org-agenda-skip-deadline-if-done t
-        org-agenda-include-deadlines t
-        org-agenda-block-separator nil
-        org-agenda-compact-blocks t
-        org-agenda-start-day nil
-        org-agenda-span 1
-        org-agenda-start-on-weekday nil
-        org-agenda-hide-tags-regexp "task"
-        org-agenda-prefix-format
-        '((agenda . " %i %?-12t% s")
-          (todo . " %i ")
-          (tags . " %i ")
-          (search . " %i ")))
-  (setq org-agenda-custom-commands
-        '(("c" "Super view"
-           ((agenda "" ((org-agenda-overriding-header "")
-                        (org-super-agenda-groups
-                         '((:name "Today"
-                            :time-grid t
-                            :date t
-                            :deadline today
-                            :scheduled future
-                            :order 1)))))
-            (alltodo "" ((org-agenda-overriding-header "")
-                         (org-super-agenda-groups
-                          '((:discard (:todo "FUN"))  ; <- HIER ist die korrekte Position
-                            (:log t)
-                            (:name "ACTIVE"
-                             :todo "ACTIVE")
-                            (:name "NEXT"
-                             :todo "NEXT")
-                            (:name "TODO"
-                             :todo "TODO")
-                            (:name "WAIT"
-                             :todo "WAIT"))))))
-           ((org-agenda-exporter-settings
-             '((ps-number-of-columns 2)
-               (ps-landscape-mode t)
-               (org-agenda-add-entry-text-maxlines 5)
-               (htmlize-output-type 'css)))))))
   :config
   (org-super-agenda-mode))
 #+end_src
+
+** org-ql
+
+#+begin_src emacs-lisp
+(use-package org-ql
+  :ensure t
+  :after org-super-agenda
+  :config
+  (setq org-agenda-custom-commands
+        '(("w" "Weekly Overview"
+           ((org-ql-block '(and (or (deadline auto)
+                                    (scheduled :to 7))
+                                (not (done))
+                                (not (habit)))
+                          ((org-ql-block-header "Weekly Tasks")
+                           (org-super-agenda-groups
+                            '((:name "Deadlines"
+                                     :deadline t
+                                     :order 1)
+                              (:name "Schedule"
+                                     :scheduled t
+                                     :order 2)
+                              (:discard (:anything t))))))
+            (org-ql-block '(and (ts-active :from today :to 7 :with-time t)
+                                (not (done))
+                                (not (habit)))
+                          ((org-ql-block-header "Appointments")
+                           (org-super-agenda-groups
+                            '((:name "This Week"
+                                     :anything t
+                                     :order 1)))))
+            (org-ql-block '(and (habit)
+                                (not (done)))
+                          ((org-ql-block-header "Habits")
+                           (org-super-agenda-groups
+                            '((:name "Daily Habits"
+                                     :habit t
+                                     :order 1)
+                              (:discard (:anything t)))))))))))
+#+end_src
+
 
 ** TODO org-todo-keywords
 
@@ -524,6 +644,58 @@ Org Backend exporter for typst templates written and configured in org mode.
 (use-package ox-typst
   :straight (:host github :repo "jmpunkt/ox-typst")
   :after org)
+#+end_src
+
+** org-cliplink
+
+#+begin_src emacs-lisp
+(use-package org-cliplink
+  :ensure t
+  :defer t)
+#+end_src
+
+** org-download
+
+#+begin_src emacs-lisp
+(use-package org-download
+  :ensure t
+  :hook (org-mode . org-download-enable)
+  :config
+  (setq-default org-download-image-dir "~/org/attachments/")
+  (setq org-download-method 'directory)
+  (setq org-download-timestamp "%Y%m%d-%H%M%S_")
+  (setq org-download-heading-lvl nil))
+#+end_src
+
+** org-publish
+
+#+begin_src emacs-lisp
+
+(setq org-publish-project-alist
+      '(("wiki"
+         :author "cashmere"
+         :email "cashmere@cashmere.rs"
+         :preserve-breaks t
+         :preserve-indent t
+         :with-title t
+         :base-directory "/home/cashmere/wiki/"
+         :base-extension "org"
+         :publishing-directory "/home/cashmere/wiki/html/"
+         :recursive t
+         :publishing-function org-html-publish-to-html
+         :with-toc nil
+         :section-numbers nil
+         :html-head "<link rel=\"stylesheet\" href=\"/style.css\" type=\"text/css\"/>"
+         :preparation-function (lambda (_)
+                                  (require 'denote-org)
+                                  (dolist (file (directory-files-recursively 
+                                                "/home/cashmere/wiki/" "\\.org$"))
+                                    (with-current-buffer (find-file-noselect file)
+                                      (ignore-errors
+                                        (denote-org-extras-convert-links-to-file-type))
+                                      (save-buffer)))))))
+
+(setq org-export-with-broken-links t)
 #+end_src
 
 * denote
@@ -552,6 +724,99 @@ Denote fitself focused on the last versions to have a core for note taking and t
   (denote-agenda-insinuate))
 #+end_src
 
+** config
+
+#+begin_src emacs-lisp
+(defcustom my/denote-task-filename-component-regexp
+  "\\(?:[-_.]\\|:\\)task\\(?:[-_.]\\|:\\|$\\)"
+  "Regexp matching a filename component that denotes the 'task' tag.
+Works on the base filename (without extension), e.g. matches \"-task\", \":task:\", \"_task_\"."
+  :type 'string)
+
+(defun my/denote--make-unique-filename (dir base ext)
+  "Return a unique filepath in DIR for BASE+EXT by adding -1, -2... if needed."
+  (let* ((extstr (if (and ext (not (string-empty-p ext))) (concat "." ext) ""))
+         (candidate (expand-file-name (concat base extstr) dir))
+         (count 1))
+    (while (file-exists-p candidate)
+      (setq candidate (expand-file-name (format "%s-%d%s" base count extstr) dir))
+      (setq count (1+ count)))
+    candidate))
+
+(defun my/denote-remove-task-filetag-and-silent-rename ()
+  "If current headline became DONE in a Denote note, remove :task: filetag and remove 'task' from filename silently.
+- Only acts if there are no other non-DONE TODOs in the same file.
+- Does not call Denote's interactive rename command (no buffers opened)."
+  (when (and (derived-mode-p 'org-mode)
+             (string= (org-get-todo-state) "DONE")
+             (buffer-file-name)
+             ;; detect Denote note by presence of #+identifier:
+             (save-excursion
+               (goto-char (point-min))
+               (re-search-forward "^#\\+identifier:" nil t)))
+    ;; only proceed if no other active TODOs remain in the file
+    (let ((has-other
+           (catch 'has
+             (org-map-entries
+              (lambda ()
+                (let ((s (org-get-todo-state)))
+                  (when (and s (not (string= s "DONE")))
+                    (throw 'has t))))
+              nil 'file)
+             nil)))
+      (unless has-other
+        ;; 1) Remove :task: from #+filetags:
+        (save-excursion
+          (goto-char (point-min))
+          (when (re-search-forward "^#\\+filetags:\\s-*\\(.*\\)$" nil t)
+            (let* ((tags (match-string 1))
+                   (clean (replace-regexp-in-string ":task:" "" tags))
+                   (clean (replace-regexp-in-string "::+" ":" clean))
+                   (clean (replace-regexp-in-string "^:\\|:$" "" clean)))
+              (if (string-empty-p clean)
+                  (delete-region (line-beginning-position) (1+ (line-end-position)))
+                (beginning-of-line)
+                (kill-line)
+                (insert (concat "#+filetags: :" clean ":"))))))
+        ;; 2) Compute new filename (silent, non-interactive)
+        (let* ((file (buffer-file-name))
+               (dir  (file-name-directory file))
+               (name (file-name-nondirectory file))
+               (ext  (file-name-extension name)) ;; "org"
+               (base (file-name-sans-extension name))
+               ;; remove the task component from the base
+               (new-base (replace-regexp-in-string my/denote-task-filename-component-regexp
+                                                   ""
+                                                   base)))
+          (when (and new-base (not (string= new-base base)))
+            ;; cleanup repeated separators: convert multiple '-'/'_'/'..' to single '-'
+            (setq new-base (replace-regexp-in-string "[-_.:]+"
+                                                     "-"
+                                                     new-base))
+            ;; strip leading/trailing separators
+            (setq new-base (replace-regexp-in-string "\\`[-_.:-]+" "" new-base))
+            (setq new-base (replace-regexp-in-string "[-_.:-]+\\'" "" new-base))
+            ;; ensure unique filename to avoid overwrite without prompt
+            (let ((target (my/denote--make-unique-filename dir new-base ext)))
+              (condition-case err
+                  (progn
+                    (rename-file file target 1) ;; 1 = ok to overwrite, but we avoid collisions by uniqueness
+                    ;; update current buffer to visit the new filename silently
+                    (set-visited-file-name target t t)
+                    ;; save changes (filetags update + new filename)
+                    (save-buffer)
+                    (message "Denote: removed 'task' component from filename -> %s" (file-name-nondirectory target)))
+                (error
+                 (message "Denote rename failed: %s" (error-message-string err)))))))))))
+
+(add-hook 'org-after-todo-state-change-hook #'my/denote-remove-task-filetag-and-silent-rename)
+#+end_src
+
+** configuration
+
+#+begin_src emacs-lisp
+#+end_src
+
 ** denote-menu
 
 #+begin_src emacs-lisp
@@ -570,6 +835,15 @@ Some goodies for better integration with org files.
 #+begin_src emacs-lisp
 (use-package denote-org
     :ensure t)
+#+end_src
+
+** consult-denote
+
+#+begin_src emacs-lisp
+(use-package consult-denote
+  :straight (:host github :repo "protesilaos/consult-denote")
+  :ensure t
+  :defer t)
 #+end_src
 
 ** my/functions
@@ -598,6 +872,37 @@ Some goodies for better integration with org files.
                   (replace-match new-link t t))))))
         (save-buffer)
         (kill-buffer)))))
+#+end_src
+
+** export fn by prot himself
+
+#+begin_src emacs-lisp
+(defvar my-org-export-output-directory-prefix "./export_")
+
+(defun my-org-export-create-directory (fn extension &rest args)
+  (let ((export-dir (format "%s%s" my-org-export-output-directory-prefix extension)))
+    (unless (file-directory-p export-dir)
+      (make-directory export-dir)))
+  (apply fn extension args))
+
+(advice-add #'org-export-output-file-name :around #'my-org-export-create-directory)
+(setq denote-excluded-directories-regexp "export_.*")
+#+end_src
+
+** ox-json
+
+#+begin_src emacs-lisp
+(use-package ox-json
+  :ensure t
+  )
+#+end_src
+
+** denote-explore
+
+#+begin_src emacs-lisp
+(use-package denote-explore
+  :ensure t
+  )
 #+end_src
 
 * which-key
@@ -636,6 +941,25 @@ Some goodies for better integration with org files.
                                          (propertize "» " 'face '(:foreground "#80adf0" :weight bold))
                                    "  ")
                                  cand))))
+#+end_src
+
+** vertico-posframe
+
+#+begin_src emacs-lisp
+(use-package vertico-posframe
+  :init
+  (setq vertico-posframe-parameters   '((left-fringe  . 12)    ;; Fringes
+                                        (right-fringe . 12)
+										(accept-focus . t)))
+                                        ;; (undecorated  . nil) ;; Rounded frame
+										 
+  :config
+  (vertico-posframe-mode 1)
+  (setq vertico-posframe-width        96                       ;; Narrow frame
+        vertico-posframe-height       vertico-count            ;; Default height
+        ;; Don't create posframe for these commands
+        vertico-multiform-commands    '((consult-line    (:not posframe))
+                                        (consult-ripgrep (:not posframe)))))
 #+end_src
 
 * consult
@@ -775,21 +1099,19 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :after yasnippet)
 #+end_src
 
-
-
 *** initial installation
 
 #+begin_src emacs-lisp
-(straight-use-package
- `(lspce :type git :host github :repo "zbelial/lspce"
-         :files (:defaults ,(pcase system-type
-                              ('gnu/linux "lspce-module.so")
-                              ('darwin "lspce-module.dylib")))
-         :pre-build ,(pcase system-type
-                       ('gnu/linux '(("cargo" "build" "--release")
-                                     ("cp" "./target/release/liblspce_module.so" "./lspce-module.so")))
-                       ('darwin '(("cargo" "build" "--release")
-                                  ("cp" "./target/release/liblspce_module.dylib" "./lspce-module.dylib"))))))
+ (straight-use-package
+  `(lspce :type git :host github :repo "zbelial/lspce"
+          :files (:defaults ,(pcase system-type
+                               ('gnu/linux "lspce-module.so")
+                               ('darwin "lspce-module.dylib")))
+          :pre-build ,(pcase system-type
+                        ('gnu/linux '(("cargo" "build" "--release")
+                                      ("cp" "./target/release/liblspce_module.so" "./lspce-module.so")))
+                        ('darwin '(("cargo" "build" "--release")
+                                   ("cp" "./target/release/liblspce_module.dylib" "./lspce-module.dylib"))))))
 #+end_src
 
 *** company
@@ -817,7 +1139,8 @@ company is also required as an completion backend. besides that i really enjoy u
   (setq company-require-match nil)
   (setq company-backends '((company-capf :with company-yasnippet)
                            company-files
-                           company-dabbrev-code))
+                           company-dabbrev-code
+                           ))
   (setq company-dabbrev-code-everywhere t)
   (setq company-dabbrev-code-ignore-case t))
 #+end_src
@@ -826,26 +1149,26 @@ company is also required as an completion backend. besides that i really enjoy u
 
 #+begin_src emacs-lisp
 (use-package lspce
-  :after (f yasnippet markdown-mode envrc)
+  :ensure nil
   :config
   (setq lspce-send-changes-idle-time 0.05)
   (setq lspce-idle-delay 0.05)
   (setq lspce-show-log-level-in-modeline t)
   (setq lspce-enable-eldoc t)
   (setq lspce-eldoc-enable-hover t)
-  (setq lspce-eldoc-enable-signature t)
+  (setq lspce-eldoc-enable-signature nil)
+  (setq lspce-enable-flymake nil)
   (setq lspce--doc-max-height 10)
-  (setq eldoc-echo-area-use-multiline-p 2)
+  (setq eldoc-echo-area-use-multiline-p 0)
   (setq eldoc-echo-area-display-truncation-message nil)
-  (setq lspce-log-level 5)
-  
+  (setq lspce-xref-append-implementations-to-definitions t)
   (setq lspce-envs-pass-to-subprocess '("PATH" "PYTHON_PATH" "NIX_PATH" "NIX_PROFILES"))
-  
   (setq lspce-server-programs 
         `(("rust"  "rust-analyzer" "" lspce-ra-initializationOptions)
-		  ("python" "pylsp" "" )
+          ("python" "pylsp" "" )
           ("nix" "nixd" "" lspce-nixd-initializationOptions)
           ("nushell" "nu" "--lsp" ""))))
+
 #+end_src
 
 ** nix mode
@@ -860,13 +1183,13 @@ company is also required as an completion backend. besides that i really enjoy u
 *** nix flake function for more completion
 
 #+begin_src emacs-lisp
-(defun lspce-nixd-initializationOptions ()
-  (let ((flake-path "/home/cashmere/nix")
-        (config-name "x12"))
-    `(:nixpkgs (:expr ,(format "import (builtins.getFlake \"%s\").inputs.nixpkgs { }" flake-path))
-      :formatting (:command ["nixfmt"])
-      :options (:nixos (:expr ,(format "(builtins.getFlake \"%s\").nixosConfigurations.%s.options" flake-path config-name))
-                :home-manager (:expr ,(format "(builtins.getFlake \"%s\").nixosConfigurations.%s.config.home-manager.users.cashmere.options" flake-path config-name))))))
+ (defun lspce-nixd-initializationOptions ()
+   (let ((flake-path "/home/cashmere/nix")
+         (config-name "x12"))
+     `(:nixpkgs (:expr ,(format "import (builtins.getFlake \"%s\").inputs.nixpkgs { }" flake-path))
+       :formatting (:command ["nixfmt"])
+       :options (:nixos (:expr ,(format "(builtins.getFlake \"%s\").nixosConfigurations.%s.options" flake-path config-name))
+                 :home-manager (:expr ,(format "(builtins.getFlake \"%s\").nixosConfigurations.%s.config.home-manager.users.cashmere.options" flake-path config-name))))))
 #+end_src
 
 *** envrc
@@ -888,11 +1211,13 @@ Because I have to and not want to.
 (use-package python-mode
   :ensure t
   :mode "\\.py\\'"
-  :hook ((python-mode python-ts-mode) . lspce-mode))
+  :hook (python-mode . lspce-mode)
+  )
 
 (use-package flymake-pyrefly
   :ensure t
-  :hook (python-base-mode . pyrefly-setup-flymake-backend))
+  ;; :hook (python-base-mode . pyrefly-setup-flymake-backend)
+  )
 
 (use-package python-black
   :ensure t
@@ -911,13 +1236,26 @@ ily <3.
   :hook (rust-mode . lspce-mode))
 #+end_src
 
+*** Rustic
+
+#+begin_src emacs-lisp
+;; (use-package rustic
+;;   :ensure t
+;;   :config
+;;   (setq rustic-format-on-save nil)
+;;   (setq rustic-lsp-client nil)
+;;   :custom
+;;   (rustic-cargo-use-last-stored-arguments t))
+#+end_src
+
 ** Nushell
 
 #+begin_src emacs-lisp
 (use-package nushell-mode
   :ensure t
   :mode "\\.nu\\'"
-  :hook (nushell-mode . lspce-mode))
+  ;; :hook (nushell-mode . lspce-mode)
+  )
 #+end_src
 
 * vterm
@@ -927,6 +1265,14 @@ ily <3.
   :ensure t
   :defer t)
 (setq vterm-shell "nu")
+#+end_src
+
+** multi-vterm
+
+#+begin_src emacs-lisp
+(use-package multi-vterm
+  :ensure t
+  :defer t)
 #+end_src
 
 * olivetti
@@ -966,8 +1312,15 @@ ily <3.
   :straight t
   :config
   (if ek-use-nerd-fonts   ;; Check if nerd fonts are being used
-      (setopt magit-format-file-function #'magit-format-file-nerd-icons)) ;; Turns on magit nerd-icons
-  :defer t)
+	  (setopt magit-format-file-function #'magit-format-file-nerd-icons)) ;; Turns on magit nerd-icons
+  )
+(defun my/magit-kill-buffers ()
+  "kills all magit buffers"
+  (interactive)
+  (let ((buffers (magit-mode-get-buffers)))
+	(magit-restore-window-configuration)
+	(mapc #'kill-buffer buffers)))
+
 #+end_src
 
 * indent-guide
@@ -1016,11 +1369,20 @@ ily <3.
   (setq evil-want-keybinding nil)
   (setq evil-want-C-u-delete t)
   (setq evil-want-C-u-scroll t)
-  (setq evil-undo-system 'undo-tree)  
+  (setq evil-undo-system 'undo-tree)
+  (setq evil-split-window-below t)
+  (setq evil-vsplit-window-right t)
   :config
   (evil-mode 1)
   (define-key evil-normal-state-map "u" 'undo-tree-undo)
-  (define-key evil-normal-state-map (kbd "C-r") 'undo-tree-redo))
+  (define-key evil-normal-state-map (kbd "C-r") 'undo-tree-redo)
+  
+  (evil-set-initial-state 'help-mode 'emacs)
+  (evil-set-initial-state 'messages-buffer-mode 'normal)
+  (evil-set-initial-state 'dired-mode 'normal)
+  (evil-set-initial-state 'ibuffer-mode 'normal))
+
+(modify-syntax-entry ?_ "w")
 #+end_src
 
 ** smart-parens
@@ -1144,8 +1506,8 @@ ily <3.
   :init
   (setq undo-tree-visualizer-timestamps t
         undo-tree-visualizer-diff t
-        undo-tree-auto-save-history nil  
-        undo-tree-history-directory-alist nil  
+        undo-tree-auto-save-history t
+        undo-tree-history-directory-alist '(("." . "~/.emacs.d/undo-tree-history/"))
         undo-limit 800000
         undo-strong-limit 12000000
         undo-outer-limit 120000000)
@@ -1191,23 +1553,47 @@ ily <3.
   :straight t
   :ensure t
   :hook
-  (after-init . pulsar-global-mode)
+  ;; (after-init . pulsar-global-mode)
+  :init
+  (setq pulsar-pulse-on-window-change nil)
   :config
   (setq pulsar-pulse t)
   (setq pulsar-delay 0.025)
   (setq pulsar-iterations 10)
   (setq pulsar-face 'evil-ex-lazy-highlight)
 
-  (add-to-list 'pulsar-pulse-functions 'evil-scroll-down)
-  (add-to-list 'pulsar-pulse-functions 'flymake-goto-next-error)
-  (add-to-list 'pulsar-pulse-functions 'flymake-goto-prev-error)
-  (add-to-list 'pulsar-pulse-functions 'evil-yank)
-  (add-to-list 'pulsar-pulse-functions 'evil-yank-line)
-  (add-to-list 'pulsar-pulse-functions 'evil-delete)
-  (add-to-list 'pulsar-pulse-functions 'evil-delete-line)
-  (add-to-list 'pulsar-pulse-functions 'evil-jump-item)
-  (add-to-list 'pulsar-pulse-functions 'diff-hl-next-hunk)
-  (add-to-list 'pulsar-pulse-functions 'diff-hl-previous-hunk))
+  (add-hook 'org-agenda-mode-hook
+            (lambda () (pulsar-mode -1)))
+
+  (setq pulsar-pulse-functions
+        '(evil-scroll-down
+          flymake-goto-next-error
+          flymake-goto-prev-error
+          evil-yank
+          evil-yank-line
+          evil-delete
+          evil-delete-line
+          evil-jump-item
+          diff-hl-next-hunk
+          diff-hl-previous-hunk
+          recenter-top-bottom
+          move-to-window-line-top-bottom
+          reposition-window
+          bookmark-jump
+          other-window
+          delete-window
+          delete-other-windows
+          forward-page
+          backward-page
+          scroll-up-command
+          scroll-down-command
+          windmove-right
+          windmove-left
+          windmove-up
+          windmove-down
+          tab-new
+          tab-close
+          tab-next)))
 #+end_src
 
 * evil-org
@@ -1496,6 +1882,16 @@ ily <3.
   :bind (:map custom-bindings-map ("C-c h m" . hide-mode-line-mode)))
 #+end_src
 
+* modeline
+
+#+begin_src emacs-lisp
+;; (use-package doom-modeline
+;;   :ensure t
+;;   :hook (after-init . doom-modeline-mode)
+;;   :config
+;;   (setq doom-modeline-buffer-file-name-style 'buffer-name))
+#+end_src
+
 * soph
 
 #+begin_src emacs-lisp
@@ -1513,18 +1909,11 @@ ily <3.
 (blink-cursor-mode 0)
 (setq-default cursor-type 'bar)
 
-(defvar cashmere/font-height 150)
+(defvar cashmere/font-height 140)
 
-;; (when (member "Fragment Mono" (font-family-list))
-;;   (set-face-attribute 'default nil :font "Fragment Mono" :height cashmere/font-height)
-;;   (set-face-attribute 'fixed-pitch nil :family "Fragment Mono" :height cashmere/font-height))
-
-;; (when (member "Maple Mono NF" (font-family-list))
-;;   (set-face-attribute 'variable-pitch nil :family "Maple Mono NF" :height cashmere/font-height))
-
-(set-face-attribute 'default nil :family "MonoLisa" :weight 'semi-bold :height cashmere/font-height)
-(set-face-attribute 'fixed-pitch nil :family "MonoLisa" :weight 'regular)
-(set-face-attribute 'variable-pitch nil :family "MonoLisa" :weight 'regular :height 1.1)
+(set-face-attribute 'default nil :family "JetBrainsMono Nerd Font" :weight 'regular :height cashmere/font-height)
+(set-face-attribute 'fixed-pitch nil :family "RobotoMono Nerd Font" :weight 'regular)
+(set-face-attribute 'variable-pitch nil :family "RobotoMono Nerd Font" :weight 'regular :height 1.1)
 
 (use-package mixed-pitch
   :straight t
@@ -1539,25 +1928,172 @@ ily <3.
 (use-package autothemer
   :straight t
   :defer t)
-(use-package doom-themes
-  :straight t
-  :ensure t
-  :custom
-  ;; Global settings (defaults)
-  (doom-themes-enable-bold t)   ; if nil, bold is universally disabled
-  (doom-themes-enable-italic t) ; if nil, italics is universally disabled
-  ;; for treemacs users
-  (doom-themes-treemacs-theme "doom-nord-light") ; use "doom-colors" for less minimal icon theme
-  :config
-  (load-theme 'doom-nord-light t)
+;; (use-package doom-themes
+;;   :straight t
+;;   :ensure t
+;;   :custom
+;;   ;; Global settings (defaults)
+;;   (doom-themes-enable-bold t)   ; if nil, bold is universally disabled
+;;   (doom-themes-enable-italic t) ; if nil, italics is universally disabled
+;;   ;; for treemacs users
+;;   (doom-themes-treemacs-theme "doom-nord-light") ; use "doom-colors" for less minimal icon theme
+;;   :config
+;;   (load-theme 'doom-nord-light t)
 
-  ;; Enable flashing mode-line on errors
-  (doom-themes-visual-bell-config)
-  ;; Enable custom neotree theme (nerd-icons must be installed!)
-  ;; or for treemacs users
-  (doom-themes-treemacs-config)
-  ;; Corrects (and improves) org-mode's native fontification.
-  (doom-themes-org-config))
+;;   ;; Enable flashing mode-line on errors
+;;   (doom-themes-visual-bell-config)
+;;   ;; Enable custom neotree theme (nerd-icons must be installed!)
+;;   ;; or for treemacs users
+;;   (doom-themes-treemacs-config)
+;;   ;; Corrects (and improves) org-mode's native fontification.
+;;   (doom-themes-org-config))
+#+end_src
+
+** catppuccin-theme
+
+#+begin_src emacs-lisp
+(use-package catppuccin-theme
+  :ensure t
+  :straight t
+  :config
+  (setq catppuccin-flavor 'mocha)
+
+  (load-theme 'catppuccin :no-confirm)
+
+  (custom-set-faces
+   `(diff-hl-change ((t (:background unspecified :foreground ,(catppuccin-get-color 'blue))))))
+
+  (custom-set-faces
+   `(diff-hl-delete ((t (:background unspecified :foreground ,(catppuccin-get-color 'red))))))
+
+  (custom-set-faces
+   `(diff-hl-insert ((t (:background unspecified :foreground ,(catppuccin-get-color 'green)))))))
+#+end_src
+
+** modus themes/catppuccin
+
+#+begin_src emacs-lisp
+;; (use-package modus-themes
+;;   :ensure nil
+;;   :defer t
+;;   :custom
+;;   (modus-themes-italic-constructs t)
+;;   (modus-themes-bold-constructs t)
+;;   (modus-themes-mixed-fonts nil)
+;;   (modus-themes-prompts '(bold intense))
+;;   (modus-themes-common-palette-overrides
+;;    `((accent-0 "#1e66f5")
+;;      (accent-1 "#04a5e5")
+;;      (bg-active bg-main)
+;;      (bg-added "#d3f0d0")
+;;      (bg-added-refine "#b8e6b3")
+;;      (bg-changed "#dde5f5")
+;;      (bg-changed-refine "#c4d4f0")
+;;      (bg-completion "#ccd0da")
+;;      (bg-completion-match-0 "#eff1f5")
+;;      (bg-completion-match-1 "#eff1f5")
+;;      (bg-completion-match-2 "#eff1f5")
+;;      (bg-completion-match-3 "#eff1f5")
+;;      (bg-hl-line "#e6e9ef")
+;;      (bg-hover-secondary "#9ca0b0")
+;;      (bg-line-number-active unspecified)
+;;      (bg-line-number-inactive "#eff1f5")
+;;      (bg-main "#eff1f5")
+;;      (bg-mark-delete "#f5d9e0")
+;;      (bg-mark-select "#dde5f5")
+;;      (bg-mode-line-active "#e6e9ef")
+;;      (bg-mode-line-inactive "#e6e9ef")
+;;      (bg-prominent-err "#f5d9e0")
+;;      (bg-prompt unspecified)
+;;      (bg-prose-block-contents "#dce0e8")
+;;      (bg-prose-block-delimiter bg-prose-block-contents)
+;;      (bg-region "#9ca0b0")
+;;      (bg-removed "#f5d9e0")
+;;      (bg-removed-refine "#f0c9d1")
+;;      (bg-tab-bar      "#eff1f5")
+;;      (bg-tab-current  bg-main)
+;;      (bg-tab-other    "#eff1f5")
+;;      (border-mode-line-active nil)
+;;      (border-mode-line-inactive nil)
+;;      (builtin "#1e66f5")
+;;      (comment "#7c7f93")
+;;      (constant  "#d20f39")
+;;      (cursor  "#dc8a78")
+;;      (date-weekday "#1e66f5")
+;;      (date-weekend "#fe640b")
+;;      (docstring "#5c5f77")
+;;      (err     "#d20f39")
+;;      (fg-active fg-main)
+;;      (fg-completion "#4c4f69")
+;;      (fg-completion-match-0 "#1e66f5")
+;;      (fg-completion-match-1 "#d20f39")
+;;      (fg-completion-match-2 "#40a02b")
+;;      (fg-completion-match-3 "#fe640b")
+;;      (fg-heading-0 "#d20f39")
+;;      (fg-heading-1 "#fe640b")
+;;      (fg-heading-2 "#df8e1d")
+;;      (fg-heading-3 "#40a02b")
+;;      (fg-heading-4 "#04a5e5")
+;;      (fg-line-number-active "#7287fd")
+;;      (fg-line-number-inactive "#9ca0b0")
+;;      (fg-link  "#1e66f5")
+;;      (fg-main "#4c4f69")
+;;      (fg-mark-delete "#d20f39")
+;;      (fg-mark-select "#1e66f5")
+;;      (fg-mode-line-active "#4c4f69")
+;;      (fg-mode-line-inactive "#9ca0b0")
+;;      (fg-prominent-err "#d20f39")
+;;      (fg-prompt "#8839ef")
+;;      (fg-prose-block-delimiter "#7c7f93")
+;;      (fg-prose-verbatim "#40a02b")
+;;      (fg-region "#4c4f69")
+;;      (fnname    "#1e66f5")
+;;      (fringe "#eff1f5")
+;;      (identifier "#8839ef")
+;;      (info    "#179299")
+;;      (keyword   "#8839ef")
+;;      (keyword "#8839ef")
+;;      (name "#1e66f5")
+;;      (number "#fe640b")
+;;      (property "#1e66f5")
+;;      (string "#40a02b")
+;;      (type      "#df8e1d")
+;;      (variable  "#fe640b")
+;;      (warning "#df8e1d")))
+;;   :config
+;;   (modus-themes-with-colors
+;;     (custom-set-faces
+;;      `(change-log-acknowledgment ((,c :foreground "#7287fd")))
+;;      `(change-log-date ((,c :foreground "#40a02b")))
+;;      `(change-log-name ((,c :foreground "#fe640b")))
+;;      `(diff-context ((,c :foreground "#1e66f5")))
+;;      `(diff-file-header ((,c :foreground "#ea76cb")))
+;;      `(diff-header ((,c :foreground "#1e66f5")))
+;;      `(diff-hunk-header ((,c :foreground "#fe640b")))
+;;      `(gnus-button ((,c :foreground "#1e66f5")))
+;;      `(gnus-group-mail-3 ((,c :foreground "#1e66f5")))
+;;      `(gnus-group-mail-3-empty ((,c :foreground "#1e66f5")))
+;;      `(gnus-header-content ((,c :foreground "#04a5e5")))
+;;      `(gnus-header-from ((,c :foreground "#8839ef")))
+;;      `(gnus-header-name ((,c :foreground "#40a02b")))
+;;      `(gnus-header-subject ((,c :foreground "#1e66f5")))
+;;      `(log-view-message ((,c :foreground "#7287fd")))
+;;      `(match ((,c :background "#c4d4f0" :foreground "#4c4f69")))
+;;      `(modus-themes-search-current ((,c :background "#d20f39" :foreground "#eff1f5")))
+;;      `(modus-themes-search-lazy ((,c :background "#c4d4f0" :foreground "#4c4f69")))
+;;      `(newsticker-extra-face ((,c :foreground "#7c7f93" :height 0.8 :slant italic)))
+;;      `(newsticker-feed-face ((,c :foreground "#d20f39" :height 1.2 :weight bold)))
+;;      `(newsticker-treeview-face ((,c :foreground "#4c4f69")))
+;;      `(newsticker-treeview-selection-face ((,c :background "#c4d4f0" :foreground "#4c4f69")))
+;;      `(tab-bar ((,c :background "#eff1f5" :foreground "#4c4f69")))
+;;      `(tab-bar-tab ((,c :background "#eff1f5" :underline t)))
+;;      `(tab-bar-tab-group-current ((,c :background "#eff1f5" :foreground "#4c4f69" :underline t)))
+;;      `(tab-bar-tab-group-inactive ((,c :background "#eff1f5" :foreground "#7c7f93")))
+;;      `(tab-bar-tab-inactive ((,c :background "#eff1f5" :foreground "#5c5f77")))
+;;      `(vc-dir-file ((,c :foreground "#1e66f5")))
+;;      `(vc-dir-header-value ((,c :foreground "#7287fd")))))
+;;   :init
+;;   (load-theme 'modus-operandi t))
 #+end_src
 
 * dirvish
@@ -1598,6 +2134,7 @@ ily <3.
 (define-globalized-minor-mode my/global-olivetti-mode olivetti-mode
   (lambda () (olivetti-mode 1)))
 (my/centered-cursor)
+(my/global-olivetti-mode)
 #+end_src
 
 * TODO org-modern-indent
@@ -1683,19 +2220,22 @@ ily <3.
   :hook (pdf-view-mode . (lambda () (display-line-numbers-mode -1))))
 #+end_src
 
-* keybindings
+* keymaps
 
 #+begin_src emacs-lisp
-(defun my/eldoc-box-describe-and-jump ()
+(defun ek/lsp-describe-and-jump ()
   (interactive)
-  (eldoc-box-help-at-point)
-  (let ((eldoc-buffer "*eldoc-box*"))
-    (when (get-buffer eldoc-buffer)
-      (switch-to-buffer-other-window eldoc-buffer))))
+  (lspce-help-at-point)
+  (let ((help-buffer "*lsp-help*"))
+    (when (get-buffer help-buffer)
+      (switch-to-buffer-other-window help-buffer))))
 
+(evil-define-key 'normal 'global (kbd "K")
+  (if (>= emacs-major-version 31)
+      #'eldoc-box-help-at-point
+      #'ek/lsp-describe-and-jump))
 
 (defun my/format-buffer ()
-  "Format buffer based on major mode"
   (interactive)
   (cond
    ((eq major-mode 'rust-mode) (rust-format-buffer))
@@ -1709,10 +2249,11 @@ ily <3.
   "SPC" '((lambda () 
             (interactive)
             (if (projectile-project-p)
-                (projectile-find-file)
+                (consult-projectile-find-file)
               (projectile-switch-project)))
           :wk "find file/switch project")
-  "sp" '(consult-ripgrep :wk "search project")
+  "sp" '(consult-projectile :wk "search project")
+  "ss" '(consult-line :wk "search project")
   "/" '(consult-ripgrep :wk "search project")
   "." '(find-file :wk "find file")
   "," '(consult-buffer :wk "switch buffer")
@@ -1742,7 +2283,9 @@ ily <3.
   "pp" '(projectile-switch-project :wk "switch project")
   "pf" '(projectile-find-file :wk "find file")
   "ps" '(consult-ripgrep :wk "search")
-  "pb" '(consult-projectile-buffer :wk "buffers") "pk" '(projectile-kill-buffers :wk "kill buffers") "pd" '(projectile-dired :wk "root dir")
+  "pb" '(consult-projectile-buffer :wk "buffers") 
+  "pk" '(projectile-kill-buffers :wk "kill buffers") 
+  "pd" '(projectile-dired :wk "root dir")
   "pr" '(projectile-recentf :wk "recent files")
   "pa" '(projectile-add-known-project :wk "add project")
   "pc" '(projectile-compile-project :wk "compile")
@@ -1753,14 +2296,19 @@ ily <3.
   "gc" '(magit-clone :wk "clone")
   "gg" '(magit-status :wk "status")
   "gl" '(magit-log-current :wk "log")
-  "gd" '(xref-find-definitions :wk "go to definition") 
+  "gd" '(lsp-find-definition :wk "go to definition") 
+  "gD" '(lsp-find-definition-other-window :wk "definition other window")
+  "gi" '(lsp-find-implementation :wk "go to implementation")
+  "gI" '((lambda () (interactive) 
+           (let ((current-prefix-arg 4))
+             (call-interactively #'lsp-find-implementation)))
+         :wk "implementation other window")
+  "gt" '(lsp-find-type-definition :wk "go to type definition")
+  "gr" '(lsp-find-references :wk "find references")
   "gs" '(magit-file-stage :wk "stage file")
   "gb" '(vc-annotate :wk "blame")
 
   "o" '(:ignore t :wk "open")
-  ;; "op" '(neotree-toggle :wk "neotree")
-  ;; "oP" '(dired-jump :wk "dired")
-  ;; "od" '(dirvish :wk "dirvish")
 
   "h" '(:ignore t :wk "help")
   "hm" '(describe-mode :wk "mode")
@@ -1772,13 +2320,11 @@ ily <3.
   "w n" '(evil-window-new :wk "New window")
   "w s" '(evil-window-split :wk "Horizontal split window")
   "w v" '(evil-window-vsplit :wk "Vertical split window")
-  ;; Window motions
   "w h" '(evil-window-left :wk "Window left")
   "w j" '(evil-window-down :wk "Window down")
   "w k" '(evil-window-up :wk "Window up")
   "w l" '(evil-window-right :wk "Window right")
   "w w" '(evil-window-next :wk "Goto next window")
-  ;; Move Windows
   "w H" '(buf-move-left :wk "Buffer move left")
   "w J" '(buf-move-down :wk "Buffer move down")
   "w K" '(buf-move-up :wk "Buffer move up")
@@ -1786,17 +2332,8 @@ ily <3.
 
   "c" '(:ignore t :wk "code")
   "ca" '(lspce-code-actions :wk "code actions")
-  "cx" '(consult-flymake :wk "code actions")
   "cr" '(lspce-rename :wk "lsp rename")
   "cf" '(my/format-buffer :wk "format buffer")
-
-  "m" '(:ignore t :wk "mode")
-  "mp" (list (lambda ()
-               (interactive)
-               (shell-command (concat "prettier --write "
-                                      (shell-quote-argument (buffer-file-name))))
-               (revert-buffer t t t))
-             :wk "format prettier")
 
   "q" '(:ignore t :wk "quit")
   "qq" '(save-buffers-kill-terminal :wk "quit emacs")
@@ -1805,6 +2342,7 @@ ily <3.
   "a" '(embark-act :wk "embark")
   "u" '(undo-tree-visualize :wk "undo tree")
   "P" '(consult-yank-from-kill-ring :wk "paste history"))
+
 
 (defun my/avy-enabled-p ()
   (and (not (derived-mode-p 'magit-mode 'dired-mode 'ibuffer-mode))
@@ -1819,167 +2357,6 @@ ily <3.
                 (scroll-margin 0)
                 (maximum-scroll-margin 0))
             (call-interactively 'evil-avy-goto-char-2)))))
-#+end_src
-
-#+begin_src emacs-lisp
-(defun my/eldoc-box-describe-and-jump ()
-  (interactive)
-  (eldoc-box-help-at-point)
-  (let ((eldoc-buffer "*eldoc-box*"))
-    (when (get-buffer eldoc-buffer)
-      (switch-to-buffer-other-window eldoc-buffer))))
-
-
-(defun my/format-buffer ()
-  "Format buffer based on major mode"
-  (interactive)
-  (cond
-   ((eq major-mode 'rust-mode) (rust-format-buffer))
-   ((eq major-mode 'nix-mode) (nix-format-buffer))  
-   ((or (eq major-mode 'python-mode) 
-        (eq major-mode 'python-ts-mode)) (python-black-buffer))
-   ((eq major-mode 'c-mode) (c-indent-region (point-min) (point-max)))
-   (t (message "No formatter for %s" major-mode))))
-
-(my-leader
-  "SPC" '((lambda () 
-            (interactive)
-            (if (projectile-project-p)
-                (projectile-find-file)
-              (projectile-switch-project)))
-          :wk "find file/switch project")
-  "sp" '(consult-ripgrep :wk "search project")
-  "/" '(consult-ripgrep :wk "search project")
-  "." '(find-file :wk "find file")
-  "," '(consult-buffer :wk "switch buffer")
-  ":" (lambda () (interactive) (execute-extended-command nil))
-
-  "d" '(:ignore t :wk "denote")
-  "dd" '(denote-menu-list-notes t :wk "List all notes")
-  "dg" '(denote-grep t :wk "Search")
-  "dn" '(denote t :wk "Create a new note")
-  "dr" '(denote-rename-file t :wk "Rename Note")
-
-  "f" '(:ignore t :wk "files")
-  "fd" '(dired :wk "dired")
-  "fD" '(dired-jump :wk "dired jump")
-  "fr" '(consult-recent-file :wk "recent files")
-  "ff" '(find-file :wk "find file")
-  "fs" '(save-buffer :wk "save file")
-
-  "b" '(:ignore t :wk "buffers")
-  "bb" '(consult-buffer :wk "switch buffer")
-  "bi" '(ibuffer :wk "ibuffer")
-  "bd" '(kill-current-buffer :wk "kill buffer")
-  "bk" '(kill-current-buffer :wk "kill buffer")
-  "bs" '(save-buffer :wk "save buffer")
-
-  "p" '(:ignore t :wk "project")
-  "pp" '(projectile-switch-project :wk "switch project")
-  "pf" '(projectile-find-file :wk "find file")
-  "ps" '(consult-ripgrep :wk "search")
-  "pb" '(consult-projectile-buffer :wk "buffers") "pk" '(projectile-kill-buffers :wk "kill buffers") "pd" '(projectile-dired :wk "root dir")
-  "pr" '(projectile-recentf :wk "recent files")
-  "pa" '(projectile-add-known-project :wk "add project")
-  "pc" '(projectile-compile-project :wk "compile")
-  "pt" '(projectile-test-project :wk "test")
-  "pi" '(projectile-invalidate-cache :wk "invalidate cache")
-
-  "g" '(:ignore t :wk "git/goto")
-  "gc" '(magit-clone :wk "clone")
-  "gg" '(magit-status :wk "status")
-  "gl" '(magit-log-current :wk "log")
-  "gd" '(xref-find-definitions :wk "go to definition") 
-  "gs" '(magit-file-stage :wk "stage file")
-  "gb" '(vc-annotate :wk "blame")
-
-  "o" '(:ignore t :wk "open")
-  ;; "op" '(neotree-toggle :wk "neotree")
-  ;; "oP" '(dired-jump :wk "dired")
-  ;; "od" '(dirvish :wk "dirvish")
-
-  "h" '(:ignore t :wk "help")
-  "hm" '(describe-mode :wk "mode")
-  "hf" '(describe-function :wk "function")
-  "hv" '(describe-variable :wk "variable")
-  "hk" '(describe-key :wk "key")
-
-  "w c" '(evil-window-delete :wk "Close window")
-  "w n" '(evil-window-new :wk "New window")
-  "w s" '(evil-window-split :wk "Horizontal split window")
-  "w v" '(evil-window-vsplit :wk "Vertical split window")
-  ;; Window motions
-  "w h" '(evil-window-left :wk "Window left")
-  "w j" '(evil-window-down :wk "Window down")
-  "w k" '(evil-window-up :wk "Window up")
-  "w l" '(evil-window-right :wk "Window right")
-  "w w" '(evil-window-next :wk "Goto next window")
-  ;; Move Windows
-  "w H" '(buf-move-left :wk "Buffer move left")
-  "w J" '(buf-move-down :wk "Buffer move down")
-  "w K" '(buf-move-up :wk "Buffer move up")
-  "w L" '(buf-move-right :wk "Buffer move right")
-
-  "c" '(:ignore t :wk "code")
-  "ca" '(lspce-code-actions :wk "code actions")
-  "cx" '(consult-flymake :wk "code actions")
-  "cr" '(lspce-rename :wk "lsp rename")
-  "cf" '(my/format-buffer :wk "format buffer")
-
-  "m" '(:ignore t :wk "mode")
-  "mp" (list (lambda ()
-               (interactive)
-               (shell-command (concat "prettier --write "
-                                      (shell-quote-argument (buffer-file-name))))
-               (revert-buffer t t t))
-             :wk "format prettier")
-
-  "q" '(:ignore t :wk "quit")
-  "qq" '(save-buffers-kill-terminal :wk "quit emacs")
-  "qr" '(restart-emacs :wk "restart")
-
-  "a" '(embark-act :wk "embark")
-  "u" '(undo-tree-visualize :wk "undo tree")
-  "P" '(consult-yank-from-kill-ring :wk "paste history"))
-
-(defun my/avy-enabled-p ()
-  (and (not (derived-mode-p 'magit-mode 'dired-mode 'ibuffer-mode))
-       (not (eq major-mode 'dirvish-mode))))
-
-(general-def '(normal visual) 'override
-  "s" (lambda ()
-        (interactive)
-        (when (my/avy-enabled-p)
-          (let ((avy-all-windows t)
-                (avy-background t)
-                (scroll-margin 0)
-                (maximum-scroll-margin 0))
-            (call-interactively 'evil-avy-goto-char-2)))))
-(general-def 'normal 'override
-  "K" 'my/eldoc-box-describe-and-jump)
-
-(defun my/ibuffer-smart ()
-  (interactive)
-  (ibuffer)
-  (local-set-key (kbd "RET") 
-                 (lambda () 
-                   (interactive)
-                   (ibuffer-visit-buffer)
-                   (kill-buffer "*Ibuffer*")))
-  (local-set-key (kbd "q") 
-                 (lambda () 
-                   (interactive)
-                   (kill-buffer "*Ibuffer*"))))
-
-(my-leader
-  "bi" 'my/ibuffer-smart)
-
-(my-local-leader
-  "a" '(org-agenda :wk "org agenda")
-  "t" '(vterm :wk "terminal")
-  "c" '(my/centered-cursor :wk "center cursor")
-  "d" '(dirvish :wk "dired")
-  "z" '(zoom-mode :wk "zoom/golden ratio"))
 
 (general-def 'normal 'override
   "]d" 'flymake-goto-next-error
@@ -2005,7 +2382,50 @@ ily <3.
            (comment-or-uncomment-region
             (region-beginning)
             (region-end)))))
+#+end_src
 
+
+
+
+** org mode keymaps
+
+#+begin_src emacs-lisp
+(my-local-leader
+  :keymaps 'org-mode-map
+  "h" '(consult-org-heading :wk "search headings")
+  "n" '(my-toggle-org-tree-indirect-buffer :wk "toggle narrow"))
+
+(my-leader
+  :keymaps 'org-mode-map
+  "c" '(:wk "Clock" :ignore)
+
+  "cs" '(org-schedule :wk "Schedule")
+  "cd" '(org-deadline :wk "Deadline")
+
+  "l" '(:wk "Link" :ignore)
+  "lc" '(org-cliplink :wk "Cliplink")
+  "li" '(org-download-clipboard :wk "Image")
+  "ll" '(org-insert-link :wk "Link various things")
+
+  "t" '(org-todo :wk "TODO")
+
+  "RET" '(org-open-at-point))
+#+end_src
+
+** denote-menu keymaps
+
+#+begin_src emacs-lisp
+(with-eval-after-load 'denote-menu
+  (general-def 'normal denote-menu-mode-map
+    "r" 'denote-menu-filter
+    "c" 'denote-menu-clear-filters
+    "e" 'denote-menu-export-to-dired
+    "o" 'denote-menu-filter-out-keyword))
+#+end_src
+
+** dirvish keymaps
+
+#+begin_src emacs-lisp
 (general-def 'normal dirvish-mode-map
   "?" 'dirvish-dispatch
   "q" 'dirvish-quit
@@ -2035,29 +2455,23 @@ ily <3.
   "s" 'dirvish-symlink
   "S" 'dirvish-relative-symlink
   "h" 'dirvish-hardlink)
+#+end_src
 
+** local leader
+
+#+begin_src emacs-lisp
 (my-local-leader
-  :keymaps 'org-mode-map
-  "h" '(consult-org-heading :wk "search headings")
-  "n" '(my-toggle-org-tree-indirect-buffer :wk "toggle narrow"))
+  "a" '(org-agenda :wk "org agenda")
+  "t" '(multi-vterm :wk "terminal")
+  "c" '(my/centered-cursor :wk "center cursor")
+  "d" '(dirvish :wk "dired")
+  "z" '(zoom-mode :wk "zoom/golden ratio")
+  "m" '(mu4e :wk "mail"))
+#+end_src
 
-(general-def 'normal eat-mode-map
-  "C-l" 'eat-reset)
+** convenient keys
 
-(define-key minibuffer-local-map [escape] 'abort-recursive-edit)
-(define-key minibuffer-local-ns-map [escape] 'abort-recursive-edit)
-(define-key minibuffer-local-completion-map [escape] 'abort-recursive-edit)
-(define-key minibuffer-local-must-match-map [escape] 'abort-recursive-edit)
-(define-key minibuffer-local-isearch-map [escape] 'abort-recursive-edit)
-
-(defun delete-word (arg)
-  (interactive "p")
-  (delete-region (point) (progn (forward-word arg) (point))))
-
-(defun backward-delete-word (arg)
-  (interactive "p")
-  (delete-word (- arg)))
-
+#+begin_src emacs-lisp
 (global-set-key (kbd "M-<delete>") 'delete-word)
 (global-set-key (kbd "M-<backspace>") 'backward-delete-word)
 (global-set-key (kbd "C-<delete>") 'delete-word)
@@ -2156,6 +2570,21 @@ ily <3.
             (setq message-sendmail-extra-arguments (list '"-a" account))))))
   
   (add-hook 'message-send-mail-hook 'mu4e-set-msmtp-account))
+#+end_src
+
+* ibuffer big window
+
+#+begin_src emacs-lisp
+
+#+end_src
+
+* profiler
+
+#+begin_src emacs-lisp
+;; (profiler-start 'cpu)
+;; (org-agenda nil "c")
+;; (profiler-report)
+;; (profiler-stop)
 #+end_src
 
 * provide init
