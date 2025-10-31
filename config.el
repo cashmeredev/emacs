@@ -70,6 +70,8 @@
     (string-match "\\*[^*]+\\*" (buffer-name buffer)))
   (setq switch-to-prev-buffer-skip 'skip-these-buffers)
 
+(setq switch-to-prev-buffer-skip-regexp
+      '("\\*[^*]+\\*" "^magit" "^\\*magit"))
 
   ;; Configure font settings based on the operating system.
   ;; Ok, this kickstart is meant to be used on the terminal, not on GUI.
@@ -1081,13 +1083,18 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :config
   (if ek-use-nerd-fonts   ;; Check if nerd fonts are being used
 	  (setopt magit-format-file-function #'magit-format-file-nerd-icons)) ;; Turns on magit nerd-icons
-  )
+  :custom
+  (magit-display-buffer-function #'magit-display-buffer-same-window-except-diff-v1))
 (defun my/magit-kill-buffers ()
   "kills all magit buffers"
   (interactive)
   (let ((buffers (magit-mode-get-buffers)))
 	(magit-restore-window-configuration)
 	(mapc #'kill-buffer buffers)))
+
+(setq switch-to-prev-buffer-skip
+      (lambda (window buffer bury-or-kill)
+        (string-match-p "\\*magit" (buffer-name buffer))))
 
 (use-package indent-guide
   :defer t
