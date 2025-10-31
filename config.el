@@ -132,34 +132,43 @@
   :type 'boolean
   :group 'appearance)
 
+(setq wl-copy-process nil)
+(defun wl-copy (text)
+  (setq wl-copy-process (make-process :name "wl-copy"
+                                      :buffer nil
+                                      :command '("wl-copy" "-f" "-n")
+                                      :connection-type 'pipe
+                                      :noquery t))
+  (process-send-string wl-copy-process text)
+  (process-send-eof wl-copy-process))
+(defun wl-paste ()
+  (if (and wl-copy-process (process-live-p wl-copy-process))
+      nil ; should return nil if we're the current paste owner
+      (shell-command-to-string "wl-paste -n | tr -d \r")))
+(setq interprogram-cut-function 'wl-copy)
+(setq interprogram-paste-function 'wl-paste)
+
 (use-package window
   :straight nil
-  :ensure nil       ;; This is built-in, no need to fetch it.
+  :ensure nil
   :custom
   (display-buffer-alist
    '(
-     ;; ("\\*.*e?shell\\*"
-     ;;  (display-buffer-in-side-window)
-     ;;  (window-height . 0.25)
-     ;;  (side . bottom)
-     ;;  (slot . -1))
-
-     ("\\*\\(Backtrace\\|Warnings\\|Compile-Log\\|[Hh]elp\\|Messages\\|Bookmark List\\|Occur\\|eldoc.*\\)\\*"
+     ("\\*\\(Backtrace\\|Warnings\\|Compile-Log\\|[Hh]elp\\|Messages\\|Bookmark List\\|Occur\\)\\*"
       (display-buffer-in-side-window)
       (window-height . 0.25)
       (side . bottom)
       (slot . 0))
 
-	 ;; Example configuration for the LSP help buffer,
-	 ;; keeps it always on bottom using 25% of the available space:
-	 ("\\*\\(lsp-help\\)\\*"
+	 ("\\*\\(eldoc\\)\\*"
 	  (display-buffer-in-side-window)
 	  (window-height . 0.25)
 	  (side . bottom)
-	  (slot . 0))
+      (slot . 1)
+      (window-parameters . ((no-delete-other-windows . t)))
+      (body-function . (lambda (window)
+                        (select-window window))))
 
-	 ;; Configuration for displaying various diagnostic buffers on
-	 ;; bottom 25%:
 	 ("\\*\\(Flymake diagnostics\\|xref\\|ivy\\|Swiper\\|Completions\\)"
 	  (display-buffer-in-side-window)
 	  (window-height . 0.25)
@@ -261,29 +270,77 @@
                           ("C-c ^ n" . smerge-next)        ;; Move to the next conflict.
                           ("C-c ^ p" . smerge-previous)))  ;; Move to the previous conflict.
 
-(use-package eldoc
+(use-package auth-source
   :straight nil
-  :ensure nil                                ;; This is built-in, no need to fetch it.
-  :after lspce-mode
+  :ensure nil                                  ;; This is built-in, no need to fetch it.
+  :defer t
   :config
-  (setq eldoc-idle-delay 0.001)                  ;; Automatically fetch doc help
-  (setq eldoc-echo-area-use-multiline-p t) ;; We use the "K" floating help instead
-  ;; set to t if you want docs on the echo area
-  (setq eldoc-help-at-pt t)
-  (setq eldoc-echo-area-display-truncation-message nil)
-  :init
-  (global-eldoc-mode))
+  ;; Enable password-store integration for secure API key retrieval.
+  (when (require 'auth-source-pass nil t)
+    (auth-source-pass-enable)
+    ;; Add password-store explicitly to auth-sources for compatibility.
+    (add-to-list 'auth-sources 'password-store)
+    ;; Optional: Cache expires after 5 minutes for security.
+    (setq auth-source-cache-expiry 300)))
 
-(use-package eldoc-box
+(use-package dashboard
   :ensure t
   :config
-  (eldoc-box-clear-with-C-g t)
-  (eldoc-box-only-multiline-doc nil)
-  (eldoc-box-frame-parameters
-                '((internal-border-width . 2)
-          (border-width . 1)
-          (left-fringe . 8)
-          (right-fringe . 8))))
+  (dashboard-setup-startup-hook))
+
+(defun agenda-home ()
+  (interactive)
+  (org-agenda-list 1)
+  (delete-other-windows))
+
+(add-hook 'server-after-make-frame-hook #'agenda-home)
+
+(defun refresh-agenda-periodic-function ()
+  "Recompute the Org Agenda buffer(s) periodically."
+  (ignore-errors
+    (when (get-buffer "*Org Agenda*")
+          (with-selected-window (get-buffer-window "*Org Agenda*")
+            (org-agenda-redo-all)))))
+
+;; Refresh agenda every minute.
+(run-with-timer 60 60 'refresh-agenda-periodic-function)
+
+(setq org-agenda-current-time-string "now - - - - - - -")
+
+(custom-set-faces
+ '(org-agenda-current-time ((t (:foreground "red")))))
+
+;; (defun rlr/agenda-links ()
+;;   (end-of-buffer)
+;;   (insert-file-contents "/Path to Org Directory/agenda-links.org")
+;;   (while (org-activate-links (point-max))
+;;     (goto-char (match-end 0)))
+;;   (beginning-of-buffer))
+
+;; (add-hook 'org-agenda-finalize-hook #'rlr/agenda-links)
+
+(setq org-return-follows-link t)
+
+(setopt org-link-elisp-skip-confirm-regexp "rlr.*")
+
+(use-package gptel
+  :ensure t                                    ;; Install from MELPA if not present.
+  :defer t
+  :config
+  ;; Define OpenRouter backend using gptel-make-openai with custom host and endpoint.
+  (setq my/openrouter-backend
+        (gptel-make-openai
+         "OpenRouter"                             ; Any name you want
+         :host "openrouter.ai"
+         :endpoint "/api/v1/chat/completions"
+         :stream t
+         :key (lambda () (auth-source-pass-get 'secret "openrouter-api"))  ; Retrieves from pass entry
+         :models '(x-ai/grok-code-fast-1)))
+
+  ;; Set backend, default mode, and list of backends.
+  (setq gptel-backend my/openrouter-backend)
+  (setq gptel-default-mode 'org-mode)
+  (setq gptel-backends (list my/openrouter-backend)))
 
 (use-package flymake
   :straight nil
@@ -299,14 +356,24 @@
       '("~/.emacs.d/config.el"
         "~/.emacs.d/init.el"))
 
-(use-package flycheck
-  :ensure t
-  :config
-  (add-hook 'after-init-hook #'global-flycheck-mode))
+;; (use-package flycheck
+;;   :ensure t
+;;   :config
+;;   (add-hook 'after-init-hook #'global-flycheck-mode))
 
-(use-package flycheck-rust
+;; (use-package flycheck-rust
+;;   :ensure t
+;;   :config
+;;   (setq flycheck-rust-check-tests nil)
+;;   (add-hook 'flycheck-mode-hook #'flycheck-rust-setup))
+
+(use-package flyover
   :ensure t
-  :hook (flycheck-mode . flycheck-rust-setup))
+  :hook (flycheck-mode-hook . flyover-mode)
+  :config
+  (setq flyover-levels '(error warning info))
+  (setq flyover-checkers '(flymake))
+  (setq flyover-use-theme-colors t))
 
 (use-package xref
   :straight nil
@@ -830,16 +897,42 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :hook
   (after-init . marginalia-mode))
 
+(use-package eglot
+  :straight nil
+  :ensure nil
+  :config
+  (setq eglot-autoshutdown t)
+  (setq eglot-sync-connect 1)
+  (setq eglot-send-changes-idle-time 0.1)
+  (setq eglot-sync-connect nil)
+  (setq eglot-connect-timeout nil)
+  (setq eglot-events-buffer-size 0)
+  (setq eglot-report-progress nil)
+  
+  (add-hook 'eglot-managed-mode-hook 
+            (lambda () (eglot-inlay-hints-mode -1)))
+  
+  (setq eglot-ignored-server-capabilities 
+        '(:inlayHintProvider :documentHighlightProvider)))
+;; (setq eldoc-echo-area-use-multiline-p nil)
+;; (setq eldoc-idle-delay 10000)
+
+
+
+(use-package eglot-booster
+  :ensure t
+  :straight ( eglot-booster :type git :host nil :repo "https://github.com/jdtsmith/eglot-booster")
+  :after eglot
+  :config	(eglot-booster-mode))
+
 (use-package typst-ts-mode
   :straight t
   :mode "\\.typ\\'"
-  ;; :hook (typst-ts-mode . eglot-ensure)
+  :hook (typst-ts-mode . eglot-ensure)
   :config
-  :defer t
-  ;; (with-eval-after-load 'eglot
-  ;;   (add-to-list 'eglot-server-programs
-  ;;                `(typst-ts-mode . ,(eglot-alternatives '("tinymist" "typst-lsp")))))
-  )
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 typst-ts-mode . ,(eglot-alternatives '("tinymist")))))
 
 (use-package f
   :ensure t)
@@ -853,16 +946,16 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :ensure t
   :after yasnippet)
 
-(straight-use-package
- `(lspce :type git :host github :repo "zbelial/lspce"
-         :files (:defaults ,(pcase system-type
-                              ('gnu/linux "lspce-module.so")
-                              ('darwin "lspce-module.dylib")))
-         :pre-build ,(pcase system-type
-                       ('gnu/linux '(("cargo" "build" "--release")
-                                     ("cp" "./target/release/liblspce_module.so" "./lspce-module.so")))
-                       ('darwin '(("cargo" "build" "--release")
-                                  ("cp" "./target/release/liblspce_module.dylib" "./lspce-module.dylib"))))))
+;; (straight-use-package
+;;  `(lspce :type git :host github :repo "zbelial/lspce"
+;;          :files (:defaults ,(pcase system-type
+;;                               ('gnu/linux "lspce-module.so")
+;;                               ('darwin "lspce-module.dylib")))
+;;          :pre-build ,(pcase system-type
+;;                        ('gnu/linux '(("cargo" "build" "--release")
+;;                                      ("cp" "./target/release/liblspce_module.so" "./lspce-module.so")))
+;;                        ('darwin '(("cargo" "build" "--release")
+;;                                   ("cp" "./target/release/liblspce_module.dylib" "./lspce-module.dylib"))))))
 
 (use-package company
   :straight t
@@ -889,31 +982,14 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (setq company-dabbrev-code-everywhere t)
   (setq company-dabbrev-code-ignore-case t))
 
-(use-package lspce
-  :ensure nil
-  :config
-  (setq lspce-send-changes-idle-time 0.05)
-  (setq lspce-idle-delay 0.05)
-  (setq lspce-show-log-level-in-modeline t)
-  (setq lspce-enable-eldoc t)
-  (setq lspce-eldoc-enable-hover t)
-  (setq lspce-eldoc-enable-signature nil)
-  (setq lspce-enable-flymake nil)
-  (setq lspce--doc-max-height 10)
-  (setq eldoc-echo-area-use-multiline-p 0)
-  (setq eldoc-echo-area-display-truncation-message nil)
-  (setq lspce-xref-append-implementations-to-definitions t)
-  (setq lspce-envs-pass-to-subprocess '("PATH" "PYTHON_PATH" "NIX_PATH" "NIX_PROFILES"))
-  (setq lspce-server-programs 
-        `(("rust"  "rust-analyzer" "" lspce-ra-initializationOptions)
-          ("python" "pylsp" "" )
-          ("nix" "nixd" "" lspce-nixd-initializationOptions)
-          ("nushell" "nu" "--lsp" ""))))
-
 (use-package nix-mode
   :ensure t
   :mode "\\.nix\\'"
-  :hook (nix-mode . lspce-mode))
+  :hook (nix-mode . eglot-ensure)
+  :config
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 '(nix-mode . ("nixd")))))
 
 (defun lspce-nixd-initializationOptions ()
   (let ((flake-path "/home/cashmere/nix")
@@ -931,13 +1007,14 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (use-package python-mode
   :ensure t
   :mode "\\.py\\'"
-  :hook (python-mode . lspce-mode)
-  )
+  :hook (python-mode . eglot-ensure)
+  :config
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 '(python-mode . ("pyright-langserver" "--stdio")))))
 
 (use-package flymake-pyrefly
-  :ensure t
-  ;; :hook (python-base-mode . pyrefly-setup-flymake-backend)
-  )
+  :ensure t)
 
 (use-package python-black
   :ensure t
@@ -947,7 +1024,12 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (use-package rust-mode
   :ensure t
   :mode "\\.rs\\'"
-  :hook (rust-mode . lspce-mode))
+  :hook (rust-mode . eglot-ensure)
+  :config
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 '((rust-ts-mode rust-mode) .
+                   ("rust-analyzer" :initializationOptions (:check (:command "clippy")))))))
 
 ;; (use-package rustic
 ;;   :ensure t
@@ -1048,6 +1130,16 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (define-key evil-normal-state-map "u" 'undo-tree-undo)
   (define-key evil-normal-state-map (kbd "C-r") 'undo-tree-redo)
   
+  (setq select-enable-clipboard nil)
+  
+  (evil-define-operator my-evil-yank-to-clipboard (beg end type register yank-handler)
+    (interactive "<R><x><y>")
+    (let ((select-enable-clipboard t))
+      (evil-yank beg end type register yank-handler)))
+  
+  (define-key evil-normal-state-map (kbd "Y") 'my-evil-yank-to-clipboard)
+  (define-key evil-visual-state-map (kbd "Y") 'my-evil-yank-to-clipboard)
+  
   (evil-set-initial-state 'help-mode 'emacs)
   (evil-set-initial-state 'messages-buffer-mode 'normal)
   (evil-set-initial-state 'dired-mode 'normal)
@@ -1129,7 +1221,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :general
   ;; (general-nmap "s" 'avy-goto-char-timer)
   ;; (general-omap "s" 'evil-avy-goto-char-timer)
-
   :config
   (setq avy-all-windows t
         avy-all-windows-alt t
@@ -1739,7 +1830,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
         projectile-enable-caching t
         projectile-indexing-method 'alien
         projectile-sort-order 'recentf
-        projectile-require-project-root nil))
+        projectile-require-project-root nil
+        projectile-globally-ignored-buffers '("\\*magit.*")))
 
 (use-package consult-projectile
   :ensure t
@@ -1771,19 +1863,34 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
     (when (get-buffer help-buffer)
       (switch-to-buffer-other-window help-buffer))))
 
-(evil-define-key 'normal 'global (kbd "K")
+(defun my/eldoc-and-jump ()
+  (interactive)
   (if (>= emacs-major-version 31)
-      #'eldoc-box-help-at-point
-      #'ek/lsp-describe-and-jump))
+      (eldoc-box-help-at-point)
+    (eldoc-doc-buffer))
+  (when-let ((eldoc-win (get-buffer-window "*eldoc*")))
+    (select-window eldoc-win)))
+
+(evil-define-key 'normal 'global (kbd "K") #'my/eldoc-and-jump)
+
+(defun my/setup-eldoc-hover-keys ()
+  (when (string-match-p "\\*eldoc\\*" (buffer-name))
+    (evil-normalize-keymaps)
+    (evil-local-set-key 'normal (kbd "q") 'quit-window)))
+
+(add-hook 'buffer-list-update-hook #'my/setup-eldoc-hover-keys)
+
+(evil-define-key 'normal 'global (kbd "K") #'my/eldoc-and-jump)
 
 (defun my/format-buffer ()
   (interactive)
   (cond
-   ((eq major-mode 'rust-mode) (rust-format-buffer))
-   ((eq major-mode 'nix-mode) (nix-format-buffer))  
+   ((eq major-mode 'rust-mode) (eglot-format-buffer))
+   ((eq major-mode 'nix-mode) (eglot-format-buffer))  
    ((or (eq major-mode 'python-mode) 
-        (eq major-mode 'python-ts-mode)) (python-black-buffer))
-   ((eq major-mode 'c-mode) (c-indent-region (point-min) (point-max)))
+        (eq major-mode 'python-ts-mode)) (eglot-format-buffer))
+   ((eq major-mode 'c-mode) (eglot-format-buffer))
+   ((bound-and-func-p eglot--managed-mode) (eglot-format-buffer))
    (t (message "No formatter for %s" major-mode))))
 
 (my-leader
@@ -1837,15 +1944,18 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "gc" '(magit-clone :wk "clone")
   "gg" '(magit-status :wk "status")
   "gl" '(magit-log-current :wk "log")
-  "gd" '(lsp-find-definition :wk "go to definition") 
-  "gD" '(lsp-find-definition-other-window :wk "definition other window")
-  "gi" '(lsp-find-implementation :wk "go to implementation")
+  "gd" '(xref-find-definitions :wk "go to definition") 
+  "gD" '((lambda () (interactive) 
+           (let ((current-prefix-arg 4))
+             (call-interactively #'xref-find-definitions)))
+         :wk "definition other window")
+  "gi" '(eglot-find-implementation :wk "go to implementation")
   "gI" '((lambda () (interactive) 
            (let ((current-prefix-arg 4))
-             (call-interactively #'lsp-find-implementation)))
+             (call-interactively #'eglot-find-implementation)))
          :wk "implementation other window")
-  "gt" '(lsp-find-type-definition :wk "go to type definition")
-  "gr" '(lsp-find-references :wk "find references")
+  "gt" '(eglot-find-typeDefinition :wk "go to type definition")
+  "gr" '(xref-find-references :wk "find references")
   "gs" '(magit-file-stage :wk "stage file")
   "gb" '(vc-annotate :wk "blame")
 
@@ -1857,6 +1967,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "hv" '(describe-variable :wk "variable")
   "hk" '(describe-key :wk "key")
 
+  "w w" '(evil-window-next :wk "Close window")
   "w c" '(evil-window-delete :wk "Close window")
   "w n" '(evil-window-new :wk "New window")
   "w s" '(evil-window-split :wk "Horizontal split window")
@@ -1872,9 +1983,9 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "w L" '(buf-move-right :wk "Buffer move right")
 
   "c" '(:ignore t :wk "code")
-  "ca" '(lspce-code-actions :wk "code actions")
-  "cr" '(lspce-rename :wk "lsp rename")
-  "cf" '(my/format-buffer :wk "format buffer")
+  "ca" '(eglot-code-actions :wk "code actions")
+  "cr" '(eglot-rename :wk "lsp rename")
+  "cf" '(eglot-format :wk "format buffer")
 
   "q" '(:ignore t :wk "quit")
   "qq" '(save-buffers-kill-terminal :wk "quit emacs")
@@ -1892,12 +2003,13 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (general-def '(normal visual) 'override
   "s" (lambda ()
         (interactive)
-        (when (my/avy-enabled-p)
-          (let ((avy-all-windows t)
-                (avy-background t)
-                (scroll-margin 0)
-                (maximum-scroll-margin 0))
-            (call-interactively 'evil-avy-goto-char-2)))))
+        (if (derived-mode-p 'magit-mode)
+            (call-interactively 'magit-stage)
+          (when (my/avy-enabled-p)
+            (let ((scroll-margin 0)
+                  (maximum-scroll-margin 0))
+              (call-interactively 'evil-avy-goto-char-2))))))
+
 
 (general-def 'normal 'override
   "]d" 'flymake-goto-next-error
@@ -1988,12 +2100,11 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "c" '(my/centered-cursor :wk "center cursor")
   "d" '(dirvish :wk "dired")
   "z" '(zoom-mode :wk "zoom/golden ratio")
-  "m" '(mu4e :wk "mail"))
+  "m" '(mu4e :wk "mail")
+  "p" '(pass :wk "pass")
+  "o" '(my/global-olivetti-mode :wk "center buffer")
+  "g" '(gptel :wk "gptel"))
 
-(global-set-key (kbd "M-<delete>") 'delete-word)
-(global-set-key (kbd "M-<backspace>") 'backward-delete-word)
-(global-set-key (kbd "C-<delete>") 'delete-word)
-(global-set-key (kbd "C-<backspace>") 'backward-delete-word)
 (global-set-key (kbd "C-=") 'text-scale-increase)
 (global-set-key (kbd "C--") 'text-scale-decrease)
 
@@ -2080,6 +2191,10 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
             (setq message-sendmail-extra-arguments (list '"-a" account))))))
   
   (add-hook 'message-send-mail-hook 'mu4e-set-msmtp-account))
+
+(use-package clipetty
+  :ensure t
+  :hook (after-init . global-clipetty-mode))
 
 
 
