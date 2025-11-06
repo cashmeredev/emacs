@@ -2057,22 +2057,35 @@ ily <3.
 ** catppuccin-theme
 
 #+begin_src emacs-lisp
-(use-package catppuccin-theme
-  :ensure t
-  :straight t
+;; (use-package catppuccin-theme
+;;   :ensure t
+;;   :straight t
+;;   :config
+;;   (setq catppuccin-flavor 'mocha)
+
+;;   (load-theme 'catppuccin :no-confirm)
+
+;;   (custom-set-faces
+;;    `(diff-hl-change ((t (:background unspecified :foreground ,(catppuccin-get-color 'blue))))))
+
+;;   (custom-set-faces
+;;    `(diff-hl-delete ((t (:background unspecified :foreground ,(catppuccin-get-color 'red))))))
+
+;;   (custom-set-faces
+;;    `(diff-hl-insert ((t (:background unspecified :foreground ,(catppuccin-get-color 'green)))))))
+#+end_src
+
+** modus-catppuccin
+
+[[https://gitlab.com/magus/modus-catppuccin][modus-catppuccin]]
+
+#+begin_src emacs-lisp
+(use-package modus-catppuccin
+  :straight (:type git
+             :repo "https://gitlab.com/magus/modus-catppuccin"
+             :branch "main")
   :config
-  (setq catppuccin-flavor 'mocha)
-
-  (load-theme 'catppuccin :no-confirm)
-
-  (custom-set-faces
-   `(diff-hl-change ((t (:background unspecified :foreground ,(catppuccin-get-color 'blue))))))
-
-  (custom-set-faces
-   `(diff-hl-delete ((t (:background unspecified :foreground ,(catppuccin-get-color 'red))))))
-
-  (custom-set-faces
-   `(diff-hl-insert ((t (:background unspecified :foreground ,(catppuccin-get-color 'green)))))))
+  (load-theme 'catppuccin-mocha :no-confirm))
 #+end_src
 
 ** modus themes/catppuccin
@@ -2204,10 +2217,10 @@ ily <3.
 ** kanagawa-themes
 
 #+begin_src emacs-lisp
-(use-package kanagawa-themes
-  :ensure t
-  :config
-  (load-theme 'kanagawa-wave t))
+;; (use-package kanagawa-themes
+;;   :ensure t
+;;   :config
+;;   (load-theme 'kanagawa-wave t))
 #+end_src
 
 * dirvish
@@ -2748,21 +2761,6 @@ ily <3.
   (add-hook 'message-send-mail-hook 'mu4e-set-msmtp-account))
 #+end_src
 
-* clipetty
-
-#+begin_src emacs-lisp
-(use-package clipetty
-  :ensure t
-  :hook (after-init . global-clipetty-mode))
-
-#+end_src
-
-* ibuffer big window
-
-#+begin_src emacs-lisp
-
-#+end_src
-
 * profiler
 
 #+begin_src emacs-lisp
@@ -2771,8 +2769,6 @@ ily <3.
 ;; (profiler-report)
 ;; (profiler-stop)
 #+end_src
-
-* org-db-v3
 
 * provide init
 

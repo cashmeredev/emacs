@@ -1592,22 +1592,29 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :hook ((org-mode   . mixed-pitch-mode)
          (LaTeX-mode . mixed-pitch-mode)))
 
-(use-package catppuccin-theme
-  :ensure t
-  :straight t
+;; (use-package catppuccin-theme
+;;   :ensure t
+;;   :straight t
+;;   :config
+;;   (setq catppuccin-flavor 'mocha)
+
+;;   (load-theme 'catppuccin :no-confirm)
+
+;;   (custom-set-faces
+;;    `(diff-hl-change ((t (:background unspecified :foreground ,(catppuccin-get-color 'blue))))))
+
+;;   (custom-set-faces
+;;    `(diff-hl-delete ((t (:background unspecified :foreground ,(catppuccin-get-color 'red))))))
+
+;;   (custom-set-faces
+;;    `(diff-hl-insert ((t (:background unspecified :foreground ,(catppuccin-get-color 'green)))))))
+
+(use-package modus-catppuccin
+  :straight (:type git
+             :repo "https://gitlab.com/magus/modus-catppuccin"
+             :branch "main")
   :config
-  (setq catppuccin-flavor 'mocha)
-
-  (load-theme 'catppuccin :no-confirm)
-
-  (custom-set-faces
-   `(diff-hl-change ((t (:background unspecified :foreground ,(catppuccin-get-color 'blue))))))
-
-  (custom-set-faces
-   `(diff-hl-delete ((t (:background unspecified :foreground ,(catppuccin-get-color 'red))))))
-
-  (custom-set-faces
-   `(diff-hl-insert ((t (:background unspecified :foreground ,(catppuccin-get-color 'green)))))))
+  (load-theme 'catppuccin-mocha :no-confirm))
 
 ;; (use-package modus-themes
 ;;   :ensure nil
@@ -1731,10 +1738,10 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;   :init
 ;;   (load-theme 'modus-operandi t))
 
-(use-package kanagawa-themes
-  :ensure t
-  :config
-  (load-theme 'kanagawa-wave t))
+;; (use-package kanagawa-themes
+;;   :ensure t
+;;   :config
+;;   (load-theme 'kanagawa-wave t))
 
 (use-package dirvish
   :straight t
@@ -2194,12 +2201,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
             (setq message-sendmail-extra-arguments (list '"-a" account))))))
   
   (add-hook 'message-send-mail-hook 'mu4e-set-msmtp-account))
-
-(use-package clipetty
-  :ensure t
-  :hook (after-init . global-clipetty-mode))
-
-
 
 ;; (profiler-start 'cpu)
 ;; (org-agenda nil "c")
