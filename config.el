@@ -121,7 +121,7 @@
 			  ;; Insert a welcome message in the *scratch* buffer displaying loading time and activated packages.
 			  (with-current-buffer (get-buffer-create "*scratch*")
 				(insert (format
-						 ";;    Welcome to Emacs!
+						 "  ;;    Welcome to Emacs!
   ;;
   ;;    Loading time : %s
   ;;    Packages     : %s
@@ -134,21 +134,21 @@
   :type 'boolean
   :group 'appearance)
 
-(setq wl-copy-process nil)
-(defun wl-copy (text)
-  (setq wl-copy-process (make-process :name "wl-copy"
-                                      :buffer nil
-                                      :command '("wl-copy" "-f" "-n")
-                                      :connection-type 'pipe
-                                      :noquery t))
-  (process-send-string wl-copy-process text)
-  (process-send-eof wl-copy-process))
-(defun wl-paste ()
-  (if (and wl-copy-process (process-live-p wl-copy-process))
-      nil ; should return nil if we're the current paste owner
-      (shell-command-to-string "wl-paste -n | tr -d \r")))
-(setq interprogram-cut-function 'wl-copy)
-(setq interprogram-paste-function 'wl-paste)
+;; (setq wl-copy-process nil)
+;; (defun wl-copy (text)
+;;   (setq wl-copy-process (make-process :name "wl-copy"
+;;                                       :buffer nil
+;;                                       :command '("wl-copy" "-f" "-n")
+;;                                       :connection-type 'pipe
+;;                                       :noquery t))
+;;   (process-send-string wl-copy-process text)
+;;   (process-send-eof wl-copy-process))
+;; (defun wl-paste ()
+;;   (if (and wl-copy-process (process-live-p wl-copy-process))
+;;       nil ; should return nil if we're the current paste owner
+;;       (shell-command-to-string "wl-paste -n | tr -d \r")))
+;; (setq interprogram-cut-function 'wl-copy)
+;; (setq interprogram-paste-function 'wl-paste)
 
 (use-package window
   :straight nil
@@ -285,46 +285,6 @@
     ;; Optional: Cache expires after 5 minutes for security.
     (setq auth-source-cache-expiry 300)))
 
-(use-package dashboard
-  :ensure t
-  :config
-  (dashboard-setup-startup-hook))
-
-(defun agenda-home ()
-  (interactive)
-  (org-agenda-list 1)
-  (delete-other-windows))
-
-(add-hook 'server-after-make-frame-hook #'agenda-home)
-
-(defun refresh-agenda-periodic-function ()
-  "Recompute the Org Agenda buffer(s) periodically."
-  (ignore-errors
-    (when (get-buffer "*Org Agenda*")
-          (with-selected-window (get-buffer-window "*Org Agenda*")
-            (org-agenda-redo-all)))))
-
-;; Refresh agenda every minute.
-(run-with-timer 60 60 'refresh-agenda-periodic-function)
-
-(setq org-agenda-current-time-string "now - - - - - - -")
-
-(custom-set-faces
- '(org-agenda-current-time ((t (:foreground "red")))))
-
-;; (defun rlr/agenda-links ()
-;;   (end-of-buffer)
-;;   (insert-file-contents "/Path to Org Directory/agenda-links.org")
-;;   (while (org-activate-links (point-max))
-;;     (goto-char (match-end 0)))
-;;   (beginning-of-buffer))
-
-;; (add-hook 'org-agenda-finalize-hook #'rlr/agenda-links)
-
-(setq org-return-follows-link t)
-
-(setopt org-link-elisp-skip-confirm-regexp "rlr.*")
-
 (use-package gptel
   :ensure t                                    ;; Install from MELPA if not present.
   :defer t
@@ -358,24 +318,20 @@
       '("~/.emacs.d/config.el"
         "~/.emacs.d/init.el"))
 
-;; (use-package flycheck
-;;   :ensure t
-;;   :config
-;;   (add-hook 'after-init-hook #'global-flycheck-mode))
-
-;; (use-package flycheck-rust
-;;   :ensure t
-;;   :config
-;;   (setq flycheck-rust-check-tests nil)
-;;   (add-hook 'flycheck-mode-hook #'flycheck-rust-setup))
-
-(use-package flyover
+(use-package flycheck
   :ensure t
-  :hook (flycheck-mode-hook . flyover-mode)
   :config
-  (setq flyover-levels '(error warning info))
-  (setq flyover-checkers '(flymake))
-  (setq flyover-use-theme-colors t))
+  (add-hook 'after-init-hook #'global-flycheck-mode))
+
+(use-package flycheck-rust
+  :ensure t
+  :config
+  (setq flycheck-rust-check-tests nil)
+  (add-hook 'flycheck-mode-hook #'flycheck-rust-setup))
+
+;; (use-package flyover
+;;   :ensure t
+;;   :hook (flycheck-mode-hook . flyover-mode))
 
 (use-package xref
   :straight nil
@@ -477,6 +433,13 @@
 ;;           (tags . " %i ")
 ;;           (search . " %i ")))
 
+(with-eval-after-load 'org-contrib
+    (org-babel-do-load-languages
+     'org-babel-load-languages
+     '((emacs-lisp . t)
+       ;; ...
+       (nushell . t))))
+
 (use-package yequake
   :custom
   (yequake-frames
@@ -545,7 +508,20 @@
   :after org-super-agenda
   :config
   (setq org-agenda-custom-commands
-        '(("w" "Weekly Overview"
+        '(("t" "Task Overview"
+           ((alltodo "" ((org-agenda-overriding-header "")
+                         (org-super-agenda-groups
+                          '((:discard (:todo "FUN"))  
+                            (:log t)
+                            (:name "ACTIVE"
+                                   :todo "ACTIVE")
+                            (:name "NEXT"
+                                   :todo "NEXT")
+                            (:name "TODO"
+                                   :todo "TODO")
+                            (:name "WAIT"
+                                   :todo "WAIT")))))))
+          ("w" "Weekly Overview"
            ((org-ql-block '(and (or (deadline auto)
                                     (scheduled :to 7))
                                 (not (done))
@@ -1015,9 +991,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
     (add-to-list 'eglot-server-programs
                  '(python-mode . ("pyright-langserver" "--stdio")))))
 
-(use-package flymake-pyrefly
-  :ensure t)
-
 (use-package python-black
   :ensure t
   :demand t
@@ -1043,14 +1016,20 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 (use-package nushell-mode
   :ensure t
-  :mode "\\.nu\\'"
-  ;; :hook (nushell-mode . lspce-mode)
-  )
+  :mode "\\.nu\\'")
+
+(use-package nushell-ts-babel
+  :straight (nushell-ts-babel :type git :host github :repo "herbertjones/nushell-ts-babel")
+  :after org
+  :config
+  (org-babel-do-load-languages
+   'org-babel-load-languages
+   (append org-babel-load-languages
+           '((nushell . t)))))
 
 (use-package vterm
   :ensure t
   :defer t)
-(setq vterm-shell "nu")
 
 (use-package multi-vterm
   :ensure t
@@ -1138,14 +1117,15 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (define-key evil-normal-state-map (kbd "C-r") 'undo-tree-redo)
   
   (setq select-enable-clipboard nil)
+  (setq select-enable-primary nil)
   
-  (evil-define-operator my-evil-yank-to-clipboard (beg end type register yank-handler)
-    (interactive "<R><x><y>")
-    (let ((select-enable-clipboard t))
-      (evil-yank beg end type register yank-handler)))
+  ;; (evil-define-operator my-evil-yank-to-clipboard (beg end type register yank-handler)
+  ;;   (interactive "<R><x><y>")
+  ;;   (let ((select-enable-clipboard t))
+  ;;     (evil-yank beg end type register yank-handler)))
   
-  (define-key evil-normal-state-map (kbd "Y") 'my-evil-yank-to-clipboard)
-  (define-key evil-visual-state-map (kbd "Y") 'my-evil-yank-to-clipboard)
+  ;; (define-key evil-normal-state-map (kbd "Y") 'my-evil-yank-to-clipboard)
+  ;; (define-key evil-visual-state-map (kbd "Y") 'my-evil-yank-to-clipboard)
   
   (evil-set-initial-state 'help-mode 'emacs)
   (evil-set-initial-state 'messages-buffer-mode 'normal)
@@ -1612,29 +1592,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :hook ((org-mode   . mixed-pitch-mode)
          (LaTeX-mode . mixed-pitch-mode)))
 
-(use-package autothemer
-  :straight t
-  :defer t)
-;; (use-package doom-themes
-;;   :straight t
-;;   :ensure t
-;;   :custom
-;;   ;; Global settings (defaults)
-;;   (doom-themes-enable-bold t)   ; if nil, bold is universally disabled
-;;   (doom-themes-enable-italic t) ; if nil, italics is universally disabled
-;;   ;; for treemacs users
-;;   (doom-themes-treemacs-theme "doom-nord-light") ; use "doom-colors" for less minimal icon theme
-;;   :config
-;;   (load-theme 'doom-nord-light t)
-
-;;   ;; Enable flashing mode-line on errors
-;;   (doom-themes-visual-bell-config)
-;;   ;; Enable custom neotree theme (nerd-icons must be installed!)
-;;   ;; or for treemacs users
-;;   (doom-themes-treemacs-config)
-;;   ;; Corrects (and improves) org-mode's native fontification.
-;;   (doom-themes-org-config))
-
 (use-package catppuccin-theme
   :ensure t
   :straight t
@@ -1774,6 +1731,11 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;   :init
 ;;   (load-theme 'modus-operandi t))
 
+(use-package kanagawa-themes
+  :ensure t
+  :config
+  (load-theme 'kanagawa-wave t))
+
 (use-package dirvish
   :straight t
   :init
@@ -1801,7 +1763,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (setq delete-by-moving-to-trash t)
   (setq dired-mouse-drag-files t))
 
-(setq-default olivetti-body-width 100)
+(setq-default olivetti-body-width 110)
 (define-globalized-minor-mode my/global-olivetti-mode olivetti-mode
   (lambda () (olivetti-mode 1)))
 (my/centered-cursor)
@@ -1853,8 +1815,9 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :defer t)
 
 (use-package zoom
-  :ensure t
-  :defer t)
+  :ensure t)
+(custom-set-variables
+ '(zoom-size '(0.618 . 0.618)))
 
 (use-package pdf-tools
   :ensure t
@@ -1998,6 +1961,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "qq" '(save-buffers-kill-terminal :wk "quit emacs")
   "qr" '(restart-emacs :wk "restart")
 
+  "x" '(org-capture :wk "capture")
+
   "a" '(embark-act :wk "embark")
   "u" '(undo-tree-visualize :wk "undo tree")
   "P" '(consult-yank-from-kill-ring :wk "paste history"))
@@ -2114,6 +2079,37 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 (global-set-key (kbd "C-=") 'text-scale-increase)
 (global-set-key (kbd "C--") 'text-scale-decrease)
+
+(defun my/evil-delete-to-blackhole (orig-fn beg end &optional type register &rest args)
+  (apply orig-fn beg end type ?_ args))
+
+(advice-add 'evil-delete :around 'my/evil-delete-to-blackhole)
+
+(my-leader
+  "y" '(my/yank-to-clipboard :wk "clipboard" :ignore t)
+  "yy" '(my/yank-to-clipboard :wk "yank to clipboard")
+  "yp" '(my/paste-from-clipboard :wk "paste from clipboard"))
+
+(defun my/yank-to-clipboard ()
+  (interactive)
+  (if (region-active-p)
+      (let ((select-enable-clipboard t))
+        (kill-ring-save (region-beginning) (region-end))
+        (message "Yanked to clipboard"))
+    (message "No region active")))
+
+(defun my/paste-from-clipboard ()
+  (interactive)
+  (let ((select-enable-clipboard t))
+    (yank)))
+
+(defun my/delete-to-clipboard ()
+  (interactive)
+  (if (region-active-p)
+      (let ((select-enable-clipboard t))
+        (kill-region (region-beginning) (region-end))
+        (message "Deleted to clipboard"))
+    (message "No region active")))
 
 (use-package elfeed
   :ensure t
