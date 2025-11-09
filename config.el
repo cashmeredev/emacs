@@ -838,15 +838,17 @@ Works on the base filename (without extension), e.g. matches \"-task\", \":task:
   :init 
   (setq markdown-command "multimarkdown")) ;; Set the Markdown processing command.
 
-(use-package treesit-auto
-  :ensure t
-  :straight t
-  :after emacs
-  :custom
-  (treesit-auto-install 'prompt)
-  :config
-  (treesit-auto-add-to-auto-mode-alist 'all)
-  (global-treesit-auto-mode t))
+;; (use-package treesit-auto
+;;   :ensure t
+;;   :straight t
+;;   :defer t
+;;   :custom
+;;   (treesit-auto-install 'prompt)
+;;   :init
+;;   (delete 'org treesit-auto-langs)
+;;   :config
+;;   (treesit-auto-add-to-auto-mode-alist 'all)
+;;   (global-treesit-auto-mode t))
 
 (use-package embark
   :ensure t
@@ -912,9 +914,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
     (add-to-list 'eglot-server-programs
                  typst-ts-mode . ,(eglot-alternatives '("tinymist")))))
 
-(use-package f
-  :ensure t)
-
 (use-package yasnippet
   :ensure t
   :config
@@ -923,17 +922,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (use-package yasnippet-snippets
   :ensure t
   :after yasnippet)
-
-;; (straight-use-package
-;;  `(lspce :type git :host github :repo "zbelial/lspce"
-;;          :files (:defaults ,(pcase system-type
-;;                               ('gnu/linux "lspce-module.so")
-;;                               ('darwin "lspce-module.dylib")))
-;;          :pre-build ,(pcase system-type
-;;                        ('gnu/linux '(("cargo" "build" "--release")
-;;                                      ("cp" "./target/release/liblspce_module.so" "./lspce-module.so")))
-;;                        ('darwin '(("cargo" "build" "--release")
-;;                                   ("cp" "./target/release/liblspce_module.dylib" "./lspce-module.dylib"))))))
 
 (use-package company
   :straight t
@@ -1614,7 +1602,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
              :repo "https://gitlab.com/magus/modus-catppuccin"
              :branch "main")
   :config
-  (load-theme 'catppuccin-mocha :no-confirm))
+  (load-theme 'catppuccin-frappe :no-confirm))
 
 ;; (use-package modus-themes
 ;;   :ensure nil

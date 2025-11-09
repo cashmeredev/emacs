@@ -1098,15 +1098,17 @@ Some goodies for better integration with org files.
 ensures that every available tree sitter is downloaded and set up for you.
 
 #+begin_src emacs-lisp
-(use-package treesit-auto
-  :ensure t
-  :straight t
-  :after emacs
-  :custom
-  (treesit-auto-install 'prompt)
-  :config
-  (treesit-auto-add-to-auto-mode-alist 'all)
-  (global-treesit-auto-mode t))
+;; (use-package treesit-auto
+;;   :ensure t
+;;   :straight t
+;;   :defer t
+;;   :custom
+;;   (treesit-auto-install 'prompt)
+;;   :init
+;;   (delete 'org treesit-auto-langs)
+;;   :config
+;;   (treesit-auto-add-to-auto-mode-alist 'all)
+;;   (global-treesit-auto-mode t))
 #+end_src
 
 * embark
@@ -1206,14 +1208,9 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
                  typst-ts-mode . ,(eglot-alternatives '("tinymist")))))
 #+end_src
 
-** lspce
-
-*** prerequisites
+** yasnippet
 
 #+begin_src emacs-lisp
-(use-package f
-  :ensure t)
-
 (use-package yasnippet
   :ensure t
   :config
@@ -1224,22 +1221,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :after yasnippet)
 #+end_src
 
-*** initial installation
-
-#+begin_src emacs-lisp
-;; (straight-use-package
-;;  `(lspce :type git :host github :repo "zbelial/lspce"
-;;          :files (:defaults ,(pcase system-type
-;;                               ('gnu/linux "lspce-module.so")
-;;                               ('darwin "lspce-module.dylib")))
-;;          :pre-build ,(pcase system-type
-;;                        ('gnu/linux '(("cargo" "build" "--release")
-;;                                      ("cp" "./target/release/liblspce_module.so" "./lspce-module.so")))
-;;                        ('darwin '(("cargo" "build" "--release")
-;;                                   ("cp" "./target/release/liblspce_module.dylib" "./lspce-module.dylib"))))))
-#+end_src
-
-*** company
+** company
 
 company is also required as an completion backend. besides that i really enjoy using company.
 
@@ -2085,7 +2067,7 @@ ily <3.
              :repo "https://gitlab.com/magus/modus-catppuccin"
              :branch "main")
   :config
-  (load-theme 'catppuccin-mocha :no-confirm))
+  (load-theme 'catppuccin-frappe :no-confirm))
 #+end_src
 
 ** modus themes/catppuccin
