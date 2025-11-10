@@ -272,19 +272,6 @@
                           ("C-c ^ n" . smerge-next)        ;; Move to the next conflict.
                           ("C-c ^ p" . smerge-previous)))  ;; Move to the previous conflict.
 
-(use-package auth-source
-  :straight nil
-  :ensure nil                                  ;; This is built-in, no need to fetch it.
-  :defer t
-  :config
-  ;; Enable password-store integration for secure API key retrieval.
-  (when (require 'auth-source-pass nil t)
-    (auth-source-pass-enable)
-    ;; Add password-store explicitly to auth-sources for compatibility.
-    (add-to-list 'auth-sources 'password-store)
-    ;; Optional: Cache expires after 5 minutes for security.
-    (setq auth-source-cache-expiry 300)))
-
 (use-package gptel
   :ensure t                                    ;; Install from MELPA if not present.
   :defer t
@@ -440,6 +427,14 @@
        ;; ...
        (nushell . t))))
 
+(use-package org-noter
+  :ensure t
+  :defer t)
+
+(use-package nov
+  :ensure t
+  :mode ("\\.epub\\'" . nov-mode))
+
 (use-package yequake
   :custom
   (yequake-frames
@@ -574,29 +569,40 @@
   (setq org-download-timestamp "%Y%m%d-%H%M%S_")
   (setq org-download-heading-lvl nil))
 
+;; (setq org-publish-project-alist
+;;       '(("wiki"
+;;          :author "cashmere"
+;;          :email "cashmere@cashmere.rs"
+;;          :preserve-breaks t
+;;          :preserve-indent t
+;;          :with-title t
+;;          :base-directory "/home/cashmere/wiki/"
+;;          :base-extension "org"
+;;          :publishing-directory "/home/cashmere/wiki/html/"
+;;          :recursive t
+;;          :publishing-function org-html-publish-to-html
+;;          :with-toc nil
+;;          :section-numbers nil
+;;          :html-head "<link rel=\"stylesheet\" href=\"/style.css\" type=\"text/css\"/>"
+;;          :preparation-function (lambda (_)
+;;                                   (require 'denote-org)
+;;                                   (dolist (file (directory-files-recursively 
+;;                                                 "/home/cashmere/wiki/" "\\.org$"))
+;;                                     (with-current-buffer (find-file-noselect file)
+;;                                       (ignore-errors
+;;                                         (denote-org-extras-convert-links-to-file-type))
+;;                                       (save-buffer)))))))
+
 (setq org-publish-project-alist
       '(("wiki"
-         :author "cashmere"
-         :email "cashmere@cashmere.rs"
-         :preserve-breaks t
-         :preserve-indent t
-         :with-title t
-         :base-directory "/home/cashmere/wiki/"
-         :base-extension "org"
-         :publishing-directory "/home/cashmere/wiki/html/"
-         :recursive t
-         :publishing-function org-html-publish-to-html
-         :with-toc nil
+         :base-directory "~/wiki"
+         :publishing-directory "~/blog/content/wiki"
+         :publishing-function denote-publish-to-md
+         :recursive nil
+         :exclude-tags ("noexport" "draft")
          :section-numbers nil
-         :html-head "<link rel=\"stylesheet\" href=\"/style.css\" type=\"text/css\"/>"
-         :preparation-function (lambda (_)
-                                  (require 'denote-org)
-                                  (dolist (file (directory-files-recursively 
-                                                "/home/cashmere/wiki/" "\\.org$"))
-                                    (with-current-buffer (find-file-noselect file)
-                                      (ignore-errors
-                                        (denote-org-extras-convert-links-to-file-type))
-                                      (save-buffer)))))))
+         :with-creator nil
+         :with-toc nil)))
 
 (setq org-export-with-broken-links t)
 
@@ -758,6 +764,20 @@ Works on the base filename (without extension), e.g. matches \"-task\", \":task:
   :ensure t
   )
 
+(use-package denote-publish
+  :ensure t
+  :straight ( denote-publish :type git :host nil :repo "https://github.com/vedang/denote-publish")) 
+
+(setq denote-publish-default-base-dir "~/wiki")
+(setq denote-publish-default-output-dir "~/blog/wiki")
+
+(setq denote-publish-link-class "internal-link")
+
+(setq denote-publish-front-matter-fields
+      '(title subtitle identifier date last_updated_at
+              aliases tags category skip_archive has_code
+              og_image og_description og_video_id))
+
 (use-package which-key
   :ensure t
   :defer t
@@ -832,11 +852,10 @@ Works on the base filename (without extension), e.g. matches \"-task\", \":task:
 
 (use-package markdown-mode
   :defer t
-  :straight t
   :ensure t
-  :mode ("README\\.md\\'" . gfm-mode)            ;; Use gfm-mode for README.md files.
+  :mode ("README\\.md\\'" . gfm-mode)            
   :init 
-  (setq markdown-command "multimarkdown")) ;; Set the Markdown processing command.
+  (setq markdown-command "multimarkdown"))
 
 ;; (use-package treesit-auto
 ;;   :ensure t
@@ -1014,6 +1033,37 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
    'org-babel-load-languages
    (append org-babel-load-languages
            '((nushell . t)))))
+
+(use-package go-mode
+  :ensure t
+  :mode "\\.go\\'"
+  :hook (go-mode . eglot-ensure)
+  :config
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 '(go-mode . ("gopls" :initializationOptions 
+                              (:staticcheck t
+                               :matcher "CaseSensitive"
+                               :usePlaceholders t)))))
+  
+  (defun go-mode-setup ()
+    (add-hook 'before-save-hook #'eglot-format-buffer -10 t)
+    (add-hook 'before-save-hook 
+              (lambda ()
+                (when (eglot-managed-p)
+                  (eglot-code-action-organize-imports nil t)))
+              nil t))
+  
+  (add-hook 'go-mode-hook #'go-mode-setup))
+
+(use-package json-mode
+  :ensure t
+  :mode "\\.json\\'"
+  :hook (json-mode . eglot-ensure)
+  :config
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 '(json-mode . ("vscode-json-language-server" "--stdio")))))
 
 (use-package vterm
   :ensure t
@@ -1814,9 +1864,33 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :config
   (setq consult-project-function #'projectile-project-root))
 
+(use-package hidepw
+  :ensure t
+  :custom
+  (hidepw-hide-first-line t)
+  :hook (pass-view-mode . hidepw-mode))
+
 (use-package pass
   :ensure t
-  :defer t)
+  :defer t
+  :mode ("\\.gpg\\'" . pass-mode)
+  :config
+  (add-to-list 'display-buffer-alist
+               '("\\*Pass.*\\*"
+                 (display-buffer-full-frame))))
+
+(use-package auth-source
+  :straight nil
+  :ensure nil                                  ;; This is built-in, no need to fetch it.
+  :defer t
+  :config
+  ;; Enable password-store integration for secure API key retrieval.
+  (when (require 'auth-source-pass nil t)
+    (auth-source-pass-enable)
+    ;; Add password-store explicitly to auth-sources for compatibility.
+    (add-to-list 'auth-sources 'password-store)
+    ;; Optional: Cache expires after 5 minutes for security.
+    (setq auth-source-cache-expiry 300)))
 
 (use-package zoom
   :ensure t)
