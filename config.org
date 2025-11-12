@@ -6,7 +6,7 @@
 
 * early-init
 
-#+begin_src emacs-lisp
+#+begin_src emacs-lisp 
 ;;; config.el --- Emacs-Kick --- A feature rich Emacs config for (neo)vi(m)mers -*- lexical-binding: t; -*-
 ;; (setenv "LSP_USE_PLISTS" "true")
 ;; (setq debug-on-error '(wrong-type-argument))
@@ -256,6 +256,14 @@
             scroll-margin 99999)
       (setq my/centered-cursor-enabled t)
       (message "centered-cursor on"))))
+#+end_src
+
+* clipetty
+
+#+begin_src emacs-lisp
+(use-package clipetty
+  :ensure t
+  :hook (after-init . global-clipetty-mode))
 #+end_src
 
 * isearch

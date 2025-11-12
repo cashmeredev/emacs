@@ -4,6 +4,19 @@
 ;; (setq gc-cons-threshold #x40000000)
 ;; (setq gc-cons-threshold 50000000)
 ;; (setenv "LSP_USE_PLISTS" "true")
+(defun copy-to-osc52 (text &optional push)
+  "Send TEXT to the system clipboard via OSC52."
+  (let ((b64 (base64-encode-string (encode-coding-string text 'utf-8) t)))
+    (send-string-to-terminal (concat "\e]52;c;" b64 "\a"))))
+
+(defun osc52-copy-last-kill ()
+  "Copy last killed text via OSC52."
+  (when kill-ring
+    (copy-to-osc52 (car kill-ring))))
+
+;; Hook into the standard kill commands
+(advice-add 'kill-ring-save :after (lambda (&rest _) (osc52-copy-last-kill)))
+(advice-add 'kill-region    :after (lambda (&rest _) (osc52-copy-last-kill)))
 (setq lsp-use-plists t)
 (setq default-frame-alist '((undecorated . t)))
 (setq gc-cons-threshold 100000000)
@@ -223,6 +236,10 @@
             scroll-margin 99999)
       (setq my/centered-cursor-enabled t)
       (message "centered-cursor on"))))
+
+(use-package clipetty
+  :ensure t
+  :hook (after-init . global-clipetty-mode))
 
 (use-package isearch
   :straight nil
