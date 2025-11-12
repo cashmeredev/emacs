@@ -1161,25 +1161,25 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 (modify-syntax-entry ?_ "w")
 
-(setq select-enable-clipboard nil)
-(setq select-enable-primary nil)
+;; (setq select-enable-clipboard nil)
+;; (setq select-enable-primary nil)
 
-(evil-define-operator my/evil-yank-to-clipboard (beg end type register yank-handler)
-  :move-point nil
-  :repeat nil
-  (interactive "<R><x><y>")
-  (let ((select-enable-clipboard t))
-    (evil-yank beg end type register yank-handler)))
+;; (evil-define-operator my/evil-yank-to-clipboard (beg end type register yank-handler)
+;;   :move-point nil
+;;   :repeat nil
+;;   (interactive "<R><x><y>")
+;;   (let ((select-enable-clipboard t))
+;;     (evil-yank beg end type register yank-handler)))
 
-(defun my/evil-paste-from-clipboard ()
-  (interactive)
-  (let ((select-enable-clipboard t))
-    (evil-paste-before 1 ?+)))
+;; (defun my/evil-paste-from-clipboard ()
+;;   (interactive)
+;;   (let ((select-enable-clipboard t))
+;;     (evil-paste-before 1 ?+)))
 
-(general-def '(normal visual) 'override
-  :prefix "SPC"
-  "yy" 'my/evil-yank-to-clipboard
-  "yp" 'my/evil-paste-from-clipboard)
+;; (general-def '(normal visual) 'override
+;;   :prefix "SPC"
+;;   "yy" 'my/evil-yank-to-clipboard
+;;   "yp" 'my/evil-paste-from-clipboard)
 
 (use-package smartparens
   :ensure t
