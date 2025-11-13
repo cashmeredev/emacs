@@ -4,19 +4,6 @@
 ;; (setq gc-cons-threshold #x40000000)
 ;; (setq gc-cons-threshold 50000000)
 ;; (setenv "LSP_USE_PLISTS" "true")
-(defun copy-to-osc52 (text &optional push)
-  "Send TEXT to the system clipboard via OSC52."
-  (let ((b64 (base64-encode-string (encode-coding-string text 'utf-8) t)))
-    (send-string-to-terminal (concat "\e]52;c;" b64 "\a"))))
-
-(defun osc52-copy-last-kill ()
-  "Copy last killed text via OSC52."
-  (when kill-ring
-    (copy-to-osc52 (car kill-ring))))
-
-;; Hook into the standard kill commands
-(advice-add 'kill-ring-save :after (lambda (&rest _) (osc52-copy-last-kill)))
-(advice-add 'kill-region    :after (lambda (&rest _) (osc52-copy-last-kill)))
 (setq lsp-use-plists t)
 (setq default-frame-alist '((undecorated . t)))
 (setq gc-cons-threshold 100000000)
@@ -278,6 +265,117 @@
           (240 . "#74c7ec")
           (260 . "#89b4fa")
           (280 . "#b4befe"))))
+
+(use-package ibuffer
+  :straight nil
+  :bind ("C-x C-b" . ibuffer)
+  :config
+  (setq ibuffer-expert t)
+  (setq ibuffer-display-summary nil)
+  (setq ibuffer-use-other-window nil)
+  (setq ibuffer-show-empty-filter-groups nil)
+  (setq ibuffer-default-sorting-mode 'filename/process)
+  (setq ibuffer-title-face 'font-lock-doc-face)
+  (setq ibuffer-use-header-line t)
+  (setq ibuffer-default-shrink-to-minimum-size nil)
+  (setq ibuffer-formats
+        '((mark modified read-only locked " "
+                (name 30 30 :left :elide)
+                " "
+                (size 9 -1 :right)
+                " "
+                (mode 16 16 :left :elide)
+                " " filename-and-process)
+          (mark " "
+                (name 16 -1)
+                " " filename)))
+  (setq ibuffer-saved-filter-groups
+        '(("Main"
+           ("Directories" (mode . dired-mode))
+           ("Rust" (or
+                   (mode . rust-mode)
+                   (mode . rust-ts-mode)))
+           ("Python" (or
+                      (mode . python-ts-mode)
+                      (mode . c-mode)
+                      (mode . python-mode)))
+           ("Nix" (or
+                     (mode . nix-mode)
+                     (mode . nix-ts-mode)))
+           ("Scripts" (or
+                       (mode . shell-script-mode)
+                       (mode . shell-mode)
+                       (mode . sh-mode)
+                       (mode . lua-mode)
+                       (mode . bat-mode)))
+           ("Config" (or
+                      (mode . conf-mode)
+                      (mode . conf-toml-mode)
+                      (mode . toml-ts-mode)
+                      (mode . conf-windows-mode)
+                      (name . "^\\.clangd$")
+                      (name . "^\\.gitignore$")
+                      (name . "^Doxyfile$")
+                      (name . "^config\\.toml$")
+                      (mode . yaml-mode)))
+           ("Web" (or
+                   (mode . mhtml-mode)
+                   (mode . html-mode)
+                   (mode . web-mode)
+                   (mode . nxml-mode)))
+           ("CSS" (or
+                   (mode . css-mode)
+                   (mode . sass-mode)))
+           ("JS" (or
+                  (mode . js-mode)
+                  (mode . rjsx-mode)))
+           ("Markup" (or
+                   (mode . markdown-mode)
+                   (mode . adoc-mode)))
+           ("Org" (mode . org-mode))
+           ("LaTeX" (name . "\.tex$"))
+           ("Magit" (or
+                     (mode . magit-blame-mode)
+                     (mode . magit-cherry-mode)
+                     (mode . magit-diff-mode)
+                     (mode . magit-log-mode)
+                     (mode . magit-process-mode)
+                     (mode . magit-status-mode)))
+           ("Elfeed" (or
+                    (mode . elfeed-search-mode)
+                    (mode . elfeed-show-mode)))
+           ("Fundamental" (or
+                           (mode . fundamental-mode)
+                           (mode . text-mode)))
+           ("Emacs" (or
+                     (mode . emacs-lisp-mode)
+                     (name . "^\\*Help\\*$")
+                     (name . "^\\*Custom.*")
+                     (name . "^\\*Org Agenda\\*$")
+                     (name . "^\\*info\\*$")
+                     (name . "^\\*scratch\\*$")
+                     (name . "^\\*Backtrace\\*$")
+                     (name . "^\\*Messages\\*$"))))))
+  :hook
+  (ibuffer-mode . (lambda ()
+                    (ibuffer-switch-to-saved-filter-groups "Main"))))
+
+(use-package nerd-icons-ibuffer
+  :ensure t
+  :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
+
+(use-package casual
+  :ensure t
+  :after ibuffer
+  :bind (:map ibuffer-mode-map
+              ("C-o" . casual-ibuffer-tmenu)
+              ("F" . casual-ibuffer-filter-tmenu)
+              ("s" . casual-ibuffer-sortby-tmenu)
+              ("{" . ibuffer-backwards-next-marked)
+              ("}" . ibuffer-forward-next-marked)
+              ("[" . ibuffer-backward-filter-group)
+              ("]" . ibuffer-forward-filter-group)
+              ("$" . ibuffer-toggle-filter-group)))
 
 (use-package smerge-mode
   :straight nil
