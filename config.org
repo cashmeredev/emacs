@@ -389,6 +389,7 @@ I adjusted the config accordingly to my modes which I use on a frequent.
                    (mode . markdown-mode)
                    (mode . adoc-mode)))
            ("Org" (mode . org-mode))
+           ("Terminal" (mode . vterm-mode))
            ("LaTeX" (name . "\.tex$"))
            ("Magit" (or
                      (mode . magit-blame-mode)
@@ -471,14 +472,12 @@ Not necessary but an eyecandy to look at!
 #+begin_src emacs-lisp
 (use-package eldoc
   :straight nil
-  :ensure t                                ;; This is built-in, no need to fetch it.
-  ;; :after eglot
+  :ensure t
   :config
-  (setq eldoc-idle-delay 0.001)                  ;; Automatically fetch doc help
-  (setq eldoc-echo-area-use-multiline-p t) ;; We use the "K" floating help instead
-  ;; set to t if you want docs on the echo area
-  (setq eldoc-help-at-pt t)
+  (setq eldoc-idle-delay 0.001)
+  (setq eldoc-echo-area-use-multiline-p 1)
   (setq eldoc-echo-area-display-truncation-message nil)
+  (setq eldoc-echo-area-prefer-doc-buffer nil)
   :init
   (global-eldoc-mode))
 #+end_src
@@ -488,11 +487,14 @@ Not necessary but an eyecandy to look at!
 #+begin_src emacs-lisp
 (use-package eldoc-box
   :ensure t
+  :hook (eglot-managed-mode . eldoc-box-hover-mode)
   :config
-  (eldoc-box-clear-with-C-g t)
-  (eldoc-box-only-multiline-doc nil)
-  (eldoc-box-frame-parameters
-                '((internal-border-width . 2)
+  (setq eldoc-box-clear-with-C-g t)
+  (setq eldoc-box-only-multiline-doc nil)
+  (setq eldoc-box-max-pixel-width 800)
+  (setq eldoc-box-max-pixel-height 400)
+  (setq eldoc-box-frame-parameters
+        '((internal-border-width . 2)
           (border-width . 1)
           (left-fringe . 8)
           (right-fringe . 8))))
@@ -1326,12 +1328,11 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (setq eglot-report-progress nil)
   
   (add-hook 'eglot-managed-mode-hook 
-            (lambda () (eglot-inlay-hints-mode -1)))
+            (lambda () 
+              (eglot-inlay-hints-mode -1)))
   
   (setq eglot-ignored-server-capabilities 
         '(:inlayHintProvider :documentHighlightProvider)))
-;; (setq eldoc-echo-area-use-multiline-p nil)
-;; (setq eldoc-idle-delay 10000)
 #+end_src
 
 *** settings
@@ -1353,13 +1354,13 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 #+begin_src emacs-lisp
 (use-package typst-ts-mode
-  :straight t
+  :ensure t
   :mode "\\.typ\\'"
   :hook (typst-ts-mode . eglot-ensure)
   :config
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
-                 typst-ts-mode . ,(eglot-alternatives '("tinymist")))))
+                 typst-ts-mode . ,(eglot-alternatives '("tinymist" "lsp")))))
 #+end_src
 
 ** yasnippet
@@ -1475,7 +1476,8 @@ ily <3.
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
                  '((rust-ts-mode rust-mode) .
-                   ("rust-analyzer" :initializationOptions (:check (:command "clippy")))))))
+                   ("rust-analyzer" :initializationOptions 
+                    (:check (:command "clippy")))))))
 #+end_src
 
 *** Rustic
@@ -2273,7 +2275,7 @@ ily <3.
              :repo "https://gitlab.com/magus/modus-catppuccin"
              :branch "main")
   :config
-  (load-theme 'catppuccin-frappe :no-confirm))
+  (load-theme 'catppuccin-latte :no-confirm))
 #+end_src
 
 ** modus themes/catppuccin
@@ -2558,10 +2560,10 @@ ily <3.
 
 #+begin_src emacs-lisp
 (use-package pdf-tools
-  :ensure t
+  :straight (:type built-in)
   :magic ("%PDF" . pdf-view-mode)
   :config
-  (pdf-tools-install :no-query)
+  (pdf-loader-install)
   :hook (pdf-view-mode . (lambda () (display-line-numbers-mode -1))))
 #+end_src
 
@@ -2645,11 +2647,12 @@ ily <3.
   "ps" '(consult-ripgrep :wk "search")
   "pb" '(consult-projectile-buffer :wk "buffers") 
   "pk" '(projectile-kill-buffers :wk "kill buffers") 
-  "pd" '(projectile-dired :wk "root dir")
+  ;; "pd" '(projectile-dired :wk "root dir")
+  "pd" '(projectile-remove-known-project :wk "delete project")
   "pr" '(projectile-recentf :wk "recent files")
   "pa" '(projectile-add-known-project :wk "add project")
-  "pc" '(projectile-compile-project :wk "compile")
-  "pt" '(projectile-test-project :wk "test")
+  ;; "pc" '(projectile-compile-project :wk "compile")
+  ;; "pt" '(projectile-test-project :wk "test")
   "pi" '(projectile-invalidate-cache :wk "invalidate cache")
 
   "g" '(:ignore t :wk "git/goto")
@@ -2895,8 +2898,24 @@ ily <3.
   (elfeed-db-directory "~/.emacs.d/elfeed")
   :config
   (setq elfeed-search-filter "@2-weeks-ago +unread"
-		elfeed-search-title-max-width 110))
-
+        elfeed-search-title-max-width 110)
+  
+  (add-hook 'elfeed-search-mode-hook #'elfeed-update)
+  
+  (setq elfeed-search-sort-function
+        (lambda (a b)
+          (let* ((a-date (elfeed-entry-date a))
+                 (b-date (elfeed-entry-date b))
+                 (a-feed (elfeed-feed-title (elfeed-entry-feed a)))
+                 (b-feed (elfeed-feed-title (elfeed-entry-feed b)))
+                 (a-title (elfeed-entry-title a))
+                 (b-title (elfeed-entry-title b)))
+            (cond
+             ((> a-date b-date) t)
+             ((< a-date b-date) nil)
+             ((string< a-feed b-feed) t)
+             ((string> a-feed b-feed) nil)
+             (t (string< a-title b-title)))))))
 
 (use-package elfeed-org
   :ensure t

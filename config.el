@@ -268,7 +268,6 @@
 
 (use-package ibuffer
   :straight nil
-  :bind ("C-x C-b" . ibuffer)
   :config
   (setq ibuffer-expert t)
   (setq ibuffer-display-summary nil)
@@ -333,6 +332,7 @@
                    (mode . markdown-mode)
                    (mode . adoc-mode)))
            ("Org" (mode . org-mode))
+           ("Terminal" (mode . vterm-mode))
            ("LaTeX" (name . "\.tex$"))
            ("Magit" (or
                      (mode . magit-blame-mode)
@@ -363,19 +363,6 @@
 (use-package nerd-icons-ibuffer
   :ensure t
   :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
-
-(use-package casual
-  :ensure t
-  :after ibuffer
-  :bind (:map ibuffer-mode-map
-              ("C-o" . casual-ibuffer-tmenu)
-              ("F" . casual-ibuffer-filter-tmenu)
-              ("s" . casual-ibuffer-sortby-tmenu)
-              ("{" . ibuffer-backwards-next-marked)
-              ("}" . ibuffer-forward-next-marked)
-              ("[" . ibuffer-backward-filter-group)
-              ("]" . ibuffer-forward-filter-group)
-              ("$" . ibuffer-toggle-filter-group)))
 
 (use-package smerge-mode
   :straight nil
@@ -1024,12 +1011,11 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (setq eglot-report-progress nil)
   
   (add-hook 'eglot-managed-mode-hook 
-            (lambda () (eglot-inlay-hints-mode -1)))
+            (lambda () 
+              (eglot-inlay-hints-mode -1)))
   
   (setq eglot-ignored-server-capabilities 
         '(:inlayHintProvider :documentHighlightProvider)))
-;; (setq eldoc-echo-area-use-multiline-p nil)
-;; (setq eldoc-idle-delay 10000)
 
 
 
@@ -1040,13 +1026,13 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :config	(eglot-booster-mode))
 
 (use-package typst-ts-mode
-  :straight t
+  :ensure t
   :mode "\\.typ\\'"
   :hook (typst-ts-mode . eglot-ensure)
   :config
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
-                 typst-ts-mode . ,(eglot-alternatives '("tinymist")))))
+                 typst-ts-mode . ,(eglot-alternatives '("tinymist" "lsp")))))
 
 (use-package yasnippet
   :ensure t
@@ -1126,7 +1112,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
                  '((rust-ts-mode rust-mode) .
-                   ("rust-analyzer" :initializationOptions (:check (:command "clippy")))))))
+                   ("rust-analyzer" :initializationOptions 
+                    (:check (:command "clippy")))))))
 
 ;; (use-package rustic
 ;;   :ensure t
@@ -1776,7 +1763,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
              :repo "https://gitlab.com/magus/modus-catppuccin"
              :branch "main")
   :config
-  (load-theme 'catppuccin-frappe :no-confirm))
+  (load-theme 'catppuccin-latte :no-confirm))
 
 ;; (use-package modus-themes
 ;;   :ensure nil
@@ -2013,10 +2000,10 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
  '(zoom-size '(0.618 . 0.618)))
 
 (use-package pdf-tools
-  :ensure t
+  :straight (:type built-in)
   :magic ("%PDF" . pdf-view-mode)
   :config
-  (pdf-tools-install :no-query)
+  (pdf-loader-install)
   :hook (pdf-view-mode . (lambda () (display-line-numbers-mode -1))))
 
 (defun ek/lsp-describe-and-jump ()
@@ -2096,11 +2083,12 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "ps" '(consult-ripgrep :wk "search")
   "pb" '(consult-projectile-buffer :wk "buffers") 
   "pk" '(projectile-kill-buffers :wk "kill buffers") 
-  "pd" '(projectile-dired :wk "root dir")
+  ;; "pd" '(projectile-dired :wk "root dir")
+  "pd" '(projectile-remove-known-project :wk "delete project")
   "pr" '(projectile-recentf :wk "recent files")
   "pa" '(projectile-add-known-project :wk "add project")
-  "pc" '(projectile-compile-project :wk "compile")
-  "pt" '(projectile-test-project :wk "test")
+  ;; "pc" '(projectile-compile-project :wk "compile")
+  ;; "pt" '(projectile-test-project :wk "test")
   "pi" '(projectile-invalidate-cache :wk "invalidate cache")
 
   "g" '(:ignore t :wk "git/goto")
@@ -2311,8 +2299,24 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (elfeed-db-directory "~/.emacs.d/elfeed")
   :config
   (setq elfeed-search-filter "@2-weeks-ago +unread"
-		elfeed-search-title-max-width 110))
-
+        elfeed-search-title-max-width 110)
+  
+  (add-hook 'elfeed-search-mode-hook #'elfeed-update)
+  
+  (setq elfeed-search-sort-function
+        (lambda (a b)
+          (let* ((a-date (elfeed-entry-date a))
+                 (b-date (elfeed-entry-date b))
+                 (a-feed (elfeed-feed-title (elfeed-entry-feed a)))
+                 (b-feed (elfeed-feed-title (elfeed-entry-feed b)))
+                 (a-title (elfeed-entry-title a))
+                 (b-title (elfeed-entry-title b)))
+            (cond
+             ((> a-date b-date) t)
+             ((< a-date b-date) nil)
+             ((string< a-feed b-feed) t)
+             ((string> a-feed b-feed) nil)
+             (t (string< a-title b-title)))))))
 
 (use-package elfeed-org
   :ensure t
