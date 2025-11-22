@@ -24,6 +24,36 @@
 (setq kept-new-versions             5)
 (setq kept-old-versions             5)
 
+(defvar yy/cache-2 nil)
+
+(defun yy/load-cache ()
+  (setq yy/cache-2
+        (condition-case e
+            (car (read-from-string
+                  (with-temp-buffer
+                    (insert-file-contents
+                     (file-name-concat user-emacs-directory "ycache.eld"))
+                    (buffer-substring (point-min) (point-max)))))
+          (error nil))))
+            ;;(make-hash-table :test #'equal))))
+(yy/load-cache)
+
+(defun yy/load-path-filter (path file suffixes)
+  (if-let* ((ls (with-memoization (alist-get file yy/cache-2 nil nil #'equal)
+                  (let ((res (load-path-filter-cache-directory-files path file suffixes)))
+                    (if (eq res path) nil res)))))
+      ls path))
+
+(defun yy/write-cache ()
+  (interactive)
+  (when yy/cache-2
+    (with-temp-file (file-name-concat user-emacs-directory "ycache.eld")
+      (pp yy/cache-2 (current-buffer)))))
+
+(yy/load-cache)
+
+(setq load-path-filter-function #'yy/load-path-filter)
+
 (use-package emacs
   :straight nil
   :ensure nil
@@ -224,6 +254,65 @@
       (setq my/centered-cursor-enabled t)
       (message "centered-cursor on"))))
 
+(use-package cursory
+  :ensure t
+  :demand t
+  :if (display-graphic-p)
+  :config
+  (setq cursory-presets
+        '((box
+           :cursor-color success ; will typically be green
+           :blink-cursor-interval 1.2)
+          (box-no-blink
+           :inherit box
+           :blink-cursor-mode -1)
+          (bar
+           :cursor-type (bar . 2)
+           :cursor-color error ; will typically be red
+           :blink-cursor-interval 0.8)
+          (bar-no-other-window
+           :inherit bar
+           :cursor-in-non-selected-windows nil)
+          (bar-no-blink
+           :inherit bar
+           :blink-cursor-mode -1)
+          (underscore
+           :cursor-color warning ; will typically be yellow
+           :cursor-type (hbar . 3)
+           :blink-cursor-interval 0.3
+           :blink-cursor-blinks 50)
+          (underscore-no-other-window
+           :inherit underscore
+           :cursor-in-non-selected-windows nil)
+          (underscore-thick
+           :inherit underscore
+           :cursor-type (hbar . 8)
+           :cursor-in-non-selected-windows (hbar . 3))
+          (t ; the default values
+           :cursor-color unspecified ; use the theme's original
+           :cursor-type box
+           :cursor-in-non-selected-windows hollow
+           :blink-cursor-mode 1
+           :blink-cursor-blinks 10
+           :blink-cursor-interval 0.2
+           :blink-cursor-delay 0.2)))
+
+  ;; I am using the default value of `cursory-latest-state-file'.
+
+  ;; Set last preset or fall back to desired style from
+  ;; `cursory-presets'.  Alternatively, use the function
+  ;; `cursory-set-last-or-fallback' (can be added to the
+  ;; `after-init-hook'.
+  (cursory-set-preset (or (cursory-restore-latest-preset) 'box))
+
+  ;; Persist configurations between Emacs sessions.  Also apply the
+  ;; :cursor-color again when swithcing to another theme.
+  (cursory-mode 1)
+  :bind
+  ;; We have to use the "point" mnemonic, because C-c c is often the
+  ;; suggested binding for `org-capture' and is the one I use as well.
+  ("C-c p" . cursory-set-preset))
+
 (use-package clipetty
   :ensure t
   :hook (after-init . global-clipetty-mode))
@@ -378,7 +467,6 @@
   :ensure t                                    ;; Install from MELPA if not present.
   :defer t
   :config
-  ;; Define OpenRouter backend using gptel-make-openai with custom host and endpoint.
   (setq my/openrouter-backend
         (gptel-make-openai
          "OpenRouter"                             ; Any name you want
@@ -386,12 +474,28 @@
          :endpoint "/api/v1/chat/completions"
          :stream t
          :key (lambda () (auth-source-pass-get 'secret "openrouter-api"))  ; Retrieves from pass entry
-         :models '(x-ai/grok-code-fast-1)))
+         :models '(anthropic/claude-haiku-4.5)))
 
   ;; Set backend, default mode, and list of backends.
   (setq gptel-backend my/openrouter-backend)
   (setq gptel-default-mode 'org-mode)
   (setq gptel-backends (list my/openrouter-backend)))
+
+(use-package eldoc
+  :straight nil
+  :ensure t
+  :config
+  (setq eldoc-idle-delay 0)                  ;; Automatically fetch doc help
+  (setq eldoc-echo-area-use-multiline-p nil) ;; We use the "K" floating help instead
+                                             ;; set to t if you want docs on the echo area
+  (setq eldoc-echo-area-display-truncation-message nil)
+  :init
+  (global-eldoc-mode))
+
+(use-package eldoc-box
+  :ensure t
+  :config
+  :defer t)
 
 (use-package flymake
   :straight nil
@@ -708,12 +812,19 @@
 
 (setq org-export-with-broken-links t)
 
+(use-package ox-pandoc
+  :ensure t
+  :after org
+  )
+
 (use-package denote
   :ensure t
   :hook (dired-mode . denote-dired-mode)
   :config
-  (setq denote-rename-buffer-mode 1
-                denote-directory (expand-file-name "~/org/")))
+  (setq denote-rename-buffer-format "%t"
+        denote-buffer-name-prefix ""
+        denote-directory (expand-file-name "~/org/"))
+  (denote-rename-buffer-mode 1))
 
 (use-package denote-agenda
   :ensure t
@@ -925,6 +1036,35 @@ Works on the base filename (without extension), e.g. matches \"-task\", \":task:
         vertico-multiform-commands    '((consult-line    (:not posframe))
                                         (consult-ripgrep (:not posframe)))))
 
+(use-package corfu
+  :ensure t
+  :custom
+  ;; Optional customizations
+  ;; :custom
+  ;; (corfu-cycle t)                ;; Enable cycling for `corfu-next/previous'
+  ;; (corfu-quit-at-boundary nil)   ;; Never quit at completion boundary
+  ;; (corfu-quit-no-match nil)      ;; Never quit, even if there is no match
+  ;; (corfu-preview-current nil)    ;; Disable current candidate preview
+  ;; (corfu-preselect 'prompt)      ;; Preselect the prompt
+  ;; (corfu-on-exact-match 'insert) ;; Configure handling of exact matches
+
+  ;; Enable Corfu only for certain modes. See also `global-corfu-modes'.
+  ;; :hook ((prog-mode . corfu-mode)
+  ;;        (shell-mode . corfu-mode)
+  ;;        (eshell-mode . corfu-mode))
+  (corfu-auto t)
+  (corfu-auto-delay 0.2)
+  (corfu-auto-prefix 2)
+  :init
+
+  ;; Recommended: Enable Corfu globally.  Recommended since many modes provide
+  ;; Capfs and Dabbrev can be used globally (M-/).  See also the customization
+  ;; variable `global-corfu-modes' to exclude certain modes.
+  ;; Enable optional extension modes:
+  ;; (corfu-history-mode)
+  ;; (corfu-popupinfo-mode)
+  (global-corfu-mode))
+
 (use-package consult
   :ensure t
   :straight t
@@ -1015,15 +1155,15 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
               (eglot-inlay-hints-mode -1)))
   
   (setq eglot-ignored-server-capabilities 
-        '(:inlayHintProvider :documentHighlightProvider)))
+        '(:inlayhintprovider :documenthighlightprovider)))
 
 
 
-(use-package eglot-booster
-  :ensure t
-  :straight ( eglot-booster :type git :host nil :repo "https://github.com/jdtsmith/eglot-booster")
-  :after eglot
-  :config	(eglot-booster-mode))
+;; (use-package eglot-booster
+;;   :ensure t
+;;   :straight ( eglot-booster :type git :host nil :repo "https://github.com/jdtsmith/eglot-booster")
+;;   :after eglot
+;;   :config	(eglot-booster-mode))
 
 (use-package typst-ts-mode
   :ensure t
@@ -1043,30 +1183,30 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :ensure t
   :after yasnippet)
 
-(use-package company
-  :straight t
-  :hook (after-init . global-company-mode)
-  :bind (:map company-active-map
-              ("C-n" . company-select-next)
-              ("C-p" . company-select-previous)
-              ("C-j" . company-select-next-or-abort)
-              ("C-k" . company-select-previous-or-abort)
-              ("M-j" . company-select-next)
-              ("M-k" . company-select-previous)
-              ("<tab>" . company-complete-selection)
-              ("TAB" . company-complete-selection))
-  :config
-  (setq company-minimum-prefix-length 1)
-  (setq company-idle-delay 0.1)
-  (setq company-show-numbers t)
-  (setq company-tooltip-align-annotations t)
-  (setq company-require-match nil)
-  (setq company-backends '((company-capf :with company-yasnippet)
-                           company-files
-                           company-dabbrev-code
-                           ))
-  (setq company-dabbrev-code-everywhere t)
-  (setq company-dabbrev-code-ignore-case t))
+;; (use-package company
+;;   :straight t
+;;   :hook (after-init . global-company-mode)
+;;   :bind (:map company-active-map
+;;               ("C-n" . company-select-next)
+;;               ("C-p" . company-select-previous)
+;;               ("C-j" . company-select-next-or-abort)
+;;               ("C-k" . company-select-previous-or-abort)
+;;               ("M-j" . company-select-next)
+;;               ("M-k" . company-select-previous)
+;;               ("<tab>" . company-complete-selection)
+;;               ("TAB" . company-complete-selection))
+;;   :config
+;;   (setq company-minimum-prefix-length 1)
+;;   (setq company-idle-delay 0.1)
+;;   (setq company-show-numbers t)
+;;   (setq company-tooltip-align-annotations t)
+;;   (setq company-require-match nil)
+;;   (setq company-backends '((company-capf :with company-yasnippet)
+;;                            company-files
+;;                            company-dabbrev-code
+;;                            ))
+;;   (setq company-dabbrev-code-everywhere t)
+;;   (setq company-dabbrev-code-ignore-case t))
 
 (use-package nix-mode
   :ensure t
@@ -1166,6 +1306,11 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
                  '(json-mode . ("vscode-json-language-server" "--stdio")))))
+
+(use-package yaml-mode
+  :ensure t
+  :mode "\\.ya?ml\\'"
+  :hook (yaml-mode . eglot-ensure))
 
 (use-package vterm
   :ensure t
@@ -1919,7 +2064,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (setq delete-by-moving-to-trash t)
   (setq dired-mouse-drag-files t))
 
-(setq-default olivetti-body-width 110)
+(setq-default olivetti-body-width 130)
 (define-globalized-minor-mode my/global-olivetti-mode olivetti-mode
   (lambda () (olivetti-mode 1)))
 (my/centered-cursor)
@@ -2013,24 +2158,27 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
     (when (get-buffer help-buffer)
       (switch-to-buffer-other-window help-buffer))))
 
+
 (defun my/eldoc-and-jump ()
+  "Zeige Eldoc-Dokumentation manuell an."
   (interactive)
   (if (>= emacs-major-version 31)
       (eldoc-box-help-at-point)
-    (eldoc-doc-buffer))
-  (when-let ((eldoc-win (get-buffer-window "*eldoc*")))
-    (select-window eldoc-win)))
+    (progn
+      (eldoc-doc-buffer)
+      (when-let ((eldoc-win (get-buffer-window "*eldoc*")))
+        (select-window eldoc-win)))))
 
 (evil-define-key 'normal 'global (kbd "K") #'my/eldoc-and-jump)
 
-(defun my/setup-eldoc-hover-keys ()
-  (when (string-match-p "\\*eldoc\\*" (buffer-name))
-    (evil-normalize-keymaps)
-    (evil-local-set-key 'normal (kbd "q") 'quit-window)))
+;; (defun my/setup-eldoc-hover-keys ()
+;;   (when (string-match-p "\\*eldoc\\*" (buffer-name))
+;;     (evil-normalize-keymaps)
+;;     (evil-local-set-key 'normal (kbd "q") 'quit-window)))
 
-(add-hook 'buffer-list-update-hook #'my/setup-eldoc-hover-keys)
+;; (add-hook 'buffer-list-update-hook #'my/setup-eldoc-hover-keys)
 
-(evil-define-key 'normal 'global (kbd "K") #'my/eldoc-and-jump)
+;; (evil-define-key 'normal 'global (kbd "K") #'my/eldoc-and-jump)
 
 (defun my/format-buffer ()
   (interactive)
@@ -2325,6 +2473,9 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (rmh-elfeed-org-files (list "~/org/rss.org"))
   :config
   (elfeed-org))
+
+(setq browse-url-browser-function 'browse-url-generic
+      browse-url-generic-program "qutebrowser")
 
 (use-package mu4e
   :straight nil
