@@ -768,11 +768,12 @@ Old config
 
 #+begin_src emacs-lisp
 (with-eval-after-load 'org-contrib
-    (org-babel-do-load-languages
-     'org-babel-load-languages
-     '((emacs-lisp . t)
-       ;; ...
-       (nushell . t))))
+  (org-babel-do-load-languages
+   'org-babel-load-languages
+   '((emacs-lisp . t)
+	 ;; ...
+	 (nushell . t)
+	 (shell . t))))
 #+end_src
 
 ** notation
@@ -1154,6 +1155,7 @@ Works on the base filename (without extension), e.g. matches \"-task\", \":task:
   (setq denote-menu-title-column-width 40
         denote-menu-show-file-type nil))
 #+end_src
+
 
 ** denote-org
 
@@ -1692,6 +1694,26 @@ ily <3.
   :ensure t
   :mode "\\.ya?ml\\'"
   :hook (yaml-mode . eglot-ensure))
+#+end_src
+
+** sh-mode
+
+#+begin_src emacs-lisp
+(use-package sh-mode
+  :straight nil
+  :ensure nil
+  :hook (bash-ts-mode . eglot-ensure)
+        (sh-mode . eglot-ensure)
+  :config
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 '((sh-mode bash-ts-mode) . ("bash-language-server" "start"))))
+  
+  (defun sh-mode-setup ()
+    (add-hook 'before-save-hook #'eglot-format-buffer -10 t))
+  
+  (add-hook 'sh-mode-hook #'sh-mode-setup)
+  (add-hook 'bash-ts-mode-hook #'sh-mode-setup))
 #+end_src
 
 * vterm
@@ -3069,6 +3091,26 @@ ily <3.
   (rmh-elfeed-org-files (list "~/org/rss.org"))
   :config
   (elfeed-org))
+
+(defun elfeed-export-from-index-to-csv (output-file)
+  (interactive "FExport CSV nach: ")
+  (require 'elfeed)
+  (require 'elfeed-db)
+  
+  (elfeed-db-load)
+  
+  (let ((entries (hash-table-values elfeed-db-entries)))
+    (with-temp-file output-file
+      (insert "id,title,link,date,feed,tags\n")
+      (dolist (entry entries)
+        (insert (format "\"%s\",\"%s\",\"%s\",%s,\"%s\",\"%s\"\n"
+                        (elfeed-entry-id entry)
+                        (replace-regexp-in-string "\"" "\"\"" (elfeed-entry-title entry))
+                        (elfeed-entry-link entry)
+                        (elfeed-entry-date entry)
+                        (elfeed-feed-title (elfeed-entry-feed entry))
+                        (mapconcat #'symbol-name (elfeed-entry-tags entry) " "))))
+      (message "Export abgeschlossen: %d Einträge" (length entries)))))
 #+end_src
 
 ** set default browser

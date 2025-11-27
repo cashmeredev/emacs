@@ -627,11 +627,12 @@
 ;;           (search . " %i ")))
 
 (with-eval-after-load 'org-contrib
-    (org-babel-do-load-languages
-     'org-babel-load-languages
-     '((emacs-lisp . t)
-       ;; ...
-       (nushell . t))))
+  (org-babel-do-load-languages
+   'org-babel-load-languages
+   '((emacs-lisp . t)
+	 ;; ...
+	 (nushell . t)
+	 (shell . t))))
 
 (use-package org-noter
   :ensure t
@@ -1311,6 +1312,22 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :ensure t
   :mode "\\.ya?ml\\'"
   :hook (yaml-mode . eglot-ensure))
+
+(use-package sh-mode
+  :straight nil
+  :ensure nil
+  :hook (bash-ts-mode . eglot-ensure)
+        (sh-mode . eglot-ensure)
+  :config
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 '((sh-mode bash-ts-mode) . ("bash-language-server" "start"))))
+  
+  (defun sh-mode-setup ()
+    (add-hook 'before-save-hook #'eglot-format-buffer -10 t))
+  
+  (add-hook 'sh-mode-hook #'sh-mode-setup)
+  (add-hook 'bash-ts-mode-hook #'sh-mode-setup))
 
 (use-package vterm
   :ensure t
@@ -2473,6 +2490,26 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (rmh-elfeed-org-files (list "~/org/rss.org"))
   :config
   (elfeed-org))
+
+(defun elfeed-export-from-index-to-csv (output-file)
+  (interactive "FExport CSV nach: ")
+  (require 'elfeed)
+  (require 'elfeed-db)
+  
+  (elfeed-db-load)
+  
+  (let ((entries (hash-table-values elfeed-db-entries)))
+    (with-temp-file output-file
+      (insert "id,title,link,date,feed,tags\n")
+      (dolist (entry entries)
+        (insert (format "\"%s\",\"%s\",\"%s\",%s,\"%s\",\"%s\"\n"
+                        (elfeed-entry-id entry)
+                        (replace-regexp-in-string "\"" "\"\"" (elfeed-entry-title entry))
+                        (elfeed-entry-link entry)
+                        (elfeed-entry-date entry)
+                        (elfeed-feed-title (elfeed-entry-feed entry))
+                        (mapconcat #'symbol-name (elfeed-entry-tags entry) " "))))
+      (message "Export abgeschlossen: %d Einträge" (length entries)))))
 
 (setq browse-url-browser-function 'browse-url-generic
       browse-url-generic-program "qutebrowser")
