@@ -2081,6 +2081,13 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (setq delete-by-moving-to-trash t)
   (setq dired-mouse-drag-files t))
 
+(use-package dired-rsync 
+  :ensure t)
+
+(use-package dired-rsync-transient
+  :ensure t
+  :after (dired-rsync transient))
+
 (setq-default olivetti-body-width 130)
 (define-globalized-minor-mode my/global-olivetti-mode olivetti-mode
   (lambda () (olivetti-mode 1)))

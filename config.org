@@ -2608,6 +2608,21 @@ ily <3.
   (setq dired-mouse-drag-files t))
 #+end_src
 
+* rsync
+
+#+begin_src emacs-lisp
+(use-package dired-rsync 
+  :ensure t)
+#+end_src
+
+** rsync-transient
+
+#+begin_src emacs-lisp
+(use-package dired-rsync-transient
+  :ensure t
+  :after (dired-rsync transient))
+#+end_src
+
 * my/fns
 
 #+begin_src emacs-lisp
