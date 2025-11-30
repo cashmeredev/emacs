@@ -1895,10 +1895,10 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 (set-face-attribute 'default nil :family "JetBrainsMono Nerd Font" :weight 'regular :height cashmere/font-height)
 (set-face-attribute 'fixed-pitch nil :family "RobotoMono Nerd Font" :weight 'regular)
-(set-face-attribute 'variable-pitch nil :family "RobotoMono Nerd Font" :weight 'regular :height 1.1)
+(set-face-attribute 'variable-pitch nil :family "Poppins" :weight 'regular :height 1.1)
 
 (use-package mixed-pitch
-  :straight t
+  :ensure t
   :defer t
   :hook ((org-mode   . mixed-pitch-mode)
          (LaTeX-mode . mixed-pitch-mode)))
