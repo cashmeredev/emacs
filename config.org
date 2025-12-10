@@ -558,7 +558,8 @@ Not necessary but an eyecandy to look at!
          :stream t
          :key (lambda () (auth-source-pass-get 'secret "openrouter-api"))
          :models '(anthropic/claude-haiku-4.5
-                   minimax/minimax-m2:online)))
+                   minimax/minimax-m2:online
+				   deepseek/deepseek-v3.2)))
 
   (setq gptel-backend my/openrouter-backend)
   (setq gptel-default-mode 'markdown-mode)
@@ -674,6 +675,7 @@ Not necessary but an eyecandy to look at!
 
   (setq org-startup-folded 'nil)
   (setq org-adapt-indentation t
+		org-return-follows-link t
         org-hide-leading-stars t
         org-pretty-entities t
         org-startup-truncated t
@@ -767,13 +769,35 @@ Old config
 ** org-babel
 
 #+begin_src emacs-lisp
-(with-eval-after-load 'org-contrib
+(with-eval-after-load 'org
   (org-babel-do-load-languages
    'org-babel-load-languages
    '((emacs-lisp . t)
-	 ;; ...
-	 (nushell . t)
-	 (shell . t))))
+    ;;  (nushell . t)
+     (shell . t)
+     (dot . t))))
+#+end_src
+
+** my/paste-md-to-org
+
+[[http://yummymelon.com/devnull/import-markdown-to-org-with-the-clipboard-in-emacs.html][nfdn: Import Markdown to Org with the Clipboard in Emacs]]
+
+#+begin_src emacs-lisp
+(defun my/paste-md-to-org ()
+  "Yank Markdown text as Org.
+
+This command will convert Markdown text in the top of the `kill-ring'
+and convert it to Org using the pandoc utility."
+  (interactive)
+  (save-excursion
+    (with-temp-buffer
+      (yank)
+      (shell-command-on-region
+       (point-min) (point-max)
+       "pandoc -f markdown -t org --wrap=preserve" t t)
+      (kill-region (point-min) (point-max)))
+    (yank)))
+
 #+end_src
 
 ** notation
@@ -1203,21 +1227,6 @@ Some goodies for better integration with org files.
         (kill-buffer)))))
 #+end_src
 
-** export fn by prot himself
-
-#+begin_src emacs-lisp
-(defvar my-org-export-output-directory-prefix "./export_")
-
-(defun my-org-export-create-directory (fn extension &rest args)
-  (let ((export-dir (format "%s%s" my-org-export-output-directory-prefix extension)))
-    (unless (file-directory-p export-dir)
-      (make-directory export-dir)))
-  (apply fn extension args))
-
-(advice-add #'org-export-output-file-name :around #'my-org-export-create-directory)
-(setq denote-excluded-directories-regexp "export_.*")
-#+end_src
-
 ** ox-json
 
 #+begin_src emacs-lisp
@@ -1293,20 +1302,20 @@ Some goodies for better integration with org files.
 ** vertico-posframe
 
 #+begin_src emacs-lisp
-(use-package vertico-posframe
-  :init
-  (setq vertico-posframe-parameters   '((left-fringe  . 12)    ;; Fringes
-                                        (right-fringe . 12)
-										(accept-focus . t)))
-                                        ;; (undecorated  . nil) ;; Rounded frame
+;; (use-package vertico-posframe
+;;   :init
+;;   (setq vertico-posframe-parameters   '((left-fringe  . 12)    ;; Fringes
+;;                                         (right-fringe . 12)
+;; 										(accept-focus . t)))
+;;                                         ;; (undecorated  . nil) ;; Rounded frame
 										 
-  :config
-  (vertico-posframe-mode 1)
-  (setq vertico-posframe-width        96                       ;; Narrow frame
-        vertico-posframe-height       vertico-count            ;; Default height
-        ;; Don't create posframe for these commands
-        vertico-multiform-commands    '((consult-line    (:not posframe))
-                                        (consult-ripgrep (:not posframe)))))
+;;   :config
+;;   (vertico-posframe-mode 1)
+;;   (setq vertico-posframe-width        96                       ;; Narrow frame
+;;         vertico-posframe-height       vertico-count            ;; Default height
+;;         ;; Don't create posframe for these commands
+;;         vertico-multiform-commands    '((consult-line    (:not posframe))
+;;                                         (consult-ripgrep (:not posframe)))))
 #+end_src
 
 ** corfu
@@ -2637,6 +2646,16 @@ ily <3.
   (setq dired-mouse-drag-files t))
 #+end_src
 
+* tramp-hlo
+
+#+begin_src emacs-lisp
+(use-package tramp-hlo
+    :ensure t
+	:straight (:host github :repo "jsadusk/tramp-hlo")
+    :config
+    (tramp-hlo-setup))
+#+end_src
+
 * zoxide
 
 #+begin_src emacs-lisp
@@ -3022,7 +3041,7 @@ ily <3.
   "p" 'dirvish-yank
   "S" 'dirvish-quicksort
   "F" 'dirvish-layout-toggle
-  "z" 'zoxide-cd
+  "z" 'zoxide-travel
   "gh" 'dirvish-subtree-up
   "gl" 'dirvish-subtree-toggle
   "h" 'dired-up-directory
@@ -3239,6 +3258,52 @@ ily <3.
             (setq message-sendmail-extra-arguments (list '"-a" account))))))
   
   (add-hook 'message-send-mail-hook 'mu4e-set-msmtp-account))
+#+end_src
+
+* emacs-everywhere
+
+#+begin_src emacs-lisp
+(use-package emacs-everywhere
+  :ensure t)
+#+end_src
+
+* pulsar
+
+#+begin_src emacs-lisp
+(use-package pulsar
+  :ensure t
+  :bind
+  ;; ( :map global-map
+  ;;   ("C-x l" . pulsar-pulse-line) ; overrides `count-lines-page'
+  ;;   ("C-x L" . pulsar-highlight-permanently-dwim)) ; or use `pulsar-highlight-temporarily-dwim'
+  :init
+  (pulsar-global-mode 1)
+  :config
+  (setq pulsar-pulse t)
+  (setq pulsar-delay 0.025)
+  (setq pulsar-iterations 10)
+  (setq pulsar-face 'evil-ex-lazy-highlight)
+
+  (add-to-list 'pulsar-pulse-functions 'evil-scroll-down)
+  (add-to-list 'pulsar-pulse-functions 'flymake-goto-next-error)
+  (add-to-list 'pulsar-pulse-functions 'flymake-goto-prev-error)
+  (add-to-list 'pulsar-pulse-functions 'evil-yank)
+  (add-to-list 'pulsar-pulse-functions 'evil-yank-line)
+  (add-to-list 'pulsar-pulse-functions 'evil-delete)
+  (add-to-list 'pulsar-pulse-functions 'evil-delete-line)
+  (add-to-list 'pulsar-pulse-functions 'evil-jump-item)
+  (add-to-list 'pulsar-pulse-functions 'diff-hl-next-hunk)
+  (add-to-list 'pulsar-pulse-functions 'diff-hl-previous-hunk))
+#+end_src
+
+* grammarly
+
+#+begin_src emacs-lisp
+(use-package grammarly
+  :ensure t
+  :config
+  (setq (grammarly-username "cashmere@cashmere.rs")
+		(grammarly-password "HS>=E,0?9iqm`11mn0?/3P[Rk]'")))
 #+end_src
 
 * profiler

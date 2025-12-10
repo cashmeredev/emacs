@@ -475,7 +475,8 @@
          :stream t
          :key (lambda () (auth-source-pass-get 'secret "openrouter-api"))
          :models '(anthropic/claude-haiku-4.5
-                   minimax/minimax-m2:online)))
+                   minimax/minimax-m2:online
+				   deepseek/deepseek-v3.2)))
 
   (setq gptel-backend my/openrouter-backend)
   (setq gptel-default-mode 'markdown-mode)
@@ -555,6 +556,7 @@
 
   (setq org-startup-folded 'nil)
   (setq org-adapt-indentation t
+		org-return-follows-link t
         org-hide-leading-stars t
         org-pretty-entities t
         org-startup-truncated t
@@ -626,13 +628,28 @@
 ;;           (tags . " %i ")
 ;;           (search . " %i ")))
 
-(with-eval-after-load 'org-contrib
+(with-eval-after-load 'org
   (org-babel-do-load-languages
    'org-babel-load-languages
    '((emacs-lisp . t)
-	 ;; ...
-	 (nushell . t)
-	 (shell . t))))
+    ;;  (nushell . t)
+     (shell . t)
+     (dot . t))))
+
+(defun my/paste-md-to-org ()
+  "Yank Markdown text as Org.
+
+This command will convert Markdown text in the top of the `kill-ring'
+and convert it to Org using the pandoc utility."
+  (interactive)
+  (save-excursion
+    (with-temp-buffer
+      (yank)
+      (shell-command-on-region
+       (point-min) (point-max)
+       "pandoc -f markdown -t org --wrap=preserve" t t)
+      (kill-region (point-min) (point-max)))
+    (yank)))
 
 (use-package org-noter
   :ensure t
@@ -959,17 +976,6 @@ Works on the base filename (without extension), e.g. matches \"-task\", \":task:
         (save-buffer)
         (kill-buffer)))))
 
-(defvar my-org-export-output-directory-prefix "./export_")
-
-(defun my-org-export-create-directory (fn extension &rest args)
-  (let ((export-dir (format "%s%s" my-org-export-output-directory-prefix extension)))
-    (unless (file-directory-p export-dir)
-      (make-directory export-dir)))
-  (apply fn extension args))
-
-(advice-add #'org-export-output-file-name :around #'my-org-export-create-directory)
-(setq denote-excluded-directories-regexp "export_.*")
-
 (use-package ox-json
   :ensure t
   )
@@ -1022,20 +1028,20 @@ Works on the base filename (without extension), e.g. matches \"-task\", \":task:
                                    "  ")
                                  cand))))
 
-(use-package vertico-posframe
-  :init
-  (setq vertico-posframe-parameters   '((left-fringe  . 12)    ;; Fringes
-                                        (right-fringe . 12)
-										(accept-focus . t)))
-                                        ;; (undecorated  . nil) ;; Rounded frame
+;; (use-package vertico-posframe
+;;   :init
+;;   (setq vertico-posframe-parameters   '((left-fringe  . 12)    ;; Fringes
+;;                                         (right-fringe . 12)
+;; 										(accept-focus . t)))
+;;                                         ;; (undecorated  . nil) ;; Rounded frame
 										 
-  :config
-  (vertico-posframe-mode 1)
-  (setq vertico-posframe-width        96                       ;; Narrow frame
-        vertico-posframe-height       vertico-count            ;; Default height
-        ;; Don't create posframe for these commands
-        vertico-multiform-commands    '((consult-line    (:not posframe))
-                                        (consult-ripgrep (:not posframe)))))
+;;   :config
+;;   (vertico-posframe-mode 1)
+;;   (setq vertico-posframe-width        96                       ;; Narrow frame
+;;         vertico-posframe-height       vertico-count            ;; Default height
+;;         ;; Don't create posframe for these commands
+;;         vertico-multiform-commands    '((consult-line    (:not posframe))
+;;                                         (consult-ripgrep (:not posframe)))))
 
 (use-package corfu
   :ensure t
@@ -2106,6 +2112,12 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (setq delete-by-moving-to-trash t)
   (setq dired-mouse-drag-files t))
 
+(use-package tramp-hlo
+    :ensure t
+	:straight (:host github :repo "jsadusk/tramp-hlo")
+    :config
+    (tramp-hlo-setup))
+
 (use-package zoxide
   :ensure t)
 
@@ -2425,7 +2437,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "p" 'dirvish-yank
   "S" 'dirvish-quicksort
   "F" 'dirvish-layout-toggle
-  "z" 'zoxide-cd
+  "z" 'zoxide-travel
   "gh" 'dirvish-subtree-up
   "gl" 'dirvish-subtree-toggle
   "h" 'dired-up-directory
@@ -2614,6 +2626,40 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
             (setq message-sendmail-extra-arguments (list '"-a" account))))))
   
   (add-hook 'message-send-mail-hook 'mu4e-set-msmtp-account))
+
+(use-package emacs-everywhere
+  :ensure t)
+
+(use-package pulsar
+  :ensure t
+  :bind
+  ;; ( :map global-map
+  ;;   ("C-x l" . pulsar-pulse-line) ; overrides `count-lines-page'
+  ;;   ("C-x L" . pulsar-highlight-permanently-dwim)) ; or use `pulsar-highlight-temporarily-dwim'
+  :init
+  (pulsar-global-mode 1)
+  :config
+  (setq pulsar-pulse t)
+  (setq pulsar-delay 0.025)
+  (setq pulsar-iterations 10)
+  (setq pulsar-face 'evil-ex-lazy-highlight)
+
+  (add-to-list 'pulsar-pulse-functions 'evil-scroll-down)
+  (add-to-list 'pulsar-pulse-functions 'flymake-goto-next-error)
+  (add-to-list 'pulsar-pulse-functions 'flymake-goto-prev-error)
+  (add-to-list 'pulsar-pulse-functions 'evil-yank)
+  (add-to-list 'pulsar-pulse-functions 'evil-yank-line)
+  (add-to-list 'pulsar-pulse-functions 'evil-delete)
+  (add-to-list 'pulsar-pulse-functions 'evil-delete-line)
+  (add-to-list 'pulsar-pulse-functions 'evil-jump-item)
+  (add-to-list 'pulsar-pulse-functions 'diff-hl-next-hunk)
+  (add-to-list 'pulsar-pulse-functions 'diff-hl-previous-hunk))
+
+(use-package grammarly
+  :ensure t
+  :config
+  (setq (grammarly-username "cashmere@cashmere.rs")
+		(grammarly-password "HS>=E,0?9iqm`11mn0?/3P[Rk]'")))
 
 ;; (profiler-start 'cpu)
 ;; (org-agenda nil "c")
