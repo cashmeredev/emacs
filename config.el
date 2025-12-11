@@ -2661,6 +2661,19 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (setq (grammarly-username "cashmere@cashmere.rs")
 		(grammarly-password "HS>=E,0?9iqm`11mn0?/3P[Rk]'")))
 
+(use-package lispy
+  :ensure t
+  :hook ((emacs-lisp-mode . lispy-mode)
+         (clojure-mode . lispy-mode)
+         (scheme-mode . lispy-mode)
+         (lisp-mode . lispy-mode)))
+
+(use-package lispyville
+  :ensure t
+  :hook (lispy-mode . lispyville-mode)
+  :config
+  (lispyville-set-key-theme '(operators c-w additional)))
+
 ;; (profiler-start 'cpu)
 ;; (org-agenda nil "c")
 ;; (profiler-report)

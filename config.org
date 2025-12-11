@@ -3306,6 +3306,23 @@ ily <3.
 		(grammarly-password "HS>=E,0?9iqm`11mn0?/3P[Rk]'")))
 #+end_src
 
+* lispy
+
+#+begin_src emacs-lisp
+(use-package lispy
+  :ensure t
+  :hook ((emacs-lisp-mode . lispy-mode)
+         (clojure-mode . lispy-mode)
+         (scheme-mode . lispy-mode)
+         (lisp-mode . lispy-mode)))
+
+(use-package lispyville
+  :ensure t
+  :hook (lispy-mode . lispyville-mode)
+  :config
+  (lispyville-set-key-theme '(operators c-w additional)))
+#+end_src
+
 * profiler
 
 #+begin_src emacs-lisp
