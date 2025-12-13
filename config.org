@@ -13,7 +13,8 @@
 ;; (setq gc-cons-threshold #x40000000)
 ;; (setq gc-cons-threshold 50000000)
 ;; (setenv "LSP_USE_PLISTS" "true")
-(setq lsp-use-plists t)
+;; (setq lsp-use-plists t)
+(setq display-graphic-p t)
 (setq default-frame-alist '((undecorated . t)))
 (setq gc-cons-threshold 100000000)
 
@@ -243,16 +244,35 @@
   (dired-listing-switches "-lah --group-directories-first")
   (dired-dwim-target t)
   (dired-guess-shell-alist-user
-   '(("\\.\\(png\\|jpe?g\\|tiff\\)" "feh" "xdg-open" "open")
+   '(;; ("\\.\\(png\\|jpe?g\\|tiff\\)" "feh" "xdg-open" "open")
      ("\\.\\(mp[34]\\|m4a\\|ogg\\|flac\\|webm\\|mkv\\)" "mpv" "xdg-open" "open")
      (".*" "open" "xdg-open")))
   (dired-kill-when-opening-new-dired-buffer t)
   :config
-  ;; (dired-async-mode 1)
-  (when (eq system-type 'darwin)
+  (require 'mailcap)
+  
+  ;; WICHTIG: Zwingt Emacs, Ihre Definitionen VOR den System-Einstellungen zu nutzen
+  (setq mailcap-prefer-mailcap-viewers nil)
+
+  ;; Kitty als Viewer für Bildformate hinzufügen
+  ;; mailcap-add fügt den Eintrag ganz oben in die Liste ein
+  (mailcap-add "image/png" "kitty --hold kitty +kitten icat %s")
+  (mailcap-add "image/jpeg" "kitty --hold kitty +kitten icat %s")
+  (mailcap-add "image/jpg" "kitty --hold kitty +kitten icat %s")
+  (mailcap-add "image/gif" "kitty --hold kitty +kitten icat %s")
+
+  ;; Tastenkombination 'E' für explizites Öffnen via Mailcap
+  (define-key dired-mode-map (kbd "E") 
+    (lambda () 
+      (interactive) 
+      (mailcap-view-file (dired-get-filename))))  (when (eq system-type 'darwin)
     (let ((gls (executable-find "gls")))
       (when gls
         (setq insert-directory-program gls)))))
+
+(setq mailcap-user-mime-data
+      '(("image/png" (viewer . "kitty --hold kitty +kitten icat %s"))
+        ("image/jpeg" (viewer . "kitty --hold kitty +kitten icat %s"))))
 #+end_src
 
 * erc
@@ -550,18 +570,23 @@ Not necessary but an eyecandy to look at!
   :ensure t
   :defer t
   :config
+  (defun my/openrouter-key ()
+    (string-trim
+     (shell-command-to-string "pass code/openrouter")))
+
   (setq my/openrouter-backend
         (gptel-make-openai
          "OpenRouter"
          :host "openrouter.ai"
          :endpoint "/api/v1/chat/completions"
          :stream t
-         :key (lambda () (auth-source-pass-get 'secret "openrouter-api"))
-         :models '(anthropic/claude-haiku-4.5
-                   minimax/minimax-m2:online
-				   deepseek/deepseek-v3.2)))
+         :key #'my/openrouter-key
+         :models '("deepseek/deepseek-v3.2:online"
+                   "minimax/minimax-m2:online")))
 
   (setq gptel-backend my/openrouter-backend)
+  (setq gptel-log-level 'debug)
+  (setq gptel-include-reasoning nil)
   (setq gptel-default-mode 'markdown-mode)
   (setq gptel-backends (list my/openrouter-backend)))
 #+end_src
@@ -830,8 +855,16 @@ and convert it to Org using the pandoc utility."
       (buffer-fns . (yequake-org-capture))
       (width . 0.75)
       (height . 0.5)
-      ;; (alpha . 0.95)
-      (frame-parameters . ((undecorated . t)
+      (frame-parameters . ((name . "org-capture")
+                           (undecorated . t)
+                           (skip-taskbar . t)
+                           (sticky . t))))
+     ("emacs-everywhere"
+      (buffer-fns . (emacs-everywhere))
+      (width . 0.75)
+      (height . 0.5)
+      (frame-parameters . ((name . "emacs-everywhere")
+                           (undecorated . t)
                            (skip-taskbar . t)
                            (sticky . t)))))))
 #+end_src
@@ -1324,31 +1357,21 @@ Some goodies for better integration with org files.
 (use-package corfu
   :ensure t
   :custom
-  ;; Optional customizations
-  ;; :custom
-  ;; (corfu-cycle t)                ;; Enable cycling for `corfu-next/previous'
-  ;; (corfu-quit-at-boundary nil)   ;; Never quit at completion boundary
-  ;; (corfu-quit-no-match nil)      ;; Never quit, even if there is no match
-  ;; (corfu-preview-current nil)    ;; Disable current candidate preview
-  ;; (corfu-preselect 'prompt)      ;; Preselect the prompt
-  ;; (corfu-on-exact-match 'insert) ;; Configure handling of exact matches
-
-  ;; Enable Corfu only for certain modes. See also `global-corfu-modes'.
-  ;; :hook ((prog-mode . corfu-mode)
-  ;;        (shell-mode . corfu-mode)
-  ;;        (eshell-mode . corfu-mode))
+  (corfu-cycle t)
   (corfu-auto t)
   (corfu-auto-delay 0.2)
   (corfu-auto-prefix 2)
   :init
+  (global-corfu-mode)
+  (corfu-history-mode)
+  (corfu-popupinfo-mode))
 
-  ;; Recommended: Enable Corfu globally.  Recommended since many modes provide
-  ;; Capfs and Dabbrev can be used globally (M-/).  See also the customization
-  ;; variable `global-corfu-modes' to exclude certain modes.
-  ;; Enable optional extension modes:
-  ;; (corfu-history-mode)
-  ;; (corfu-popupinfo-mode)
-  (global-corfu-mode))
+;; Füge das hier explizit hinzu, um die nativen Glitches zu umgehen:
+(use-package corfu-terminal
+  :ensure t
+  :after corfu
+  :init
+  (corfu-terminal-mode +1))
 #+end_src
 
 * consult
@@ -1456,6 +1479,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 * programming
 
+
 ** eglot
 
 #+begin_src emacs-lisp
@@ -1562,18 +1586,6 @@ company is also required as an completion backend. besides that i really enjoy u
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
                  '(nix-mode . ("nixd")))))
-#+end_src
-
-*** nix flake function for more completion
-
-#+begin_src emacs-lisp
-(defun lspce-nixd-initializationOptions ()
-  (let ((flake-path "/home/cashmere/nix")
-        (config-name "x12"))
-    `(:nixpkgs (:expr ,(format "import (builtins.getFlake \"%s\").inputs.nixpkgs { }" flake-path))
-      :formatting (:command ["nixfmt"])
-      :options (:nixos (:expr ,(format "(builtins.getFlake \"%s\").nixosConfigurations.%s.options" flake-path config-name))
-                :home-manager (:expr ,(format "(builtins.getFlake \"%s\").nixosConfigurations.%s.config.home-manager.users.cashmere.options" flake-path config-name))))))
 #+end_src
 
 *** envrc
@@ -2053,52 +2065,51 @@ ily <3.
 * pulsar
 
 #+begin_src emacs-lisp
-;; (use-package pulsar
-;;   :defer t
-;;   :straight t
-;;   :ensure t
-;;   :hook
-;;   ;; (after-init . pulsar-global-mode)
-;;   :init
-;;   (setq pulsar-pulse-on-window-change nil)
-;;   :config
-;;   (setq pulsar-pulse t)
-;;   (setq pulsar-delay 0.025)
-;;   (setq pulsar-iterations 10)
-;;   (setq pulsar-face 'evil-ex-lazy-highlight)
+(use-package pulsar
+  :defer t
+  :ensure t
+  :hook
+  (after-init . pulsar-global-mode)
+  :init
+  (setq pulsar-pulse-on-window-change nil)
+  :config
+  (setq pulsar-pulse t)
+  (setq pulsar-delay 0.025)
+  (setq pulsar-iterations 10)
+  (setq pulsar-face 'evil-ex-lazy-highlight)
 
-;;   (add-hook 'org-agenda-mode-hook
-;;             (lambda () (pulsar-mode -1)))
+  (add-hook 'org-agenda-mode-hook
+            (lambda () (pulsar-mode -1)))
 
-;;   (setq pulsar-pulse-functions
-;;         '(evil-scroll-down
-;;           flymake-goto-next-error
-;;           flymake-goto-prev-error
-;;           evil-yank
-;;           evil-yank-line
-;;           evil-delete
-;;           evil-delete-line
-;;           evil-jump-item
-;;           diff-hl-next-hunk
-;;           diff-hl-previous-hunk
-;;           recenter-top-bottom
-;;           move-to-window-line-top-bottom
-;;           reposition-window
-;;           bookmark-jump
-;;           other-window
-;;           delete-window
-;;           delete-other-windows
-;;           forward-page
-;;           backward-page
-;;           scroll-up-command
-;;           scroll-down-command
-;;           windmove-right
-;;           windmove-left
-;;           windmove-up
-;;           windmove-down
-;;           tab-new
-;;           tab-close
-;;           tab-next)))
+  (setq pulsar-pulse-functions
+        '(evil-scroll-down
+          flymake-goto-next-error
+          flymake-goto-prev-error
+          evil-yank
+          evil-yank-line
+          evil-delete
+          evil-delete-line
+          evil-jump-item
+          diff-hl-next-hunk
+          diff-hl-previous-hunk
+          recenter-top-bottom
+          move-to-window-line-top-bottom
+          reposition-window
+          bookmark-jump
+          other-window
+          delete-window
+          delete-other-windows
+          forward-page
+          backward-page
+          scroll-up-command
+          scroll-down-command
+          windmove-right
+          windmove-left
+          windmove-up
+          windmove-down
+          tab-new
+          tab-close
+          tab-next)))
 #+end_src
 
 * evil-org
@@ -2172,214 +2183,284 @@ ily <3.
 * headerline
 
 #+begin_src emacs-lisp 
-;; (require 'battery)
-;; (require 'nerd-icons)
+(require 'battery)
+(require 'nerd-icons)
 
-;; (defface my-battery-charging
-;;   '((t :inherit success))
-;;   "Face for charging battery.")
+;; 2. Define battery faces (uncomment your original faces)
+(defface my-battery-charging
+  '((t :inherit success))
+  "Face for charging battery.")
 
-;; (defface my-battery-full
-;;   '((t :inherit success))
-;;   "Face for full battery.")
+(defface my-battery-full
+  '((t :inherit success))
+  "Face for full battery.")
 
-;; (defface my-battery-normal
-;;   '((t :inherit mode-line))
-;;   "Face for normal battery.")
+(defface my-battery-normal
+  '((t :inherit mode-line))
+  "Face for normal buffer indicator.")
 
-;; (defface my-battery-warning
-;;   '((t :inherit warning))
-;;   "Face for low battery.")
+(defface my-buffer-read-only
+  '((t :inherit error))
+  "Face for read-only buffer indicator.")
 
-;; (defface my-battery-critical
-;;   '((t :inherit error))
-;;   "Face for critical battery.")
+(defface my-buffer-remote
+  '((t :inherit font-lock-comment-face))
+  "Face for remote buffer indicator.")
 
-;; (defface my-battery-error
-;;   '((t :inherit error))
-;;   "Face for battery error.")
+;; Evil state faces
+(defface my-evil-normal-state
+  '((t :inherit success))
+  "Face for evil normal state.")
 
-;; (defvar my-battery-string nil)
+(defface my-evil-insert-state
+  '((t :inherit font-lock-keyword-face))
+  "Face for evil insert state.")
 
-;; (defun my-update-battery ()
-;;   (setq my-battery-string
-;;         (when (bound-and-true-p display-battery-mode)
-;;           (let* ((data (and battery-status-function
-;;                             (functionp battery-status-function)
-;;                             (funcall battery-status-function)))
-;;                  (status (cdr (assoc ?L data)))
-;;                  (charging? (or (string-equal "AC" status)
-;;                                 (string-equal "on-line" status)))
-;;                  (percentage (car (read-from-string (or (cdr (assq ?p data)) "ERR"))))
-;;                  (valid? (and (numberp percentage)
-;;                               (>= percentage 0)
-;;                               (<= percentage battery-mode-line-limit)))
-;;                  (face (if valid?
-;;                            (cond (charging? 'my-battery-charging)
-;;                                  ((< percentage battery-load-critical) 'my-battery-critical)
-;;                                  ((< percentage 25) 'my-battery-warning)
-;;                                  ((< percentage 95) 'my-battery-normal)
-;;                                  (t 'my-battery-full))
-;;                          'my-battery-error))
-;;                  (icon (if valid?
-;;                            (cond
-;;                             ((>= percentage 100)
-;;                              (if charging?
-;;                                  (nerd-icons-mdicon "nf-md-battery_charging_100" :face face)
-;;                                (nerd-icons-mdicon "nf-md-battery" :face face)))
-;;                             ((>= percentage 90)
-;;                              (if charging?
-;;                                  (nerd-icons-mdicon "nf-md-battery_charging_90" :face face)
-;;                                (nerd-icons-mdicon "nf-md-battery_90" :face face)))
-;;                             ((>= percentage 80)
-;;                              (if charging?
-;;                                  (nerd-icons-mdicon "nf-md-battery_charging_80" :face face)
-;;                                (nerd-icons-mdicon "nf-md-battery_80" :face face)))
-;;                             ((>= percentage 70)
-;;                              (if charging?
-;;                                  (nerd-icons-mdicon "nf-md-battery_charging_70" :face face)
-;;                                (nerd-icons-mdicon "nf-md-battery_70" :face face)))
-;;                             ((>= percentage 60)
-;;                              (if charging?
-;;                                  (nerd-icons-mdicon "nf-md-battery_charging_60" :face face)
-;;                                (nerd-icons-mdicon "nf-md-battery_60" :face face)))
-;;                             ((>= percentage 50)
-;;                              (if charging?
-;;                                  (nerd-icons-mdicon "nf-md-battery_charging_50" :face face)
-;;                                (nerd-icons-mdicon "nf-md-battery_50" :face face)))
-;;                             ((>= percentage 40)
-;;                              (if charging?
-;;                                  (nerd-icons-mdicon "nf-md-battery_charging_40" :face face)
-;;                                (nerd-icons-mdicon "nf-md-battery_40" :face face)))
-;;                             ((>= percentage 30)
-;;                              (if charging?
-;;                                  (nerd-icons-mdicon "nf-md-battery_charging_30" :face face)
-;;                                (nerd-icons-mdicon "nf-md-battery_30" :face face)))
-;;                             ((>= percentage 20)
-;;                              (if charging?
-;;                                  (nerd-icons-mdicon "nf-md-battery_charging_20" :face face)
-;;                                (nerd-icons-mdicon "nf-md-battery_20" :face face)))
-;;                             ((>= percentage 10)
-;;                              (if charging?
-;;                                  (nerd-icons-mdicon "nf-md-battery_charging_10" :face face)
-;;                                (nerd-icons-mdicon "nf-md-battery_10" :face face)))
-;;                             (t (if charging?
-;;                                    (nerd-icons-mdicon "nf-md-battery_charging_outline" :face face)
-;;                                  (nerd-icons-mdicon "nf-md-battery_outline" :face face))))
-;;                          (nerd-icons-mdicon "nf-md-battery_alert" :face face)))
-;;                  (text (if valid? (format " %d%%" percentage) " N/A"))
-;;                  (help-echo (if (and battery-echo-area-format data valid?)
-;;                                 (battery-format battery-echo-area-format data)
-;;                               "Battery status not available")))
-;;             (concat (propertize icon 'help-echo help-echo)
-;;                     (propertize text 'face face 'help-echo help-echo))))))
+(defface my-evil-visual-state
+  '((t :inherit warning))
+  "Face for evil visual state.")
 
-;; (defun my-override-battery ()
-;;   (when (bound-and-true-p display-battery-mode)
-;;     (advice-add #'battery-update :after #'my-update-battery)
-;;     (setq global-mode-string (delq 'battery-mode-line-string global-mode-string))
-;;     (my-update-battery)))
+(defface my-evil-motion-state
+  '((t :inherit font-lock-doc-face :slant normal))
+  "Face for evil motion state.")
 
-;; (add-hook 'display-battery-mode-hook #'my-override-battery)
+(defface my-evil-emacs-state
+  '((t :inherit font-lock-builtin-face))
+  "Face for evil emacs state.")
 
-;; (display-time-mode 1)
-;; (display-battery-mode 1)
+;; 3. Battery functionality (simplified version)
+(defvar my-battery-string nil)
+(defun my-header-line-right ()
+  "Formatiert den rechten Teil der Header-Line und richtet ihn korrekt aus."
+  (let* ((rhs (concat (my-mu4e-segment)
+                      (when (my-should-show-battery)
+                        my-battery-string)
+                      (when (bound-and-true-p display-time-mode)
+                        (concat " " display-time-string " ")))) ;; Extra Leerzeichen als Abstand zum Rand
+         ;; Breite in Pixeln berechnen (benötigt Emacs 29+ oder lib)
+         (width (if (fboundp 'string-pixel-width)
+                    (string-pixel-width rhs)
+                  ;; Fallback für ältere Emacs-Versionen (ungenauer)
+                  (* (string-width rhs) (frame-char-width)))))
+    ;; Spacer erstellen: "Rechts minus Breite des Textes"
+    (concat (propertize " " 'display `(space :align-to (- right (,width))))
+            rhs)))
 
-;; (defun my-lspce-diagnostics-string ()
-;;   (when (and (bound-and-true-p lspce-mode)
-;;              (bound-and-true-p flymake-mode))
-;;     (let* ((diags (flymake-diagnostics))
-;;            (error-count 0)
-;;            (warning-count 0)
-;;            (note-count 0))
-;;       (dolist (diag diags)
-;;         (let ((severity (flymake-diagnostic-type diag)))
-;;           (cond
-;;            ((eq severity :error) (setq error-count (1+ error-count)))
-;;            ((eq severity :warning) (setq warning-count (1+ warning-count)))
-;;            ((eq severity :note) (setq note-count (1+ note-count))))))
-;;       (when (or (> error-count 0) (> warning-count 0) (> note-count 0))
-;;         (concat
-;;          (when (> error-count 0)
-;;            (propertize (format " %d" error-count)
-;;                        'face 'error
-;;                        'help-echo (format "%d error(s)" error-count)))
-;;          (when (> warning-count 0)
-;;            (propertize (format " %d" warning-count)
-;;                        'face 'warning
-;;                        'help-echo (format "%d warning(s)" warning-count)))
-;;          (when (> note-count 0)
-;;            (propertize (format " %d" note-count)
-;;                        'face 'success
-;;                        'help-echo (format "%d note(s)" note-count))))))))
+(defun my-update-battery ()
+  "Update battery display."
+  (setq my-battery-string
+        (when (bound-and-true-p display-battery-mode)
+          (let* ((data (and battery-status-function
+                            (functionp battery-status-function)
+                            (funcall battery-status-function)))
+                 (status (cdr (assoc ?L data)))
+                 (charging? (or (string-equal "AC" status)
+                                (string-equal "on-line" status)))
+                 (percentage (car (read-from-string (or (cdr (assq ?p data)) "ERR"))))
+                 (valid? (and (numberp percentage)
+                              (>= percentage 0)
+                              (<= percentage 100)))
+                 (face (if valid?
+                           (cond (charging? 'my-battery-charging)
+                                 ((< percentage 20) 'error)
+                                 ((< percentage 30) 'warning)
+                                 (t 'success))
+                         'error))
+                 (icon (if valid?
+                           (cond
+                            ((>= percentage 90)
+                             (nerd-icons-mdicon "nf-md-battery" :face face))
+                            ((>= percentage 60)
+                             (nerd-icons-mdicon "nf-md-battery_70" :face face))
+                            ((>= percentage 30)
+                             (nerd-icons-mdicon "nf-md-battery_50" :face face))
+                            (t
+                             (nerd-icons-mdicon "nf-md-battery_20" :face face)))
+                         (nerd-icons-mdicon "nf-md-battery_alert" :face face)))
+                 (text (if valid? (format " %d%%" percentage) " N/A")))
+            (concat (propertize icon 'help-echo "Battery status")
+                    (propertize text 'face face 'help-echo "Battery status"))))))
 
-;; (setq-default header-line-format
-;; 			  '("%e"
-;; 				(:propertize " " display (raise +0.4))
-;; 				(:propertize " " display (raise -0.4))
-				
-;; 				(:propertize "λ " face font-lock-comment-face)
-;; 				mode-line-frame-identification
-;; 				mode-line-buffer-identification
-				
-;; 				(:eval (when-let (vc vc-mode)
-;; 						 (list (propertize "   " 'face 'font-lock-comment-face)
-;; 							   (propertize (truncate-string-to-width
-;; 											(substring vc 5) 50)
-;; 										   'face 'font-lock-comment-face))))
-				
-;; 				(:eval (my-lspce-diagnostics-string))
-				
-;; 				(:propertize "  %4l:%c" face mode-line-buffer-id)
-				
-;; 				(:eval (propertize
-;; 						" " 'display
-;; 						`((space :align-to
-;; 								 (- (+ right right-fringe right-margin)
-;; 									,(+ 3
-;; 										(string-width (or my-battery-string ""))
-;; 										(string-width (or display-time-string ""))))))))
-				
-;; 				(:eval my-battery-string)
-;; 				" "
-;; 				(:eval display-time-string)))
+(defun my-override-battery ()
+  "Override default battery display."
+  (when (bound-and-true-p display-battery-mode)
+    (advice-add #'battery-update :after #'my-update-battery)
+    (setq global-mode-string (delq 'battery-mode-line-string global-mode-string))
+    (my-update-battery)))
 
-;; (setq-default mode-line-format nil)
+;; 4. Buffer state icons
+(defvar my-buffer-state-icon nil)
+(defvar my-buffer-file-icon nil)
 
-;; (defun my-lspce-diagnostics-string ()
-;;   (when (and (bound-and-true-p lspce-mode)
-;;              (bound-and-true-p flymake-mode))
-;;     (let* ((diags (flymake-diagnostics))
-;;            (error-count 0)
-;;            (warning-count 0)
-;;            (note-count 0))
-;;       (dolist (diag diags)
-;;         (let ((severity (flymake-diagnostic-type diag)))
-;;           (cond
-;;            ((eq severity :error) (setq error-count (1+ error-count)))
-;;            ((eq severity :warning) (setq warning-count (1+ warning-count)))
-;;            ((eq severity :note) (setq note-count (1+ note-count))))))
-;;       (when (or (> error-count 0) (> warning-count 0) (> note-count 0))
-;;         (concat
-;;          " "
-;;          (when (> error-count 0)
-;;            (concat
-;;             (nerd-icons-mdicon "nf-md-close_circle" :face 'error)
-;;             (propertize (format " %d " error-count)
-;;                         'face 'error
-;;                         'help-echo (format "%d error(s)" error-count))))
-;;          (when (> warning-count 0)
-;;            (concat
-;;             (nerd-icons-mdicon "nf-md-alert" :face 'warning)
-;;             (propertize (format " %d " warning-count)
-;;                         'face 'warning
-;;                         'help-echo (format "%d warning(s)" warning-count))))
-;;          (when (> note-count 0)
-;;            (concat
-;;             (nerd-icons-mdicon "nf-md-information" :face 'success)
-;;             (propertize (format " %d" note-count)
-;;                         'face 'success
-;;                         'help-echo (format "%d note(s)" note-count)))))))))
+(defun my-update-buffer-file-icon (&rest _)
+  "Update file icon in header-line. Handles optional arguments from advice."
+  (setq my-buffer-file-icon
+        (when (require 'nerd-icons nil t)
+          (let ((icon (nerd-icons-icon-for-buffer)))
+            (propertize
+             (if (or (null icon) (string-empty-p icon))
+                 (nerd-icons-faicon "nf-fa-file_o")
+               icon)
+             'help-echo "File type")))))
+
+
+(defun my-update-buffer-state-icon ()
+  "Update buffer state indicator."
+  (setq my-buffer-state-icon
+        (concat
+         (cond (buffer-read-only
+                (propertize (nerd-icons-mdicon "nf-md-lock" :face 'my-buffer-read-only)
+                            'help-echo "Read-only buffer"))
+               ((and buffer-file-name (buffer-modified-p))
+                (propertize (nerd-icons-mdicon "nf-md-content_save_edit" :face 'warning)
+                            'help-echo "Buffer modified"))
+               (t "")))))
+
+(defun my-update-buffer-file-name ()
+  "Update buffer file name with proper faces."
+  (let* ((file-name (or (and buffer-file-name 
+                             (file-name-nondirectory buffer-file-name))
+                        (buffer-name)))
+         (face (cond ((and buffer-file-name (buffer-modified-p))
+                      'warning)
+                     (buffer-read-only
+                      'error)
+                     (t 'mode-line-buffer-id))))
+    (propertize file-name 'face face)))
+
+;; 5. Evil state indicator
+(defvar my-evil-state-string nil)
+
+(defun my-update-evil-state ()
+  "Update evil state indicator."
+  (setq my-evil-state-string
+        (when (bound-and-true-p evil-local-mode)
+          (let ((state (cond
+                        ((evil-normal-state-p)
+                         (cons (nerd-icons-mdicon "nf-md-alpha_n_circle" :face 'my-evil-normal-state)
+                               "N"))
+                        ((evil-insert-state-p)
+                         (cons (nerd-icons-mdicon "nf-md-alpha_i_circle" :face 'my-evil-insert-state)
+                               "I"))
+                        ((evil-visual-state-p)
+                         (cons (nerd-icons-mdicon "nf-md-alpha_v_circle" :face 'my-evil-visual-state)
+                               "V"))
+                        ((evil-motion-state-p)
+                         (cons (nerd-icons-mdicon "nf-md-alpha_m_circle" :face 'my-evil-motion-state)
+                               "M"))
+                        ((evil-emacs-state-p)
+                         (cons (nerd-icons-mdicon "nf-md-alpha_e_circle" :face 'my-evil-emacs-state)
+                               "E"))
+                        (t
+                         (cons (nerd-icons-mdicon "nf-md-alpha_u_circle" :face 'mode-line)
+                               "O")))))
+            (when state
+              (concat (car state) " " (cdr state)))))))
+
+;; 6. Battery toggle
+(defvar my-show-battery t
+  "Whether to show battery in header-line.")
+
+(defun my-should-show-battery ()
+  "Determine if battery should be shown."
+  (and my-show-battery
+       (bound-and-true-p display-battery-mode)
+       my-battery-string))
+
+;; 7. mu4e integration (simplified - check if mu4e exists)
+(defvar my-mu4e-unread-count 0)
+
+(defun my-update-mu4e-count ()
+  "Update mu4e unread count."
+  (setq my-mu4e-unread-count
+        (when (and (featurep 'mu4e-alert)
+                   (bound-and-true-p mu4e-alert-mode-line))
+          (or (when (functionp 'mu4e-alert-mode-line)
+                (mu4e-alert-mode-line))
+              0))))
+
+(defun my-mu4e-segment ()
+  "Create mu4e notification segment."
+  (when (and (featurep 'mu4e-alert)
+             (numberp my-mu4e-unread-count)
+             (> my-mu4e-unread-count 0))
+    (let* ((icon (nerd-icons-mdicon "nf-md-email" :face 'warning))
+           (count (if (> my-mu4e-unread-count 99)
+                      "99+"
+                    (number-to-string my-mu4e-unread-count)))
+           (text (propertize count 'face '(:inherit warning :weight bold))))
+      (concat " " icon " " text " "))))
+
+;; 8. Fixed header-line-format
+(setq-default header-line-format
+              '("%e"
+                (:propertize " " display (raise +0.4))
+                (:propertize " " display (raise -0.4))
+
+                ;; --- Linker Teil (wie gehabt) ---
+                (:eval (when my-evil-state-string
+                         (list my-evil-state-string "  ")))
+                (:eval (when my-buffer-file-icon
+                         (list my-buffer-file-icon " ")))
+                (:eval (my-update-buffer-file-name))
+                (:eval (when my-buffer-state-icon
+                         (list " " my-buffer-state-icon)))
+                (:eval (when vc-mode
+                         (list "   "
+                               (propertize (truncate-string-to-width
+                                            (substring vc-mode 5) 50)
+                                           'face 'font-lock-comment-face))))
+                (:propertize "  %4l:%c" face mode-line-buffer-id)
+
+                ;; --- Rechter Teil (neu: berechnet und ausgerichtet) ---
+                (:eval (my-header-line-right))))
+
+
+
+;; 9. Force mode-line to be hidden
+(setq-default mode-line-format nil)
+
+;; 10. Setup hooks
+(add-hook 'find-file-hook #'my-update-buffer-file-icon)
+(add-hook 'after-change-major-mode-hook #'my-update-buffer-file-icon)
+(add-hook 'after-save-hook #'my-update-buffer-state-icon)
+(add-hook 'buffer-list-update-hook #'my-update-buffer-state-icon)
+(advice-add #'rename-buffer :after #'my-update-buffer-file-icon)
+(advice-add #'set-visited-file-name :after #'my-update-buffer-file-icon)
+
+(add-hook 'evil-normal-state-entry-hook #'my-update-evil-state)
+(add-hook 'evil-insert-state-entry-hook #'my-update-evil-state)
+(add-hook 'evil-visual-state-entry-hook #'my-update-evil-state)
+(add-hook 'evil-motion-state-entry-hook #'my-update-evil-state)
+(add-hook 'evil-emacs-state-entry-hook #'my-update-evil-state)
+(add-hook 'evil-local-mode-hook #'my-update-evil-state)
+
+(add-hook 'display-battery-mode-hook #'my-override-battery)
+
+;; 11. Enable time and battery
+(display-time-mode 1)
+(display-battery-mode 1)
+
+;; 12. Helper functions
+(defun my-toggle-battery-display ()
+  "Toggle battery display in header-line."
+  (interactive)
+  (setq my-show-battery (not my-show-battery))
+  (force-mode-line-update)
+  (message "Battery display %s" (if my-show-battery "enabled" "disabled")))
+
+(defun my-header-line-refresh ()
+  "Force refresh header-line."
+  (interactive)
+  (force-mode-line-update))
+
+;; 13. Initialize everything
+(my-update-buffer-file-icon)
+(my-update-buffer-state-icon)
+(my-update-evil-state)
+(my-update-battery)
+
+
 
 (use-package hide-mode-line
   :straight t
@@ -2390,28 +2471,28 @@ ily <3.
 * modeline
 
 #+begin_src emacs-lisp
-(use-package doom-modeline
-  :ensure t
-  :hook (after-init . doom-modeline-mode)
-  :custom
-  (doom-modeline-time t)
-  (doom-modeline-time-icon nil)
-  (doom-modeline-buffer-file-name-style 'buffer-name)
-  (doom-modeline-height 40)
-  (doom-modeline-buffer-encoding nil)
-  (doom-modeline-env-version t)
-  (doom-modeline-env-setup-rust nil)
-  :config
-  (setq display-time-24hr-format nil)
-  (display-time-mode 1)
-  (set-face-attribute 'mode-line nil :height 180)
-  (set-face-attribute 'mode-line-inactive nil :height 180)
-  (add-hook
-   'doom-modeline-mode-hook
-   (lambda ()
-     (setq-default header-line-format
-                   (default-value 'mode-line-format))
-     (setq-default mode-line-format nil))))
+;; (use-package doom-modeline
+;;   :ensure t
+;;   :hook (after-init . doom-modeline-mode)
+;;   :custom
+;;   (doom-modeline-time t)
+;;   (doom-modeline-time-icon nil)
+;;   (doom-modeline-buffer-file-name-style 'buffer-name)
+;;   (doom-modeline-height 40)
+;;   (doom-modeline-buffer-encoding nil)
+;;   (doom-modeline-env-version t)
+;;   (doom-modeline-env-setup-rust nil)
+;;   :config
+;;   (setq display-time-24hr-format nil)
+;;   (display-time-mode 1)
+;;   (set-face-attribute 'mode-line nil :height 180)
+;;   (set-face-attribute 'mode-line-inactive nil :height 180)
+;;   (add-hook
+;;    'doom-modeline-mode-hook
+;;    (lambda ()
+;;      (setq-default header-line-format
+;;                    (default-value 'mode-line-format))
+;;      (setq-default mode-line-format nil))))
 #+end_src
 
 * soph
@@ -2433,7 +2514,7 @@ ily <3.
 
 (defvar cashmere/font-height 140)
 
-(set-face-attribute 'default nil :family "JetBrainsMono Nerd Font" :weight 'regular :height cashmere/font-height)
+(set-face-attribute 'default nil :family "JetBrainsMono Nerd Font" :weight 'bold :height cashmere/font-height)
 (set-face-attribute 'fixed-pitch nil :family "RobotoMono Nerd Font" :weight 'regular)
 (set-face-attribute 'variable-pitch nil :family "Poppins" :weight 'regular :height 1.1)
 
@@ -2701,7 +2782,7 @@ ily <3.
 #+begin_src emacs-lisp
 (setq ibuffer-never-show-predicates
       '(;; System buffers
-        "^\\*Messages\\*$"
+        ;; "^\\*Messages\\*$"
         "^\\*scratch\\*$"
         "^\\*Completions\\*$"
         "^\\*Help\\*$"
@@ -3267,43 +3348,25 @@ ily <3.
   :ensure t)
 #+end_src
 
-* pulsar
-
-#+begin_src emacs-lisp
-(use-package pulsar
-  :ensure t
-  :bind
-  ;; ( :map global-map
-  ;;   ("C-x l" . pulsar-pulse-line) ; overrides `count-lines-page'
-  ;;   ("C-x L" . pulsar-highlight-permanently-dwim)) ; or use `pulsar-highlight-temporarily-dwim'
-  :init
-  (pulsar-global-mode 1)
-  :config
-  (setq pulsar-pulse t)
-  (setq pulsar-delay 0.025)
-  (setq pulsar-iterations 10)
-  (setq pulsar-face 'evil-ex-lazy-highlight)
-
-  (add-to-list 'pulsar-pulse-functions 'evil-scroll-down)
-  (add-to-list 'pulsar-pulse-functions 'flymake-goto-next-error)
-  (add-to-list 'pulsar-pulse-functions 'flymake-goto-prev-error)
-  (add-to-list 'pulsar-pulse-functions 'evil-yank)
-  (add-to-list 'pulsar-pulse-functions 'evil-yank-line)
-  (add-to-list 'pulsar-pulse-functions 'evil-delete)
-  (add-to-list 'pulsar-pulse-functions 'evil-delete-line)
-  (add-to-list 'pulsar-pulse-functions 'evil-jump-item)
-  (add-to-list 'pulsar-pulse-functions 'diff-hl-next-hunk)
-  (add-to-list 'pulsar-pulse-functions 'diff-hl-previous-hunk))
-#+end_src
 
 * grammarly
 
 #+begin_src emacs-lisp
 (use-package grammarly
   :ensure t
-  :config
-  (setq (grammarly-username "cashmere@cashmere.rs")
-		(grammarly-password "HS>=E,0?9iqm`11mn0?/3P[Rk]'")))
+  ;; :config
+  )
+#+end_src
+
+** eglot-grammarly
+
+#+begin_src emacs-lisp
+(use-package eglot-grammarly
+  :straight (:host github :repo "emacs-grammarly/eglot-grammarly")
+  :defer t  ; defer package loading
+  :hook ((text-mode markdown-mode). (lambda ()
+                                      (require 'eglot-grammarly)
+                                      (eglot-ensure))))
 #+end_src
 
 * lispy
@@ -3322,6 +3385,20 @@ ily <3.
   :config
   (lispyville-set-key-theme '(operators c-w additional)))
 #+end_src
+
+* weechat.el
+
+#+begin_src emacs-lisp
+;; https://github.com/
+(use-package weechat
+  :straight (:host github :repo "the-kenny/weechat.el")
+  :ensure t
+  :config
+  (setq weechat-host-default "127.0.0.1")
+  (setq weechat-port-default 9000)
+  (setq weechat-password-default "securepass"))
+#+end_src
+
 
 * profiler
 
