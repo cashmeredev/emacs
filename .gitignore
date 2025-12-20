@@ -49,7 +49,6 @@
 /tree-sitter/
 /tree-sitter/bin/*
 /url/
-custom-vars.el
 gnus.el
 history
 ielm-history.eld
