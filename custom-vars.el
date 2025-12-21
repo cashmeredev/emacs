@@ -5,10 +5,10 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(custom-safe-themes
-   '("5ec088e25ddfcfe37b6ae7712c9cb37fd283ea5df7ac609d007cafa27dab6c64"
+   '("1b623b81f373d49bcf057315fe404b30c500c3b5a387cf86c699d83f2f5763f4"
+	 "5ec088e25ddfcfe37b6ae7712c9cb37fd283ea5df7ac609d007cafa27dab6c64"
 	 "0f220ea77c6355c411508e71225680ecb3e308b4858ef6c8326089d9ea94b86f"
 	 default))
- '(lambda-themes-set-italic-comments t)
  '(lambda-themes-set-italic-keywords nil)
  '(lambda-themes-set-vibrant t)
  '(zoom-size '(0.382 . 0.618)))
