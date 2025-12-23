@@ -2209,7 +2209,7 @@ ily <3.
   (kill-emacs))                                      ;; Close Emacs after installation is complete.
 #+end_src
 
-* headerline
+* COMMENT headerline
 
 #+begin_src emacs-lisp 
 ;; (require 'battery)
@@ -2491,11 +2491,13 @@ ily <3.
 ;;                        (or nerd-icons-font-family "Symbols Nerd Font Mono"))
 ;;                 (message "Installing nerd-icons fonts...")
 ;;                 (nerd-icons-install-fonts)))))
+#+end_src
 
+* hide modeline
+
+#+begin_src emacs-lisp
 (use-package hide-mode-line
-  :straight t
-  :defer t
-  :bind (:map custom-bindings-map ("C-c h m" . hide-mode-line-mode)))
+  :ensure t)
 #+end_src
 
 * awesome-tray
@@ -2548,31 +2550,10 @@ ily <3.
 ;; )
 #+end_src
 
-* modeline
+* lambda-line
 
 #+begin_src emacs-lisp
-;; (use-package doom-modeline
-;;   :ensure t
-;;   :hook (after-init . doom-modeline-mode)
-;;   :custom
-;;   (doom-modeline-time t)
-;;   (doom-modeline-time-icon nil)
-;;   (doom-modeline-buffer-file-name-style 'buffer-name)
-;;   (doom-modeline-height 24)
-;;   (doom-modeline-buffer-encoding nil)
-;;   (doom-modeline-env-version t)
-;;   (doom-modeline-env-setup-rust nil)
-;;   :config
-;;   (setq display-time-24hr-format nil)
-;;   (display-time-mode 1)
-;;   (set-face-attribute 'mode-line nil :height 180)
-;;   (set-face-attribute 'mode-line-inactive nil :height 180))
-#+end_src
-
-* punch-line
-
-#+begin_src emacs-lisp
-(display-time-mode 1)
+(setq display-time-mode 1)
 ;; (use-package lambda-line
 ;;   :straight (:type git :host github :repo "lambda-emacs/lambda-line") 
 ;;   :custom
@@ -2601,6 +2582,29 @@ ily <3.
 ;;     (setq mode-line-format (list "%_"))))
 #+end_src
 
+* doom modeline
+#+begin_src emacs-lisp
+;; (use-package doom-modeline
+;;   :ensure t
+;;   :hook (after-init . doom-modeline-mode)
+;;   :custom
+;;   (doom-modeline-time t)
+;;   (doom-modeline-time-icon nil)
+;;   (doom-modeline-buffer-file-name-style 'buffer-name)
+;;   (doom-modeline-height 24)
+;;   (doom-modeline-buffer-encoding nil)
+;;   (doom-modeline-env-version t)
+;;   (doom-modeline-env-setup-rust nil)
+;;   :config
+;;   (setq display-time-24hr-format nil)
+;;   (display-time-mode 1)
+;;   (set-face-attribute 'mode-line nil :height 180)
+;;   (set-face-attribute 'mode-line-inactive nil :height 180))
+#+end_src
+
+* punch-line
+
+
 #+begin_src emacs-lisp
 (use-package punch-line
   :ensure t
@@ -2612,7 +2616,12 @@ ily <3.
 		punch-show-buffer-position t
         punch-line-music-max-length 80
 		punch-line-modal-divider-style 'block
-		punch-line-section-backgrounds 'auto)
+		punch-line-section-backgrounds 'auto
+		punch-show-weather-info t
+		punch-weather-longitude "10.41"
+		punch-weather-latitude "53.25"
+		punch-cpu-usage t
+		punch-show-processes-info t)
   (punch-line-mode 1)
   (setq-default header-line-format mode-line-format)
   (setq-default mode-line-format nil))
@@ -2831,15 +2840,6 @@ ily <3.
   (lambda-themes-set-variable-pitch t) 
   :config
   (load-theme 'lambda-dark-faded))
-
-(defface my-custom-face
-  `((((background dark))
-	 :foreground ,(alist-get 'crucial lambda-themes-dark-palette)
-	 :background ,(alist-get 'ultralight lambda-themes-dark-palette))
-	(((background light))
-	 :foreground ,(alist-get 'crucial lambda-themes-light-palette)
-	 :background ,(alist-get 'highlight lambda-themes-light-palette)))
-  "My custom face using lambda-themes colors.")
 #+end_src
 
 * dirvish

@@ -1700,290 +1700,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (read-key)                                         ;; Wait for the user to press any key.
   (kill-emacs))                                      ;; Close Emacs after installation is complete.
 
-;; (require 'battery)
-;; (require 'nerd-icons)
-;;
-;; ;; 2. Define battery faces
-;; (defface my-battery-charging
-;;   '((t :inherit success))
-;;   "Face for charging battery.")
-;;
-;; (defface my-battery-full
-;;   '((t :inherit success))
-;;   "Face for full battery.")
-;;
-;; (defface my-battery-normal
-;;   '((t :inherit mode-line))
-;;   "Face for normal buffer indicator.")
-;;
-;; (defface my-buffer-read-only
-;;   '((t :inherit error))
-;;   "Face for read-only buffer indicator.")
-;;
-;; (defface my-buffer-remote
-;;   '((t :inherit font-lock-comment-face))
-;;   "Face for remote buffer indicator.")
-;;
-;; ;; Evil state faces
-;; (defface my-evil-normal-state
-;;   '((t :inherit success))
-;;   "Face for evil normal state.")
-;;
-;; (defface my-evil-insert-state
-;;   '((t :inherit font-lock-keyword-face))
-;;   "Face for evil insert state.")
-;;
-;; (defface my-evil-visual-state
-;;   '((t :inherit warning))
-;;   "Face for evil visual state.")
-;;
-;; (defface my-evil-motion-state
-;;   '((t :inherit font-lock-doc-face :slant normal))
-;;   "Face for evil motion state.")
-;;
-;; (defface my-evil-emacs-state
-;;   '((t :inherit font-lock-builtin-face))
-;;   "Face for evil emacs state.")
-;;
-;; ;; 3. Battery functionality
-;; (defvar my-battery-string nil)
-;; (defun my-header-line-right ()
-;;   "Formatiert den rechten Teil der Header-Line und richtet ihn korrekt aus."
-;;   (let* ((rhs (concat (my-mu4e-segment)
-;;                       (when (my-should-show-battery)
-;;                         my-battery-string)
-;;                       (when (bound-and-true-p display-time-mode)
-;;                         (concat " " display-time-string " "))))
-;;          (width (if (fboundp 'string-pixel-width)
-;;                     (string-pixel-width rhs)
-;;                   (* (string-width rhs) (frame-char-width)))))
-;;     (concat (propertize " " 'display `(space :align-to (- right (,width))))
-;;             rhs)))
-;;
-;; (defun my-update-battery ()
-;;   "Update battery display."
-;;   (setq my-battery-string
-;;         (when (bound-and-true-p display-battery-mode)
-;;           (let* ((data (and battery-status-function
-;;                             (functionp battery-status-function)
-;;                             (funcall battery-status-function)))
-;;                  (status (cdr (assoc ?L data)))
-;;                  (charging? (or (string-equal "AC" status)
-;;                                 (string-equal "on-line" status)))
-;;                  (percentage (car (read-from-string (or (cdr (assq ?p data)) "ERR"))))
-;;                  (valid? (and (numberp percentage)
-;;                               (>= percentage 0)
-;;                               (<= percentage 100)))
-;;                  (face (if valid?
-;;                            (cond (charging? 'my-battery-charging)
-;;                                  ((< percentage 20) 'error)
-;;                                  ((< percentage 30) 'warning)
-;;                                  (t 'success))
-;;                          'error))
-;;                  (icon (if valid?
-;;                            (cond
-;;                             ((>= percentage 90)
-;;                              (nerd-icons-mdicon "nf-md-battery" :face face))
-;;                             ((>= percentage 60)
-;;                              (nerd-icons-mdicon "nf-md-battery_70" :face face))
-;;                             ((>= percentage 30)
-;;                              (nerd-icons-mdicon "nf-md-battery_50" :face face))
-;;                             (t
-;;                              (nerd-icons-mdicon "nf-md-battery_20" :face face)))
-;;                          (nerd-icons-mdicon "nf-md-battery_alert" :face face)))
-;;                  (text (if valid? (format " %d%%" percentage) " N/A")))
-;;             (concat (propertize icon 'help-echo "Battery status")
-;;                     (propertize text 'face face 'help-echo "Battery status"))))))
-;;
-;; (defun my-override-battery ()
-;;   "Override default battery display."
-;;   (when (bound-and-true-p display-battery-mode)
-;;     (advice-add #'battery-update :after #'my-update-battery)
-;;     (setq global-mode-string (delq 'battery-mode-line-string global-mode-string))
-;;     (my-update-battery)))
-;;
-;; ;; 4. Buffer state icons (simplified from your new code)
-;; (defvar my-buffer-state-icon nil)
-;; (defvar my-buffer-file-icon nil)
-;;
-;; (defun my-update-buffer-file-icon (&rest _)
-;;   "Update file icon in header-line using nerd-icons."
-;;   (setq my-buffer-file-icon
-;;         (when (require 'nerd-icons nil t)
-;;           (let ((icon (nerd-icons-icon-for-buffer)))
-;;             (propertize
-;;              (if (or (null icon) (string-empty-p icon))
-;;                  (nerd-icons-faicon "nf-fa-file_o")
-;;                icon)
-;;              'help-echo "File type")))))
-;;
-;; (defun my-update-buffer-state-icon ()
-;;   "Update buffer state indicator."
-;;   (setq my-buffer-state-icon
-;;         (concat
-;;          (cond (buffer-read-only
-;;                 (propertize (nerd-icons-mdicon "nf-md-lock" :face 'my-buffer-read-only)
-;;                             'help-echo "Read-only buffer"))
-;;                ((and buffer-file-name (buffer-modified-p))
-;;                 (propertize (nerd-icons-mdicon "nf-md-content_save_edit" :face 'warning)
-;;                             'help-echo "Buffer modified"))
-;;                (t "")))))
-;;
-;; (defun my-update-buffer-file-name ()
-;;   "Update buffer file name with proper faces."
-;;   (let* ((file-name (or (and buffer-file-name 
-;;                              (file-name-nondirectory buffer-file-name))
-;;                         (buffer-name)))
-;;          (face (cond ((and buffer-file-name (buffer-modified-p))
-;;                       'warning)
-;;                      (buffer-read-only
-;;                       'error)
-;;                      (t 'mode-line-buffer-id))))
-;;     (propertize file-name 'face face)))
-;;
-;; ;; 5. Evil state indicator (keeping your formatting with letters)
-;; (defvar my-evil-state-string nil)
-;;
-;; (defun my-update-evil-state ()
-;;   "Update evil state indicator."
-;;   (setq my-evil-state-string
-;;         (when (bound-and-true-p evil-local-mode)
-;;           (let ((state (cond
-;;                         ((evil-normal-state-p)
-;;                          (cons (nerd-icons-mdicon "nf-md-alpha_n_circle" :face 'my-evil-normal-state)
-;;                                "N"))
-;;                         ((evil-insert-state-p)
-;;                          (cons (nerd-icons-mdicon "nf-md-alpha_i_circle" :face 'my-evil-insert-state)
-;;                                "I"))
-;;                         ((evil-visual-state-p)
-;;                          (cons (nerd-icons-mdicon "nf-md-alpha_v_circle" :face 'my-evil-visual-state)
-;;                                "V"))
-;;                         ((evil-motion-state-p)
-;;                          (cons (nerd-icons-mdicon "nf-md-alpha_m_circle" :face 'my-evil-motion-state)
-;;                                "M"))
-;;                         ((evil-emacs-state-p)
-;;                          (cons (nerd-icons-mdicon "nf-md-alpha_e_circle" :face 'my-evil-emacs-state)
-;;                                "E"))
-;;                         (t
-;;                          (cons (nerd-icons-mdicon "nf-md-alpha_u_circle" :face 'mode-line)
-;;                                "O")))))
-;;             (when state
-;;               (concat (car state) " " (cdr state)))))))
-;;
-;; ;; 6. Battery toggle
-;; (defvar my-show-battery t
-;;   "Whether to show battery in header-line.")
-;;
-;; (defun my-should-show-battery ()
-;;   "Determine if battery should be shown."
-;;   (and my-show-battery
-;;        (bound-and-true-p display-battery-mode)
-;;        my-battery-string))
-;;
-;; ;; 7. mu4e integration
-;; (defvar my-mu4e-unread-count 0)
-;;
-;; (defun my-update-mu4e-count ()
-;;   "Update mu4e unread count."
-;;   (setq my-mu4e-unread-count
-;;         (when (and (featurep 'mu4e-alert)
-;;                    (bound-and-true-p mu4e-alert-mode-line))
-;;           (or (when (functionp 'mu4e-alert-mode-line)
-;;                 (mu4e-alert-mode-line))
-;;               0))))
-;;
-;; (defun my-mu4e-segment ()
-;;   "Create mu4e notification segment."
-;;   (when (and (featurep 'mu4e-alert)
-;;              (numberp my-mu4e-unread-count)
-;;              (> my-mu4e-unread-count 0))
-;;     (let* ((icon (nerd-icons-mdicon "nf-md-email" :face 'warning))
-;;            (count (if (> my-mu4e-unread-count 99)
-;;                       "99+"
-;;                     (number-to-string my-mu4e-unread-count)))
-;;            (text (propertize count 'face '(:inherit warning :weight bold))))
-;;       (concat " " icon " " text " "))))
-;;
-;; ;; 8. Fixed header-line-format (preserving your layout with right-aligned content)
-;; (setq-default header-line-format
-;;               '("%e"
-;;                 (:propertize " " display (raise +0.4))
-;;                 (:propertize " " display (raise -0.4))
-;;
-;;                 ;; Left side components
-;;                 (:eval (when my-evil-state-string
-;;                          (list my-evil-state-string "  ")))
-;;                 (:eval (when my-buffer-file-icon
-;;                          (list my-buffer-file-icon " ")))
-;;                 (:eval (my-update-buffer-file-name))
-;;                 (:eval (when my-buffer-state-icon
-;;                          (list " " my-buffer-state-icon)))
-;;                 (:eval (when vc-mode
-;;                          (list "   "
-;;                                (propertize (truncate-string-to-width
-;;                                             (substring vc-mode 5) 50)
-;;                                            'face 'font-lock-comment-face))))
-;;                 (:propertize "  %4l:%c" face mode-line-buffer-id)
-;;
-;;                 ;; Right side (calculated and aligned)
-;;                 (:eval (my-header-line-right))))
-;;
-;; ;; 9. Force mode-line to be hidden
-;; (setq-default mode-line-format nil)
-;;
-;; ;; 10. Setup hooks
-;; (add-hook 'find-file-hook #'my-update-buffer-file-icon)
-;; (add-hook 'after-change-major-mode-hook #'my-update-buffer-file-icon)
-;; (add-hook 'after-save-hook #'my-update-buffer-state-icon)
-;; (add-hook 'buffer-list-update-hook #'my-update-buffer-state-icon)
-;; (advice-add #'rename-buffer :after #'my-update-buffer-file-icon)
-;; (advice-add #'set-visited-file-name :after #'my-update-buffer-file-icon)
-;;
-;; (add-hook 'evil-normal-state-entry-hook #'my-update-evil-state)
-;; (add-hook 'evil-insert-state-entry-hook #'my-update-evil-state)
-;; (add-hook 'evil-visual-state-entry-hook #'my-update-evil-state)
-;; (add-hook 'evil-motion-state-entry-hook #'my-update-evil-state)
-;; (add-hook 'evil-emacs-state-entry-hook #'my-update-evil-state)
-;; (add-hook 'evil-local-mode-hook #'my-update-evil-state)
-;;
-;; (add-hook 'display-battery-mode-hook #'my-override-battery)
-;;
-;; ;; 11. Enable time and battery
-;; (display-time-mode 1)
-;; (display-battery-mode 1)
-;;
-;; ;; 12. Helper functions
-;; (defun my-toggle-battery-display ()
-;;   "Toggle battery display in header-line."
-;;   (interactive)
-;;   (setq my-show-battery (not my-show-battery))
-;;   (force-mode-line-update)
-;;   (message "Battery display %s" (if my-show-battery "enabled" "disabled")))
-;;
-;; (defun my-header-line-refresh ()
-;;   "Force refresh header-line."
-;;   (interactive)
-;;   (force-mode-line-update))
-;;
-;; ;; 13. Initialize everything
-;; (my-update-buffer-file-icon)
-;; (my-update-buffer-state-icon)
-;; (my-update-evil-state)
-;; (my-update-battery)
-;;
-;; ;; Install nerd-icons fonts if missing (from your new code)
-;; (add-hook 'after-init-hook
-;;           (lambda ()
-;;             (when (require 'nerd-icons nil t)
-;;               (unless (nerd-icons--find-font
-;;                        (or nerd-icons-font-family "Symbols Nerd Font Mono"))
-;;                 (message "Installing nerd-icons fonts...")
-;;                 (nerd-icons-install-fonts)))))
-
 (use-package hide-mode-line
-  :straight t
-  :defer t
-  :bind (:map custom-bindings-map ("C-c h m" . hide-mode-line-mode)))
+  :ensure t)
 
 ;; (use-package awesome-tray
 ;;   :straight (:host github :repo "manateelazycat/awesome-tray")
@@ -2031,24 +1749,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;   (awesome-tray-mode 1)
 ;; )
 
-;; (use-package doom-modeline
-;;   :ensure t
-;;   :hook (after-init . doom-modeline-mode)
-;;   :custom
-;;   (doom-modeline-time t)
-;;   (doom-modeline-time-icon nil)
-;;   (doom-modeline-buffer-file-name-style 'buffer-name)
-;;   (doom-modeline-height 24)
-;;   (doom-modeline-buffer-encoding nil)
-;;   (doom-modeline-env-version t)
-;;   (doom-modeline-env-setup-rust nil)
-;;   :config
-;;   (setq display-time-24hr-format nil)
-;;   (display-time-mode 1)
-;;   (set-face-attribute 'mode-line nil :height 180)
-;;   (set-face-attribute 'mode-line-inactive nil :height 180))
-
-(display-time-mode 1)
+(setq display-time-mode 1)
 ;; (use-package lambda-line
 ;;   :straight (:type git :host github :repo "lambda-emacs/lambda-line") 
 ;;   :custom
@@ -2076,6 +1777,23 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;     (setq-default mode-line-format (list "%_"))
 ;;     (setq mode-line-format (list "%_"))))
 
+;; (use-package doom-modeline
+;;   :ensure t
+;;   :hook (after-init . doom-modeline-mode)
+;;   :custom
+;;   (doom-modeline-time t)
+;;   (doom-modeline-time-icon nil)
+;;   (doom-modeline-buffer-file-name-style 'buffer-name)
+;;   (doom-modeline-height 24)
+;;   (doom-modeline-buffer-encoding nil)
+;;   (doom-modeline-env-version t)
+;;   (doom-modeline-env-setup-rust nil)
+;;   :config
+;;   (setq display-time-24hr-format nil)
+;;   (display-time-mode 1)
+;;   (set-face-attribute 'mode-line nil :height 180)
+;;   (set-face-attribute 'mode-line-inactive nil :height 180))
+
 (use-package punch-line
   :ensure t
   :straight (:host github :repo "konrad1977/punch-line")
@@ -2086,7 +1804,12 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 		punch-show-buffer-position t
         punch-line-music-max-length 80
 		punch-line-modal-divider-style 'block
-		punch-line-section-backgrounds 'auto)
+		punch-line-section-backgrounds 'auto
+		punch-show-weather-info t
+		punch-weather-longitude "10.41"
+		punch-weather-latitude "53.25"
+		punch-cpu-usage t
+		punch-show-processes-info t)
   (punch-line-mode 1)
   (setq-default header-line-format mode-line-format)
   (setq-default mode-line-format nil))
@@ -2276,15 +1999,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (lambda-themes-set-variable-pitch t) 
   :config
   (load-theme 'lambda-dark-faded))
-
-(defface my-custom-face
-  `((((background dark))
-	 :foreground ,(alist-get 'crucial lambda-themes-dark-palette)
-	 :background ,(alist-get 'ultralight lambda-themes-dark-palette))
-	(((background light))
-	 :foreground ,(alist-get 'crucial lambda-themes-light-palette)
-	 :background ,(alist-get 'highlight lambda-themes-light-palette)))
-  "My custom face using lambda-themes colors.")
 
 (use-package dirvish
   :straight t
