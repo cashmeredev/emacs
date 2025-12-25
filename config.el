@@ -221,31 +221,30 @@
      ("\\.\\(mp[34]\\|m4a\\|ogg\\|flac\\|webm\\|mkv\\)" "mpv" "xdg-open" "open")
      (".*" "open" "xdg-open")))
   (dired-kill-when-opening-new-dired-buffer t)
+  (dired-create-destination-dirs 'always)
   :config
+  (setq dired-async-mode t)
+  
   (require 'mailcap)
   
-  ;; WICHTIG: Zwingt Emacs, Ihre Definitionen VOR den System-Einstellungen zu nutzen
   (setq mailcap-prefer-mailcap-viewers nil)
 
-  ;; Kitty als Viewer für Bildformate hinzufügen
-  ;; mailcap-add fügt den Eintrag ganz oben in die Liste ein
   (mailcap-add "image/png" "kitty --hold kitty +kitten icat %s")
   (mailcap-add "image/jpeg" "kitty --hold kitty +kitten icat %s")
   (mailcap-add "image/jpg" "kitty --hold kitty +kitten icat %s")
   (mailcap-add "image/gif" "kitty --hold kitty +kitten icat %s")
 
-  ;; Tastenkombination 'E' für explizites Öffnen via Mailcap
   (define-key dired-mode-map (kbd "E") 
     (lambda () 
       (interactive) 
-      (mailcap-view-file (dired-get-filename))))  (when (eq system-type 'darwin)
+      (mailcap-view-file (dired-get-filename))))
+      
+  (when (eq system-type 'darwin)
     (let ((gls (executable-find "gls")))
       (when gls
         (setq insert-directory-program gls)))))
 
-(setq mailcap-user-mime-data
-      '(("image/png" (viewer . "kitty --hold kitty +kitten icat %s"))
-        ("image/jpeg" (viewer . "kitty --hold kitty +kitten icat %s"))))
+(use-package async :ensure t)
 
 (use-package erc
   :straight nil
@@ -529,7 +528,7 @@
          :stream t
          :key #'my/openrouter-key
          :models '("deepseek/deepseek-v3.2:online"
-                   "minimax/minimax-m2:online")))
+                   "minimax/minimax-m2.1:online")))
 
   (setq gptel-backend my/openrouter-backend)
   (setq gptel-log-level 'debug)
@@ -1136,6 +1135,13 @@ Works on the base filename (without extension), e.g. matches \"-task\", \":task:
   (corfu-history-mode)
   (corfu-popupinfo-mode))
 
+(defun my/suppress-corfu-terminal-warning (orig-fun type message &rest args)
+  (unless (and (eq type 'corfu)
+               (string-match-p "corfu-terminal.*not needed" message))
+    (apply orig-fun type message args)))
+
+(advice-add 'display-warning :around #'my/suppress-corfu-terminal-warning)
+
 (use-package corfu-terminal
   :ensure t
   :after corfu
@@ -1313,6 +1319,14 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :demand t
   :after python)
 
+(use-package elm-mode
+  :ensure t
+  :mode  "\\.py\\'"
+  :hook (elm-mode . eglot-ensure)
+  :config
+  (with-eval-after-load 'eglot-server-programs
+	'(elm-mode . ("elm-language-server"))))
+
 (use-package rust-mode
   :ensure t
   :mode "\\.rs\\'"
@@ -1401,8 +1415,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (use-package vterm
   :ensure t
   :config
-  (setq vterm-timer-delay 0.001)
-  (setq vterm-shell "nu"))
+  (setq vterm-timer-delay 0.001))
 
 (use-package multi-vterm
   :ensure t
@@ -1998,7 +2011,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (lambda-themes-set-italic-keywords t)
   (lambda-themes-set-variable-pitch t) 
   :config
-  (load-theme 'lambda-dark-faded))
+  (load-theme 'lambda-dark))
 
 (use-package dirvish
   :straight t
@@ -2300,8 +2313,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 
 (general-def 'normal 'override
-  "]d" 'flymake-goto-next-error
-  "[d" 'flymake-goto-prev-error
+  "]d" 'flycheck-next-error
+  "[d" 'flycheck-previous-error
   "]c" 'diff-hl-next-hunk
   "[c" 'diff-hl-previous-hunk
   "]b" 'switch-to-next-buffer
@@ -2396,6 +2409,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "gg" '(gptel :wk "open gptel")
   "ga" '(gptel-add :wk "add buffer to gptel")
   "gf" '(gptel-add-file :wk "add file to gptel")
+  "gA" '(gptel-abort :wk "abort response")
+  "gr" '(gptel-rewrite :wk "rewrite section")
   "gm" '(gptel-menu :wk "open gptel menu"))
 
 ;; (my-leader
