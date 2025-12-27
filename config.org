@@ -689,6 +689,15 @@ Not necessary but an eyecandy to look at!
   (add-hook 'flycheck-mode-hook #'flycheck-rust-setup))
 #+end_src
 
+** flycheck-ruff
+
+#+begin_src emacs-lisp
+(use-package flycheck-python-ruff
+  :straight (:host github :repo "v4n6/flycheck-python-ruff")
+  :ensure t
+  :hook ((python-mode python-ts-mode) . flycheck-python-ruff-setup))
+#+end_src
+
 ** flyover
 
 #+begin_src emacs-lisp
@@ -1548,7 +1557,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 * programming
 
-
 ** eglot
 
 #+begin_src emacs-lisp
@@ -1673,19 +1681,54 @@ for automatic flake devshells.
 Because I have to and not want to.
 
 #+begin_src emacs-lisp 
+;; (use-package python-mode
+;;   :ensure t
+;;   :mode "\\.py\\'"
+;;   :hook (python-mode . eglot-ensure)
+;;   :config
+;;   (with-eval-after-load 'eglot
+;;     (add-to-list 'eglot-server-programs
+;;                  '(python-mode . ("pyright-langserver" "--stdio")))))
+
+;; (use-package python-black
+;;   :ensure t
+;;   :demand t
+;;   :after python)
+
 (use-package python-mode
   :ensure t
   :mode "\\.py\\'"
   :hook (python-mode . eglot-ensure)
   :config
   (with-eval-after-load 'eglot
+    (setq eglot-server-programs
+          (assoc-delete-all 'python-mode eglot-server-programs))
+    (setq eglot-server-programs
+          (assoc-delete-all 'python-ts-mode eglot-server-programs))
     (add-to-list 'eglot-server-programs
-                 '(python-mode . ("pyright-langserver" "--stdio")))))
+                 '(python-mode . ("ty" "lsp")))))
 
-(use-package python-black
+#+end_src
+
+*** pet
+
+#+begin_src emacs-lisp
+(use-package pyvenv
   :ensure t
-  :demand t
-  :after python)
+  :config
+  (setq pyvenv-mode-line-indicator '(pyvenv-virtual-env-name 
+                                      (" [venv:" pyvenv-virtual-env-name "] ")))
+  (add-hook 'python-mode-hook 
+            (lambda ()
+              (pyvenv-mode 1))))
+#+end_src
+
+*** ruff-formatter
+
+#+begin_src emacs-lisp
+(use-package ruff-format
+  :ensure t
+  :hook (python-mode . ruff-format-on-save-mode))
 #+end_src
 
 ** elm-mode
@@ -1693,7 +1736,7 @@ Because I have to and not want to.
 #+begin_src emacs-lisp
 (use-package elm-mode
   :ensure t
-  :mode  "\\.py\\'"
+  :mode  "\\.elm\\'"
   :hook (elm-mode . eglot-ensure)
   :config
   (with-eval-after-load 'eglot-server-programs
@@ -1817,6 +1860,14 @@ ily <3.
   
   (add-hook 'sh-mode-hook #'sh-mode-setup)
   (add-hook 'bash-ts-mode-hook #'sh-mode-setup))
+#+end_src
+
+** jinja-mode
+
+#+begin_src emacs-lisp
+(use-package jinja2-mode
+  :ensure t
+  :defer t)
 #+end_src
 
 * vterm
@@ -2165,9 +2216,8 @@ ily <3.
 #+begin_src emacs-lisp
 (use-package evil-org
   :ensure t
-  :straight t
   :after org
-  :hook (org-mode . (lambda () evil-org-mode))
+  :hook (org-mode . evil-org-mode)
   :config
   (require 'evil-org-agenda)
   (evil-org-agenda-set-keys))
@@ -3273,6 +3323,22 @@ ily <3.
   "ll" '(org-insert-link :wk "Link various things")
 
   "t" '(org-todo :wk "TODO"))
+(evil-define-key 'normal org-mode-map (kbd "RET") 'org-open-at-point)
+#+end_src
+
+
+** jinja2-mode keymaps
+
+#+begin_src emacs-lisp
+;; jinja2-mode-map
+(my-leader
+  :keymaps 'jinja2-mode-map
+  "m" '(:wk "insert" :ignore)
+  "mv" '(jinja2-insert-var :wk "var")
+  "mt" '(jinja2-insert-tag :wk "tag")
+  "mc" '(jinja2-insert-comment :wk "comment")
+  
+  "mf" '(fill-paragraph :wk "fill paragraph"))
 #+end_src
 
 ** denote-menu keymaps

@@ -11,6 +11,10 @@
 	 "0f220ea77c6355c411508e71225680ecb3e308b4858ef6c8326089d9ea94b86f"
 	 default))
  '(lambda-themes-set-vibrant t)
+ '(safe-local-variable-values
+   '((eval progn
+		   (add-to-list 'auto-mode-alist '("\\.html\\'" . jinja2-mode))
+		   (add-to-list 'auto-mode-alist '("\\.j2\\'" . jinja2-mode)))))
  '(zoom-size '(0.382 . 0.618)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.

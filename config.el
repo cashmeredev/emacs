@@ -577,6 +577,11 @@
   (setq flycheck-rust-check-tests nil)
   (add-hook 'flycheck-mode-hook #'flycheck-rust-setup))
 
+(use-package flycheck-python-ruff
+  :straight (:host github :repo "v4n6/flycheck-python-ruff")
+  :ensure t
+  :hook ((python-mode python-ts-mode) . flycheck-python-ruff-setup))
+
 ;; (use-package flyover
 ;;   :ensure t
 ;;   :hook (flycheck-mode-hook . flyover-mode))
@@ -1305,23 +1310,49 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :config
   (envrc-global-mode))
 
+;; (use-package python-mode
+;;   :ensure t
+;;   :mode "\\.py\\'"
+;;   :hook (python-mode . eglot-ensure)
+;;   :config
+;;   (with-eval-after-load 'eglot
+;;     (add-to-list 'eglot-server-programs
+;;                  '(python-mode . ("pyright-langserver" "--stdio")))))
+
+;; (use-package python-black
+;;   :ensure t
+;;   :demand t
+;;   :after python)
+
 (use-package python-mode
   :ensure t
   :mode "\\.py\\'"
   :hook (python-mode . eglot-ensure)
   :config
   (with-eval-after-load 'eglot
+    (setq eglot-server-programs
+          (assoc-delete-all 'python-mode eglot-server-programs))
+    (setq eglot-server-programs
+          (assoc-delete-all 'python-ts-mode eglot-server-programs))
     (add-to-list 'eglot-server-programs
-                 '(python-mode . ("pyright-langserver" "--stdio")))))
+                 '(python-mode . ("ty" "lsp")))))
 
-(use-package python-black
+(use-package pyvenv
   :ensure t
-  :demand t
-  :after python)
+  :config
+  (setq pyvenv-mode-line-indicator '(pyvenv-virtual-env-name 
+                                      (" [venv:" pyvenv-virtual-env-name "] ")))
+  (add-hook 'python-mode-hook 
+            (lambda ()
+              (pyvenv-mode 1))))
+
+(use-package ruff-format
+  :ensure t
+  :hook (python-mode . ruff-format-on-save-mode))
 
 (use-package elm-mode
   :ensure t
-  :mode  "\\.py\\'"
+  :mode  "\\.elm\\'"
   :hook (elm-mode . eglot-ensure)
   :config
   (with-eval-after-load 'eglot-server-programs
@@ -1411,6 +1442,10 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   
   (add-hook 'sh-mode-hook #'sh-mode-setup)
   (add-hook 'bash-ts-mode-hook #'sh-mode-setup))
+
+(use-package jinja2-mode
+  :ensure t
+  :defer t)
 
 (use-package vterm
   :ensure t
@@ -1667,9 +1702,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 (use-package evil-org
   :ensure t
-  :straight t
   :after org
-  :hook (org-mode . (lambda () evil-org-mode))
+  :hook (org-mode . evil-org-mode)
   :config
   (require 'evil-org-agenda)
   (evil-org-agenda-set-keys))
@@ -2355,6 +2389,17 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "ll" '(org-insert-link :wk "Link various things")
 
   "t" '(org-todo :wk "TODO"))
+(evil-define-key 'normal org-mode-map (kbd "RET") 'org-open-at-point)
+
+;; jinja2-mode-map
+(my-leader
+  :keymaps 'jinja2-mode-map
+  "m" '(:wk "insert" :ignore)
+  "mv" '(jinja2-insert-var :wk "var")
+  "mt" '(jinja2-insert-tag :wk "tag")
+  "mc" '(jinja2-insert-comment :wk "comment")
+  
+  "mf" '(fill-paragraph :wk "fill paragraph"))
 
 (with-eval-after-load 'denote-menu
   (general-def 'normal denote-menu-mode-map
