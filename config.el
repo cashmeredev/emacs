@@ -261,9 +261,9 @@
   (erc-tls :server "irc.cashmere.rs"
            :port 6697
            :nick "cashmere"
-           :user "cashmere/bitlbee"
+           :user "cashmere/libera.chat"
            :password (password-store-get 'soju)
-		   :id 'bitlbee))
+		   :id 'libera))
 
 (use-package dashboard
   :ensure t
@@ -1392,41 +1392,59 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;   :custom
 ;;   (rustic-cargo-use-last-stored-arguments t))
 
-(use-package nushell-mode
-  :ensure nil
-  :straight nil
-  :mode "\\.nu\\'")
-
-(use-package nushell-ts-babel
-  :straight (nushell-ts-babel :type git :host github :repo "herbertjones/nushell-ts-babel")
-  :after org
-  :config
-  (org-babel-do-load-languages
-   'org-babel-load-languages
-   (append org-babel-load-languages
-           '((nushell . t)))))
-
-(use-package go-mode
+(use-package js
   :ensure t
-  :mode "\\.go\\'"
-  :hook (go-mode . eglot-ensure)
+  :mode ("\\.js\\'" . js-mode)
+  :config
+  (setq js-indent-level 2))
+
+(use-package mint-mode
+  :straight (mint-mode
+             :type git
+             :host github
+             :repo "creatorrr/emacs-mint-mode")
+  :mode "\\.mint\\'"
+  :hook (mint-mode . eglot-ensure)
   :config
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
-                 '(go-mode . ("gopls" :initializationOptions 
-                              (:staticcheck t
-                               :matcher "CaseSensitive"
-                               :usePlaceholders t)))))
+                 '(mint-mode . ("mint" "tool" "ls")))))
+
+;; (use-package nushell-mode
+;;   :ensure nil
+;;   :straight nil
+;;   :mode "\\.nu\\'")
+
+;; (use-package nushell-ts-babel
+;;   :straight (nushell-ts-babel :type git :host github :repo "herbertjones/nushell-ts-babel")
+;;   :after org
+;;   :config
+;;   (org-babel-do-load-languages
+;;    'org-babel-load-languages
+;;    (append org-babel-load-languages
+;;            '((nushell . t)))))
+
+;; (use-package go-mode
+;;   :ensure t
+;;   :mode "\\.go\\'"
+;;   :hook (go-mode . eglot-ensure)
+;;   :config
+;;   (with-eval-after-load 'eglot
+;;     (add-to-list 'eglot-server-programs
+;;                  '(go-mode . ("gopls" :initializationOptions 
+;;                               (:staticcheck t
+;;                                :matcher "CaseSensitive"
+;;                                :usePlaceholders t)))))
   
-  (defun go-mode-setup ()
-    (add-hook 'before-save-hook #'eglot-format-buffer -10 t)
-    (add-hook 'before-save-hook 
-              (lambda ()
-                (when (eglot-managed-p)
-                  (eglot-code-action-organize-imports nil t)))
-              nil t))
+;;   (defun go-mode-setup ()
+;;     (add-hook 'before-save-hook #'eglot-format-buffer -10 t)
+;;     (add-hook 'before-save-hook 
+;;               (lambda ()
+;;                 (when (eglot-managed-p)
+;;                   (eglot-code-action-organize-imports nil t)))
+;;               nil t))
   
-  (add-hook 'go-mode-hook #'go-mode-setup))
+;;   (add-hook 'go-mode-hook #'go-mode-setup))
 
 (use-package json-mode
   :ensure t
