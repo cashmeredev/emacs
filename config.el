@@ -265,6 +265,16 @@
            :password (password-store-get 'soju)
 		   :id 'libera))
 
+(use-package lambda-themes
+  :straight (:type git :host github :repo "lambda-emacs/lambda-themes") 
+  :custom
+  (lambda-themes-set-italic-comments t)
+  (lambda-themes-set-italic-keywords t)
+  (lambda-themes-set-variable-pitch t) 
+  (lambda-themes-set-theme 'dark)
+  :config
+  (load-theme 'lambda-dark-faded))
+
 (use-package dashboard
   :ensure t
   :config
@@ -1683,6 +1693,45 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (define-key evil-inner-text-objects-map "q" 'my-evil-textobj-anyblock-inner-quote)
 (define-key evil-outer-text-objects-map "q" 'my-evil-textobj-anyblock-a-quote)
 
+;; Paket für echte Multiple Cursors
+(use-package evil-mc
+  :ensure t
+  :after evil
+  :config
+  (global-evil-mc-mode 1)
+  
+  ;; Hilfsfunktion: Prüfen, ob wir im Visual-Block-Mode sind
+  ;; Diese Funktion fängt den Fehler ab, falls Variablen nicht existieren.
+  (defun my/evil-visual-block-p ()
+    (and (bound-and-true-p evil-visual-selection)
+         (eq evil-visual-selection 'block)))
+
+  ;; Funktion für Insert am Anfang (I)
+  (defun my/evil-mc-visual-block-insert ()
+    "Erstellt Cursor am Anfang des Blocks und wechselt in Insert-Mode."
+    (interactive)
+    (if (my/evil-visual-block-p)
+        (progn
+          (evil-mc-make-cursor-in-visual-selection-beg)
+          (evil-insert 1))
+      ;; Fallback: normales Verhalten, falls kein Block-Mode
+      (call-interactively 'evil-insert)))
+
+  ;; Funktion für Append am Ende (A)
+  (defun my/evil-mc-visual-block-append ()
+    "Erstellt Cursor am Ende des Blocks und wechselt in Insert-Mode."
+    (interactive)
+    (if (my/evil-visual-block-p)
+        (progn
+          (evil-mc-make-cursor-in-visual-selection-end)
+          (evil-append 1))
+      ;; Fallback: normales Verhalten
+      (call-interactively 'evil-append)))
+
+  ;; Tastenbelegung im Visual Mode überschreiben
+  (define-key evil-visual-state-map (kbd "I") 'my/evil-mc-visual-block-insert)
+  (define-key evil-visual-state-map (kbd "A") 'my/evil-mc-visual-block-append))
+
 (use-package avy
   :ensure t
   :straight t
@@ -2070,16 +2119,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;   :ensure t
 ;;   :config
 ;;   (load-theme 'kanagawa-wave t))
-
-(use-package lambda-themes
-  :straight (:type git :host github :repo "lambda-emacs/lambda-themes") 
-  :custom
-  (lambda-themes-set-italic-comments t)
-  (lambda-themes-set-italic-keywords t)
-  (lambda-themes-set-variable-pitch t) 
-  (lambda-themes-set-theme 'dark)
-  :config
-  (load-theme 'lambda-dark))
 
 (use-package dirvish
   :straight t
@@ -2672,18 +2711,18 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (use-package emacs-everywhere
   :ensure t)
 
-(use-package lispy
-  :ensure t
-  :hook ((emacs-lisp-mode . lispy-mode)
-         (clojure-mode . lispy-mode)
-         (scheme-mode . lispy-mode)
-         (lisp-mode . lispy-mode)))
+;; (use-package lispy
+;;   :ensure t
+;;   :hook ((emacs-lisp-mode . lispy-mode)
+;;          (clojure-mode . lispy-mode)
+;;          (scheme-mode . lispy-mode)
+;;          (lisp-mode . lispy-mode)))
 
-(use-package lispyville
-  :ensure t
-  :hook (lispy-mode . lispyville-mode)
-  :config
-  (lispyville-set-key-theme '(operators c-w additional)))
+;; (use-package lispyville
+;;   :ensure t
+;;   :hook (lispy-mode . lispyville-mode)
+;;   :config
+;;   (lispyville-set-key-theme '(operators c-w additional)))
 
 ;; (use-package mistty
 ;;   :ensure t

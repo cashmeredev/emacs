@@ -10,7 +10,15 @@
 	 default))
  '(lambda-themes-set-vibrant t)
  '(safe-local-variable-values
-   '((eval progn
+   '((eval setenv "PYTHONPATH"
+		   "/home/cashmere/SurfSense/surfsense_backend")
+	 (eval setenv "VIRTUAL_ENV"
+		   "/home/cashmere/SurfSense/surfsense_backend/.venv")
+	 (python-shell-interpreter
+	  . "/home/cashmere/SurfSense/surfsense_backend/.venv/bin/python")
+	 (python-shell-virtualenv-root
+	  . "/home/cashmere/SurfSense/surfsense_backend/.venv")
+	 (eval progn
 		   (add-to-list 'auto-mode-alist '("\\.html\\'" . jinja2-mode))
 		   (add-to-list 'auto-mode-alist '("\\.j2\\'" . jinja2-mode)))))
  '(zoom-size '(0.382 . 0.618)))
