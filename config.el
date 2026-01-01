@@ -532,30 +532,6 @@
                           ("C-c ^ n" . smerge-next)        ;; Move to the next conflict.
                           ("C-c ^ p" . smerge-previous)))  ;; Move to the previous conflict.
 
-(use-package gptel
-  :ensure t
-  :defer t
-  :config
-  (defun my/openrouter-key ()
-    (string-trim
-     (shell-command-to-string "pass code/openrouter")))
-
-  (setq my/openrouter-backend
-        (gptel-make-openai
-         "OpenRouter"
-         :host "openrouter.ai"
-         :endpoint "/api/v1/chat/completions"
-         :stream t
-         :key #'my/openrouter-key
-         :models '("deepseek/deepseek-v3.2:online"
-                   "minimax/minimax-m2.1:online")))
-
-  (setq gptel-backend my/openrouter-backend)
-  (setq gptel-log-level 'debug)
-  (setq gptel-include-reasoning nil)
-  (setq gptel-default-mode 'markdown-mode)
-  (setq gptel-backends (list my/openrouter-backend)))
-
 (use-package eldoc
   :straight nil
   :ensure t
@@ -1272,11 +1248,12 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 
 
-;; (use-package eglot-booster
-;;   :ensure t
-;;   :straight ( eglot-booster :type git :host nil :repo "https://github.com/jdtsmith/eglot-booster")
-;;   :after eglot
-;;   :config	(eglot-booster-mode))
+(use-package eglot-booster
+  :ensure t
+  :straight ( eglot-booster :type git :host nil :repo "https://github.com/jdtsmith/eglot-booster")
+  :after eglot
+  :config	(eglot-booster-mode))
+(setq eglot-booster-io-only t)
 
 (use-package typst-ts-mode
   :ensure t
@@ -1335,32 +1312,32 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :config
   (envrc-global-mode))
 
-;; (use-package python-mode
-;;   :ensure t
-;;   :mode "\\.py\\'"
-;;   :hook (python-mode . eglot-ensure)
-;;   :config
-;;   (with-eval-after-load 'eglot
-;;     (add-to-list 'eglot-server-programs
-;;                  '(python-mode . ("pyright-langserver" "--stdio")))))
-
-;; (use-package python-black
-;;   :ensure t
-;;   :demand t
-;;   :after python)
-
 (use-package python-mode
   :ensure t
   :mode "\\.py\\'"
   :hook (python-mode . eglot-ensure)
   :config
   (with-eval-after-load 'eglot
-    (setq eglot-server-programs
-          (assoc-delete-all 'python-mode eglot-server-programs))
-    (setq eglot-server-programs
-          (assoc-delete-all 'python-ts-mode eglot-server-programs))
     (add-to-list 'eglot-server-programs
-                 '(python-mode . ("ty" "lsp")))))
+                 '(python-mode . ("pyrefly" "--stdio")))))
+
+(use-package python-black
+  :ensure t
+  :demand t
+  :after python)
+
+;; (use-package python-mode
+;;   :ensure t
+;;   :mode "\\.py\\'"
+;;   :hook (python-mode . eglot-ensure)
+;;   :config
+;;   (with-eval-after-load 'eglot
+;;     (setq eglot-server-programs
+;;           (assoc-delete-all 'python-mode eglot-server-programs))
+;;     (setq eglot-server-programs
+;;           (assoc-delete-all 'python-ts-mode eglot-server-programs))
+;;     (add-to-list 'eglot-server-programs
+;;                  '(python-mode . ("ty" "lsp")))))
 
 (use-package pyvenv
   :ensure t
@@ -1879,32 +1856,32 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;; )
 
 (setq display-time-mode 1)
-;; (use-package lambda-line
-;;   :straight (:type git :host github :repo "lambda-emacs/lambda-line") 
-;;   :custom
-;;   (lambda-line-lsp-indicator nil)
-;;   (lambda-line-icon-time t) ;; requires ClockFace font (see below)
-;;   (lambda-line-clockface-update-fontset "ClockFaceRect") ;; set clock icon
-;;   (lambda-line-position 'top) ;; Set position of status-line 
-;;   (lambda-line-abbrev nil) ;; abbreviate major modes
-;;   (lambda-line-hspace "  ")  ;; add some cushion
-;;   (lambda-line-prefix t) ;; use a prefix symbol
-;;   (lambda-line-prefix-padding nil) ;; no extra space for prefix 
-;;   (lambda-line-status-invert nil)  ;; no invert colors
-;;   (lambda-line-gui-ro-symbol  " ⨂") ;; symbols
-;;   (lambda-line-gui-mod-symbol " ⬤") 
-;;   (lambda-line-gui-rw-symbol  " ◯") 
-;;   (lambda-line-vc-symbol nil)
-;;   (lambda-line-space-top -.50)  ;; padding on top and bottom of line
-;;   (lambda-line-space-bottom -.50)
-;;   (lambda-line-symbol-position 0.1) ;; adjust the vertical placement of symbol
-;;   :config
-;;   ;; activate lambda-line 
-;;   (lambda-line-mode) 
-;;   ;; set divider line in footer
-;;   (when (eq lambda-line-position 'top)
-;;     (setq-default mode-line-format (list "%_"))
-;;     (setq mode-line-format (list "%_"))))
+(use-package lambda-line
+  :straight (:type git :host github :repo "lambda-emacs/lambda-line") 
+  :custom
+  (lambda-line-lsp-indicator nil)
+  (lambda-line-icon-time t) ;; requires ClockFace font (see below)
+  (lambda-line-clockface-update-fontset "ClockFaceRect") ;; set clock icon
+  (lambda-line-position 'top) ;; Set position of status-line 
+  (lambda-line-abbrev nil) ;; abbreviate major modes
+  (lambda-line-hspace "  ")  ;; add some cushion
+  (lambda-line-prefix t) ;; use a prefix symbol
+  (lambda-line-prefix-padding nil) ;; no extra space for prefix 
+  (lambda-line-status-invert nil)  ;; no invert colors
+  (lambda-line-gui-ro-symbol  " ⨂") ;; symbols
+  (lambda-line-gui-mod-symbol " ⬤") 
+  (lambda-line-gui-rw-symbol  " ◯") 
+  (lambda-line-vc-symbol nil)
+  (lambda-line-space-top -.50)  ;; padding on top and bottom of line
+  (lambda-line-space-bottom -.50)
+  (lambda-line-symbol-position 0.1) ;; adjust the vertical placement of symbol
+  :config
+  ;; activate lambda-line 
+  (lambda-line-mode) 
+  ;; set divider line in footer
+  (when (eq lambda-line-position 'top)
+    (setq-default mode-line-format (list "%_"))
+    (setq mode-line-format (list "%_"))))
 
 ;; (use-package doom-modeline
 ;;   :ensure t
@@ -1923,25 +1900,25 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;   (set-face-attribute 'mode-line nil :height 180)
 ;;   (set-face-attribute 'mode-line-inactive nil :height 180))
 
-(use-package punch-line
-  :ensure t
-  :straight (:host github :repo "konrad1977/punch-line")
-  :config
-  (setq punch-line-left-separator "  "
-        punch-line-right-separator "  "
-		punch-show-git-info nil
-		punch-show-buffer-position t
-        punch-line-music-max-length 80
-		punch-line-modal-divider-style 'block
-		punch-line-section-backgrounds 'auto
-		punch-show-weather-info t
-		punch-weather-longitude "10.41"
-		punch-weather-latitude "53.25"
-		punch-cpu-usage t
-		punch-show-processes-info t)
-  (punch-line-mode 1)
-  (setq-default header-line-format mode-line-format)
-  (setq-default mode-line-format nil))
+;; (use-package punch-line
+;;   :ensure t
+;;   :straight (:host github :repo "konrad1977/punch-line")
+;;   :config
+;;   (setq punch-line-left-separator "  "
+;;         punch-line-right-separator "  "
+;; 		punch-show-git-info nil
+;; 		punch-show-buffer-position t
+;;         punch-line-music-max-length 80
+;; 		punch-line-modal-divider-style 'block
+;; 		punch-line-section-backgrounds 'auto
+;; 		punch-show-weather-info t
+;; 		punch-weather-longitude "10.41"
+;; 		punch-weather-latitude "53.25"
+;; 		punch-cpu-usage t
+;; 		punch-show-processes-info t)
+;;   (punch-line-mode 1)
+;;   (setq-default header-line-format mode-line-format)
+;;   (setq-default mode-line-format nil))
 
 (use-package adaptive-wrap
   :ensure t
@@ -2292,7 +2269,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
    ((eq major-mode 'rust-mode) (eglot-format-buffer))
    ((eq major-mode 'nix-mode) (eglot-format-buffer))  
    ((or (eq major-mode 'python-mode) 
-        (eq major-mode 'python-ts-mode)) (eglot-format-buffer))
+        (eq major-mode 'python-ts-mode)) (ruff-format-buffer))
    ((eq major-mode 'c-mode) (eglot-format-buffer))
    ((bound-and-func-p eglot--managed-mode) (eglot-format-buffer))
    (t (message "No formatter for %s" major-mode))))

@@ -624,12 +624,11 @@ Not necessary but an eyecandy to look at!
 
 * ai
 
-** gptel
+** COMMENT gptel
 
 #+begin_src emacs-lisp
 (use-package gptel
   :ensure t
-  :defer t
   :config
   (defun my/openrouter-key ()
     (string-trim
@@ -1710,32 +1709,32 @@ for automatic flake devshells.
 Because I have to and not want to.
 
 #+begin_src emacs-lisp 
-;; (use-package python-mode
-;;   :ensure t
-;;   :mode "\\.py\\'"
-;;   :hook (python-mode . eglot-ensure)
-;;   :config
-;;   (with-eval-after-load 'eglot
-;;     (add-to-list 'eglot-server-programs
-;;                  '(python-mode . ("pyright-langserver" "--stdio")))))
-
-;; (use-package python-black
-;;   :ensure t
-;;   :demand t
-;;   :after python)
-
 (use-package python-mode
   :ensure t
   :mode "\\.py\\'"
   :hook (python-mode . eglot-ensure)
   :config
   (with-eval-after-load 'eglot
-    (setq eglot-server-programs
-          (assoc-delete-all 'python-mode eglot-server-programs))
-    (setq eglot-server-programs
-          (assoc-delete-all 'python-ts-mode eglot-server-programs))
     (add-to-list 'eglot-server-programs
-                 '(python-mode . ("ty" "lsp")))))
+                 '(python-mode . ("pyrefly" "--stdio")))))
+
+(use-package python-black
+  :ensure t
+  :demand t
+  :after python)
+
+;; (use-package python-mode
+;;   :ensure t
+;;   :mode "\\.py\\'"
+;;   :hook (python-mode . eglot-ensure)
+;;   :config
+;;   (with-eval-after-load 'eglot
+;;     (setq eglot-server-programs
+;;           (assoc-delete-all 'python-mode eglot-server-programs))
+;;     (setq eglot-server-programs
+;;           (assoc-delete-all 'python-ts-mode eglot-server-programs))
+;;     (add-to-list 'eglot-server-programs
+;;                  '(python-mode . ("ty" "lsp")))))
 
 #+end_src
 
@@ -2719,32 +2718,32 @@ ily <3.
 
 #+begin_src emacs-lisp
 (setq display-time-mode 1)
-;; (use-package lambda-line
-;;   :straight (:type git :host github :repo "lambda-emacs/lambda-line") 
-;;   :custom
-;;   (lambda-line-lsp-indicator nil)
-;;   (lambda-line-icon-time t) ;; requires ClockFace font (see below)
-;;   (lambda-line-clockface-update-fontset "ClockFaceRect") ;; set clock icon
-;;   (lambda-line-position 'top) ;; Set position of status-line 
-;;   (lambda-line-abbrev nil) ;; abbreviate major modes
-;;   (lambda-line-hspace "  ")  ;; add some cushion
-;;   (lambda-line-prefix t) ;; use a prefix symbol
-;;   (lambda-line-prefix-padding nil) ;; no extra space for prefix 
-;;   (lambda-line-status-invert nil)  ;; no invert colors
-;;   (lambda-line-gui-ro-symbol  " ⨂") ;; symbols
-;;   (lambda-line-gui-mod-symbol " ⬤") 
-;;   (lambda-line-gui-rw-symbol  " ◯") 
-;;   (lambda-line-vc-symbol nil)
-;;   (lambda-line-space-top -.50)  ;; padding on top and bottom of line
-;;   (lambda-line-space-bottom -.50)
-;;   (lambda-line-symbol-position 0.1) ;; adjust the vertical placement of symbol
-;;   :config
-;;   ;; activate lambda-line 
-;;   (lambda-line-mode) 
-;;   ;; set divider line in footer
-;;   (when (eq lambda-line-position 'top)
-;;     (setq-default mode-line-format (list "%_"))
-;;     (setq mode-line-format (list "%_"))))
+(use-package lambda-line
+  :straight (:type git :host github :repo "lambda-emacs/lambda-line") 
+  :custom
+  (lambda-line-lsp-indicator nil)
+  (lambda-line-icon-time t) ;; requires ClockFace font (see below)
+  (lambda-line-clockface-update-fontset "ClockFaceRect") ;; set clock icon
+  (lambda-line-position 'top) ;; Set position of status-line 
+  (lambda-line-abbrev nil) ;; abbreviate major modes
+  (lambda-line-hspace "  ")  ;; add some cushion
+  (lambda-line-prefix t) ;; use a prefix symbol
+  (lambda-line-prefix-padding nil) ;; no extra space for prefix 
+  (lambda-line-status-invert nil)  ;; no invert colors
+  (lambda-line-gui-ro-symbol  " ⨂") ;; symbols
+  (lambda-line-gui-mod-symbol " ⬤") 
+  (lambda-line-gui-rw-symbol  " ◯") 
+  (lambda-line-vc-symbol nil)
+  (lambda-line-space-top -.50)  ;; padding on top and bottom of line
+  (lambda-line-space-bottom -.50)
+  (lambda-line-symbol-position 0.1) ;; adjust the vertical placement of symbol
+  :config
+  ;; activate lambda-line 
+  (lambda-line-mode) 
+  ;; set divider line in footer
+  (when (eq lambda-line-position 'top)
+    (setq-default mode-line-format (list "%_"))
+    (setq mode-line-format (list "%_"))))
 #+end_src
 
 * doom modeline
@@ -2771,25 +2770,25 @@ ily <3.
 
 
 #+begin_src emacs-lisp
-(use-package punch-line
-  :ensure t
-  :straight (:host github :repo "konrad1977/punch-line")
-  :config
-  (setq punch-line-left-separator "  "
-        punch-line-right-separator "  "
-		punch-show-git-info nil
-		punch-show-buffer-position t
-        punch-line-music-max-length 80
-		punch-line-modal-divider-style 'block
-		punch-line-section-backgrounds 'auto
-		punch-show-weather-info t
-		punch-weather-longitude "10.41"
-		punch-weather-latitude "53.25"
-		punch-cpu-usage t
-		punch-show-processes-info t)
-  (punch-line-mode 1)
-  (setq-default header-line-format mode-line-format)
-  (setq-default mode-line-format nil))
+;; (use-package punch-line
+;;   :ensure t
+;;   :straight (:host github :repo "konrad1977/punch-line")
+;;   :config
+;;   (setq punch-line-left-separator "  "
+;;         punch-line-right-separator "  "
+;; 		punch-show-git-info nil
+;; 		punch-show-buffer-position t
+;;         punch-line-music-max-length 80
+;; 		punch-line-modal-divider-style 'block
+;; 		punch-line-section-backgrounds 'auto
+;; 		punch-show-weather-info t
+;; 		punch-weather-longitude "10.41"
+;; 		punch-weather-latitude "53.25"
+;; 		punch-cpu-usage t
+;; 		punch-show-processes-info t)
+;;   (punch-line-mode 1)
+;;   (setq-default header-line-format mode-line-format)
+;;   (setq-default mode-line-format nil))
 
 #+end_src
 
@@ -3229,7 +3228,7 @@ ily <3.
    ((eq major-mode 'rust-mode) (eglot-format-buffer))
    ((eq major-mode 'nix-mode) (eglot-format-buffer))  
    ((or (eq major-mode 'python-mode) 
-        (eq major-mode 'python-ts-mode)) (eglot-format-buffer))
+        (eq major-mode 'python-ts-mode)) (ruff-format-buffer))
    ((eq major-mode 'c-mode) (eglot-format-buffer))
    ((bound-and-func-p eglot--managed-mode) (eglot-format-buffer))
    (t (message "No formatter for %s" major-mode))))
