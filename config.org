@@ -2050,7 +2050,7 @@ ily <3.
   (general-create-definer my-local-leader
     :states '(normal visual)
     :keymaps 'override
-    :prefix ","))
+    :prefix "m"))
 #+end_src
 
 ** evil-mode

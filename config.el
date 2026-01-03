@@ -1248,12 +1248,11 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 
 
-(use-package eglot-booster
-  :ensure t
-  :straight ( eglot-booster :type git :host nil :repo "https://github.com/jdtsmith/eglot-booster")
-  :after eglot
-  :config	(eglot-booster-mode))
-(setq eglot-booster-io-only t)
+;; (use-package eglot-booster
+;;   :ensure t
+;;   :straight ( eglot-booster :type git :host nil :repo "https://github.com/jdtsmith/eglot-booster")
+;;   :after eglot
+;;   :config	(eglot-booster-mode))
 
 (use-package typst-ts-mode
   :ensure t
@@ -1559,7 +1558,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (general-create-definer my-local-leader
     :states '(normal visual)
     :keymaps 'override
-    :prefix ","))
+    :prefix "m"))
 
 (use-package evil
   :ensure t
