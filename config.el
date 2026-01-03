@@ -271,9 +271,9 @@
   (lambda-themes-set-italic-comments t)
   (lambda-themes-set-italic-keywords t)
   (lambda-themes-set-variable-pitch t) 
-  (lambda-themes-set-theme 'dark)
+  (lambda-themes-set-theme 'light)
   :config
-  (load-theme 'lambda-dark-faded))
+  (load-theme 'lambda-light))
 
 (use-package dashboard
   :ensure t
@@ -2143,7 +2143,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (define-globalized-minor-mode my/global-olivetti-mode olivetti-mode
   (lambda () (olivetti-mode 1)))
 (my/centered-cursor)
-;; (my/global-olivetti-mode)
+(my/global-olivetti-mode)
 
 (use-package org-modern-indent
   :straight (:host github :repo "jdtsmith/org-modern-indent")
@@ -2449,6 +2449,16 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "mc" '(jinja2-insert-comment :wk "comment")
   
   "mf" '(fill-paragraph :wk "fill paragraph"))
+
+(my-leader
+  :keymaps 'python-mode-map
+  "m" '(:wk "Python mode" :ignore)
+  "mf" '(ruff-format-buffer :wk "format buffer")
+  ;; "mt" '(jinja2-insert-tag :wk "tag")
+  ;; "mc" '(jinja2-insert-comment :wk "comment")
+  
+  ;; "mf" '(fill-paragraph :wk "fill paragraph")
+  )
 
 (with-eval-after-load 'denote-menu
   (general-def 'normal denote-menu-mode-map

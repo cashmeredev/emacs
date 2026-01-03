@@ -38,7 +38,7 @@
 (setq kept-old-versions             5)
 #+end_src
 
-* emacs startuup speed
+* emacs startup speed
 
 #+begin_src emacs-lisp
 (defvar yy/cache-2 nil)
@@ -312,9 +312,9 @@
   (lambda-themes-set-italic-comments t)
   (lambda-themes-set-italic-keywords t)
   (lambda-themes-set-variable-pitch t) 
-  (lambda-themes-set-theme 'dark)
+  (lambda-themes-set-theme 'light)
   :config
-  (load-theme 'lambda-dark-faded))
+  (load-theme 'lambda-light))
 #+end_src
 
 * dashboard
@@ -3063,7 +3063,7 @@ ily <3.
 (define-globalized-minor-mode my/global-olivetti-mode olivetti-mode
   (lambda () (olivetti-mode 1)))
 (my/centered-cursor)
-;; (my/global-olivetti-mode)
+(my/global-olivetti-mode)
 #+end_src
 
 *  org-modern-indent
@@ -3421,6 +3421,20 @@ ily <3.
   "mc" '(jinja2-insert-comment :wk "comment")
   
   "mf" '(fill-paragraph :wk "fill paragraph"))
+#+end_src
+
+** python-mode keymaps
+
+#+begin_src emacs-lisp
+(my-leader
+  :keymaps 'python-mode-map
+  "m" '(:wk "Python mode" :ignore)
+  "mf" '(ruff-format-buffer :wk "format buffer")
+  ;; "mt" '(jinja2-insert-tag :wk "tag")
+  ;; "mc" '(jinja2-insert-comment :wk "comment")
+  
+  ;; "mf" '(fill-paragraph :wk "fill paragraph")
+  )
 #+end_src
 
 ** denote-menu keymaps
