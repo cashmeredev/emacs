@@ -265,15 +265,16 @@
            :password (password-store-get 'soju)
 		   :id 'libera))
 
-(use-package lambda-themes
-  :straight (:type git :host github :repo "lambda-emacs/lambda-themes") 
-  :custom
-  (lambda-themes-set-italic-comments t)
-  (lambda-themes-set-italic-keywords t)
-  (lambda-themes-set-variable-pitch t) 
-  (lambda-themes-set-theme 'light)
-  :config
-  (load-theme 'lambda-light))
+;; (use-package lambda-themes
+;;   :ensure t
+;;   :straight (:type git :host github :repo "lambda-emacs/lambda-themes") 
+;;   :custom
+;;   (lambda-themes-set-italic-comments t)
+;;   (lambda-themes-set-italic-keywords t)
+;;   (lambda-themes-set-variable-pitch t) 
+;;   (lambda-themes-set-theme 'light)
+;;   :config
+;;   (load-theme 'lambda-light))
 
 (use-package dashboard
   :ensure t
@@ -531,6 +532,29 @@
                           ("C-c ^ l" . smerge-keep-lower)  ;; Keep the changes from the lower version.
                           ("C-c ^ n" . smerge-next)        ;; Move to the next conflict.
                           ("C-c ^ p" . smerge-previous)))  ;; Move to the previous conflict.
+
+(use-package gptel
+  :ensure t
+  :config
+  (defun my/openrouter-key ()
+    (string-trim
+     (shell-command-to-string "pass code/openrouter")))
+
+  (setq my/openrouter-backend
+        (gptel-make-openai
+         "OpenRouter"
+         :host "openrouter.ai"
+         :endpoint "/api/v1/chat/completions"
+         :stream t
+         :key #'my/openrouter-key
+         :models '("deepseek/deepseek-v3.2:online"
+                   "minimax/minimax-m2.1:online")))
+
+  (setq gptel-backend my/openrouter-backend)
+  (setq gptel-log-level 'debug)
+  (setq gptel-include-reasoning nil)
+  (setq gptel-default-mode 'markdown-mode)
+  (setq gptel-backends (list my/openrouter-backend)))
 
 (use-package eldoc
   :straight nil
@@ -1476,12 +1500,13 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :defer t)
 
 (use-package olivetti
-  :custom
-  (olivetti-style 'fancy)  ; Keep margins visible
-  (olivetti-margin-width 0)  ; No side margins
-  (olivetti-fringe t)  ; Keep fringes visible
-  (olivetti-shrink t)
-  (olivetti-safe t))
+  ;; :custom
+  ;; (olivetti-style 'fancy)  ; Keep margins visible
+  ;; (olivetti-margin-width 0)  ; No side margins
+  ;; (olivetti-fringe t)  ; Keep fringes visible
+  ;; (olivetti-shrink t)
+  ;; (olivetti-safe t)
+)
 
 ;; (use-package visual-fill-column
 ;;   :hook ((text-mode . visual-line-mode)        ;; Soft-Wrapping aktivieren
@@ -1854,50 +1879,50 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;   (awesome-tray-mode 1)
 ;; )
 
-(setq display-time-mode 1)
-(use-package lambda-line
-  :straight (:type git :host github :repo "lambda-emacs/lambda-line") 
-  :custom
-  (lambda-line-lsp-indicator nil)
-  (lambda-line-icon-time t) ;; requires ClockFace font (see below)
-  (lambda-line-clockface-update-fontset "ClockFaceRect") ;; set clock icon
-  (lambda-line-position 'top) ;; Set position of status-line 
-  (lambda-line-abbrev nil) ;; abbreviate major modes
-  (lambda-line-hspace "  ")  ;; add some cushion
-  (lambda-line-prefix t) ;; use a prefix symbol
-  (lambda-line-prefix-padding nil) ;; no extra space for prefix 
-  (lambda-line-status-invert nil)  ;; no invert colors
-  (lambda-line-gui-ro-symbol  " ⨂") ;; symbols
-  (lambda-line-gui-mod-symbol " ⬤") 
-  (lambda-line-gui-rw-symbol  " ◯") 
-  (lambda-line-vc-symbol nil)
-  (lambda-line-space-top -.50)  ;; padding on top and bottom of line
-  (lambda-line-space-bottom -.50)
-  (lambda-line-symbol-position 0.1) ;; adjust the vertical placement of symbol
-  :config
-  ;; activate lambda-line 
-  (lambda-line-mode) 
-  ;; set divider line in footer
-  (when (eq lambda-line-position 'top)
-    (setq-default mode-line-format (list "%_"))
-    (setq mode-line-format (list "%_"))))
-
-;; (use-package doom-modeline
-;;   :ensure t
-;;   :hook (after-init . doom-modeline-mode)
+;; (setq display-time-mode 1)
+;; (use-package lambda-line
+;;   :straight (:type git :host github :repo "lambda-emacs/lambda-line") 
 ;;   :custom
-;;   (doom-modeline-time t)
-;;   (doom-modeline-time-icon nil)
-;;   (doom-modeline-buffer-file-name-style 'buffer-name)
-;;   (doom-modeline-height 24)
-;;   (doom-modeline-buffer-encoding nil)
-;;   (doom-modeline-env-version t)
-;;   (doom-modeline-env-setup-rust nil)
+;;   (lambda-line-lsp-indicator nil)
+;;   (lambda-line-icon-time t) ;; requires ClockFace font (see below)
+;;   (lambda-line-clockface-update-fontset "ClockFaceRect") ;; set clock icon
+;;   (lambda-line-position 'top) ;; Set position of status-line 
+;;   (lambda-line-abbrev nil) ;; abbreviate major modes
+;;   (lambda-line-hspace "  ")  ;; add some cushion
+;;   (lambda-line-prefix t) ;; use a prefix symbol
+;;   (lambda-line-prefix-padding nil) ;; no extra space for prefix 
+;;   (lambda-line-status-invert nil)  ;; no invert colors
+;;   (lambda-line-gui-ro-symbol  " ⨂") ;; symbols
+;;   (lambda-line-gui-mod-symbol " ⬤") 
+;;   (lambda-line-gui-rw-symbol  " ◯") 
+;;   (lambda-line-vc-symbol nil)
+;;   (lambda-line-space-top -.50)  ;; padding on top and bottom of line
+;;   (lambda-line-space-bottom -.50)
+;;   (lambda-line-symbol-position 0.1) ;; adjust the vertical placement of symbol
 ;;   :config
-;;   (setq display-time-24hr-format nil)
-;;   (display-time-mode 1)
-;;   (set-face-attribute 'mode-line nil :height 180)
-;;   (set-face-attribute 'mode-line-inactive nil :height 180))
+;;   ;; activate lambda-line 
+;;   (lambda-line-mode) 
+;;   ;; set divider line in footer
+;;   (when (eq lambda-line-position 'top)
+;;     (setq-default mode-line-format (list "%_"))
+;;     (setq mode-line-format (list "%_"))))
+
+(use-package doom-modeline
+  :ensure t
+  :hook (after-init . doom-modeline-mode)
+  :custom
+  (doom-modeline-time t)
+  (doom-modeline-time-icon nil)
+  (doom-modeline-buffer-file-name-style 'buffer-name)
+  (doom-modeline-height 24)
+  (doom-modeline-buffer-encoding nil)
+  (doom-modeline-env-version t)
+  (doom-modeline-env-setup-rust nil)
+  :config
+  (setq display-time-24hr-format nil)
+  (display-time-mode 1))
+  ;; (set-face-attribute 'mode-line nil :height 180)
+  ;; (set-face-attribute 'mode-line-inactive nil :height 180))
 
 ;; (use-package punch-line
 ;;   :ensure t
@@ -1962,12 +1987,13 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;   (custom-set-faces
 ;;    `(diff-hl-insert ((t (:background unspecified :foreground ,(catppuccin-get-color 'green)))))))
 
-;; (use-package modus-catppuccin
-;;   :straight (:type git
-;;              :repo "https://gitlab.com/magus/modus-catppuccin"
-;;              :branch "main")
-;;   :config
-;;   (load-theme 'catppuccin-frappe :no-confirm))
+(use-package modus-catppuccin
+  :ensure t
+  :straight (:type git
+             :repo "https://gitlab.com/magus/modus-catppuccin"
+             :branch "main")
+  :config
+  (load-theme 'catppuccin-mocha :no-confirm))
 
 ;; (use-package modus-themes
 ;;   :ensure nil
@@ -2141,7 +2167,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 (setq-default olivetti-body-width 115)
 (define-globalized-minor-mode my/global-olivetti-mode olivetti-mode
-  (lambda () (olivetti-mode 1)))
+ (lambda () (olivetti-mode 1)))
 (my/centered-cursor)
 (my/global-olivetti-mode)
 
