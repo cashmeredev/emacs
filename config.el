@@ -5,7 +5,7 @@
 ;; (setq gc-cons-threshold 50000000)
 ;; (setenv "LSP_USE_PLISTS" "true")
 ;; (setq lsp-use-plists t)
-
+(setq pgtk-wait-for-event-timeout 0.001)
 (setq package-enable-at-startup nil)
 (setq display-graphic-p t)
 (setq-default mode-line-format t)
@@ -547,8 +547,10 @@
          :endpoint "/api/v1/chat/completions"
          :stream t
          :key #'my/openrouter-key
-         :models '("deepseek/deepseek-v3.2:online"
-                   "minimax/minimax-m2.1:online")))
+         :models '("google/gemini-3-flash-preview:online"
+				   "deepseek/deepseek-v3.2:online"
+                   "minimax/minimax-m2.1:online"
+				   )))
 
   (setq gptel-backend my/openrouter-backend)
   (setq gptel-log-level 'debug)
@@ -1912,7 +1914,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :hook (after-init . doom-modeline-mode)
   :custom
   (doom-modeline-time t)
-  (doom-modeline-time-icon nil)
+  (doom-modeline-time-icon t)
   (doom-modeline-buffer-file-name-style 'buffer-name)
   (doom-modeline-height 24)
   (doom-modeline-buffer-encoding nil)
@@ -2363,7 +2365,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
              (call-interactively #'eglot-find-implementation)))
          :wk "implementation other window")
   "gt" '(eglot-find-typeDefinition :wk "go to type definition")
-  "gr" '(xref-find-references :wk "find references")
+  "gr" '(recompile :wk "recompile")
   "gs" '(magit-file-stage :wk "stage file")
   "gb" '(vc-annotate :wk "blame")
 
@@ -2426,8 +2428,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "[d" 'flycheck-previous-error
   "]c" 'diff-hl-next-hunk
   "[c" 'diff-hl-previous-hunk
-  "]b" 'switch-to-next-buffer
-  "[b" 'switch-to-prev-buffer
+  "'b" 'switch-to-next-buffer
+  ";b" 'switch-to-prev-buffer
   "]t" 'tab-next
   "[t" 'tab-previous
   "P" 'consult-yank-from-kill-ring
@@ -2723,32 +2725,16 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (use-package emacs-everywhere
   :ensure t)
 
-;; (use-package lispy
-;;   :ensure t
-;;   :hook ((emacs-lisp-mode . lispy-mode)
-;;          (clojure-mode . lispy-mode)
-;;          (scheme-mode . lispy-mode)
-;;          (lisp-mode . lispy-mode)))
-
-;; (use-package lispyville
-;;   :ensure t
-;;   :hook (lispy-mode . lispyville-mode)
-;;   :config
-;;   (lispyville-set-key-theme '(operators c-w additional)))
-
-;; (use-package mistty
-;;   :ensure t
-;;   :bind (("C-c s" . mistty)
-
-;;          ;; bind here the shortcuts you'd like the
-;;          ;; shell to handle instead of Emacs.
-;;          :map mistty-prompt-map
-
-;;          ;; fish: directory history
-;;          ("M-<up>" . mistty-send-key)
-;;          ("M-<down>" . mistty-send-key)
-;;          ("M-<left>" . mistty-send-key)
-;;          ("M-<right>" . mistty-send-key)))
+(use-package ready-player
+  :ensure t
+  :straight (:host github :repo "xenodium/ready-player")
+  :config
+  (setq ready-player-open-playback-commands
+        '((ready-player-is-audio-p "mpv" "--audio-display=no")
+          (ready-player-is-video-p "mpv")))
+  (ready-player-mode +1)
+  :custom
+  (ready-player-my-media-collection-location "/home/cashmere/Music"))
 
 ;; (profiler-start 'cpu)
 ;; (org-agenda nil "c")
