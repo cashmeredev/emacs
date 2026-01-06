@@ -14,7 +14,7 @@
 ;; (setq gc-cons-threshold 50000000)
 ;; (setenv "LSP_USE_PLISTS" "true")
 ;; (setq lsp-use-plists t)
-
+(setq pgtk-wait-for-event-timeout 0.001)
 (setq package-enable-at-startup nil)
 (setq display-graphic-p t)
 (setq-default mode-line-format t)
@@ -642,8 +642,10 @@ Not necessary but an eyecandy to look at!
          :endpoint "/api/v1/chat/completions"
          :stream t
          :key #'my/openrouter-key
-         :models '("deepseek/deepseek-v3.2:online"
-                   "minimax/minimax-m2.1:online")))
+         :models '("google/gemini-3-flash-preview:online"
+				   "deepseek/deepseek-v3.2:online"
+                   "minimax/minimax-m2.1:online"
+				   )))
 
   (setq gptel-backend my/openrouter-backend)
   (setq gptel-log-level 'debug)
@@ -2755,7 +2757,7 @@ ily <3.
   :hook (after-init . doom-modeline-mode)
   :custom
   (doom-modeline-time t)
-  (doom-modeline-time-icon nil)
+  (doom-modeline-time-icon t)
   (doom-modeline-buffer-file-name-style 'buffer-name)
   (doom-modeline-height 24)
   (doom-modeline-buffer-encoding nil)
@@ -3363,8 +3365,8 @@ ily <3.
   "[d" 'flycheck-previous-error
   "]c" 'diff-hl-next-hunk
   "[c" 'diff-hl-previous-hunk
-  "]b" 'switch-to-next-buffer
-  "[b" 'switch-to-prev-buffer
+  "'b" 'switch-to-next-buffer
+  ";b" 'switch-to-prev-buffer
   "]t" 'tab-next
   "[t" 'tab-previous
   "P" 'consult-yank-from-kill-ring
