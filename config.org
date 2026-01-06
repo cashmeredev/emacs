@@ -1033,49 +1033,63 @@ and convert it to Org using the pandoc utility."
   :after org-super-agenda
   :config
   (setq org-agenda-custom-commands
-        '(("t" "Task Overview"
-           ((alltodo "" ((org-agenda-overriding-header "")
-                         (org-super-agenda-groups
-                          '((:discard (:todo "FUN"))  
-                            (:log t)
-                            (:name "ACTIVE"
-                                   :todo "ACTIVE")
-                            (:name "NEXT"
-                                   :todo "NEXT")
-                            (:name "TODO"
-                                   :todo "TODO")
-                            (:name "WAIT"
-                                   :todo "WAIT")))))))
+        '(("t" "Project Task Overview"
+           ((org-ql-block '(and (tags "project")
+                                (not (done)))
+                          ((org-ql-block-header "Project Tasks")
+                           (org-super-agenda-groups
+                            '((:discard (:todo "FUN"))  
+                              (:name "ACTIVE" :todo "ACTIVE")
+                              (:name "NEXT" :todo "NEXT")
+                              (:name "TODO" :todo "TODO")
+                              (:name "WAIT" :todo "WAIT")))))))
+
+          ("p" "Personal Task Overview"
+           ((org-ql-block '(and (or (tags "self")
+                                    (tags "university"))
+                                (not (tags "project"))
+                                (not (done)))
+                          ((org-ql-block-header "Personal & University Tasks")
+                           (org-super-agenda-groups
+                            '((:discard (:todo "FUN"))  
+                              (:name "ACTIVE" :todo "ACTIVE")
+                              (:name "NEXT" :todo "NEXT")
+                              (:name "TODO" :todo "TODO")
+                              (:name "WAIT" :todo "WAIT")))))))
+
           ("w" "Weekly Overview"
            ((org-ql-block '(and (or (deadline auto)
                                     (scheduled :to 7))
+                                (or (tags "self")
+                                    (tags "university"))
+                                (not (tags "project"))
                                 (not (done))
                                 (not (habit)))
                           ((org-ql-block-header "Weekly Tasks")
                            (org-super-agenda-groups
-                            '((:name "Deadlines"
-                                     :deadline t
-                                     :order 1)
-                              (:name "Schedule"
-                                     :scheduled t
-                                     :order 2)
+                            '((:name "Deadlines" :deadline t :order 1)
+                              (:name "Schedule" :scheduled t :order 2)
                               (:discard (:anything t))))))
             (org-ql-block '(and (ts-active :from today :to 7 :with-time t)
+                                (or (tags "self")
+                                    (tags "university"))
+                                (not (tags "project"))
                                 (not (done))
                                 (not (habit)))
                           ((org-ql-block-header "Appointments")
                            (org-super-agenda-groups
-                            '((:name "This Week"
-                                     :anything t
-                                     :order 1)))))
+                            '((:name "This Week" :anything t :order 1)))))
             (org-ql-block '(and (habit)
+                                (or (tags "self")
+                                    (tags "university"))
+                                (not (tags "project"))
                                 (not (done)))
                           ((org-ql-block-header "Habits")
                            (org-super-agenda-groups
-                            '((:name "Daily Habits"
-                                     :habit t
-                                     :order 1)
+                            '((:name "Daily Habits" :habit t :order 1)
                               (:discard (:anything t)))))))))))
+
+
 #+end_src
 
 
@@ -2813,7 +2827,7 @@ ily <3.
 (blink-cursor-mode 0)
 (setq-default cursor-type 'bar)
 
-(defvar cashmere/font-height 140)
+(defvar cashmere/font-height 160)
 
 (set-face-attribute 'default nil :family "JetBrainsMono Nerd Font" :weight 'bold :height cashmere/font-height)
 (set-face-attribute 'fixed-pitch nil :family "RobotoMono Nerd Font" :weight 'regular)

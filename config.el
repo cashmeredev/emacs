@@ -829,48 +829,60 @@ and convert it to Org using the pandoc utility."
   :after org-super-agenda
   :config
   (setq org-agenda-custom-commands
-        '(("t" "Task Overview"
-           ((alltodo "" ((org-agenda-overriding-header "")
-                         (org-super-agenda-groups
-                          '((:discard (:todo "FUN"))  
-                            (:log t)
-                            (:name "ACTIVE"
-                                   :todo "ACTIVE")
-                            (:name "NEXT"
-                                   :todo "NEXT")
-                            (:name "TODO"
-                                   :todo "TODO")
-                            (:name "WAIT"
-                                   :todo "WAIT")))))))
+        '(("t" "Project Task Overview"
+           ((org-ql-block '(and (tags "project")
+                                (not (done)))
+                          ((org-ql-block-header "Project Tasks")
+                           (org-super-agenda-groups
+                            '((:discard (:todo "FUN"))  
+                              (:name "ACTIVE" :todo "ACTIVE")
+                              (:name "NEXT" :todo "NEXT")
+                              (:name "TODO" :todo "TODO")
+                              (:name "WAIT" :todo "WAIT")))))))
+
+          ("p" "Personal Task Overview"
+           ((org-ql-block '(and (or (tags "self")
+                                    (tags "university"))
+                                (not (tags "project"))
+                                (not (done)))
+                          ((org-ql-block-header "Personal & University Tasks")
+                           (org-super-agenda-groups
+                            '((:discard (:todo "FUN"))  
+                              (:name "ACTIVE" :todo "ACTIVE")
+                              (:name "NEXT" :todo "NEXT")
+                              (:name "TODO" :todo "TODO")
+                              (:name "WAIT" :todo "WAIT")))))))
+
           ("w" "Weekly Overview"
            ((org-ql-block '(and (or (deadline auto)
                                     (scheduled :to 7))
+                                (or (tags "self")
+                                    (tags "university"))
+                                (not (tags "project"))
                                 (not (done))
                                 (not (habit)))
                           ((org-ql-block-header "Weekly Tasks")
                            (org-super-agenda-groups
-                            '((:name "Deadlines"
-                                     :deadline t
-                                     :order 1)
-                              (:name "Schedule"
-                                     :scheduled t
-                                     :order 2)
+                            '((:name "Deadlines" :deadline t :order 1)
+                              (:name "Schedule" :scheduled t :order 2)
                               (:discard (:anything t))))))
             (org-ql-block '(and (ts-active :from today :to 7 :with-time t)
+                                (or (tags "self")
+                                    (tags "university"))
+                                (not (tags "project"))
                                 (not (done))
                                 (not (habit)))
                           ((org-ql-block-header "Appointments")
                            (org-super-agenda-groups
-                            '((:name "This Week"
-                                     :anything t
-                                     :order 1)))))
+                            '((:name "This Week" :anything t :order 1)))))
             (org-ql-block '(and (habit)
+                                (or (tags "self")
+                                    (tags "university"))
+                                (not (tags "project"))
                                 (not (done)))
                           ((org-ql-block-header "Habits")
                            (org-super-agenda-groups
-                            '((:name "Daily Habits"
-                                     :habit t
-                                     :order 1)
+                            '((:name "Daily Habits" :habit t :order 1)
                               (:discard (:anything t)))))))))))
 
 (setq org-todo-keywords
@@ -1960,7 +1972,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (blink-cursor-mode 0)
 (setq-default cursor-type 'bar)
 
-(defvar cashmere/font-height 140)
+(defvar cashmere/font-height 160)
 
 (set-face-attribute 'default nil :family "JetBrainsMono Nerd Font" :weight 'bold :height cashmere/font-height)
 (set-face-attribute 'fixed-pitch nil :family "RobotoMono Nerd Font" :weight 'regular)
@@ -2365,7 +2377,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
              (call-interactively #'eglot-find-implementation)))
          :wk "implementation other window")
   "gt" '(eglot-find-typeDefinition :wk "go to type definition")
-  "gr" '(recompile :wk "recompile")
+  "gr" '(xref-find-references :wk "find references")
   "gs" '(magit-file-stage :wk "stage file")
   "gb" '(vc-annotate :wk "blame")
 
@@ -2725,16 +2737,32 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (use-package emacs-everywhere
   :ensure t)
 
-(use-package ready-player
-  :ensure t
-  :straight (:host github :repo "xenodium/ready-player")
-  :config
-  (setq ready-player-open-playback-commands
-        '((ready-player-is-audio-p "mpv" "--audio-display=no")
-          (ready-player-is-video-p "mpv")))
-  (ready-player-mode +1)
-  :custom
-  (ready-player-my-media-collection-location "/home/cashmere/Music"))
+;; (use-package lispy
+;;   :ensure t
+;;   :hook ((emacs-lisp-mode . lispy-mode)
+;;          (clojure-mode . lispy-mode)
+;;          (scheme-mode . lispy-mode)
+;;          (lisp-mode . lispy-mode)))
+
+;; (use-package lispyville
+;;   :ensure t
+;;   :hook (lispy-mode . lispyville-mode)
+;;   :config
+;;   (lispyville-set-key-theme '(operators c-w additional)))
+
+;; (use-package mistty
+;;   :ensure t
+;;   :bind (("C-c s" . mistty)
+
+;;          ;; bind here the shortcuts you'd like the
+;;          ;; shell to handle instead of Emacs.
+;;          :map mistty-prompt-map
+
+;;          ;; fish: directory history
+;;          ("M-<up>" . mistty-send-key)
+;;          ("M-<down>" . mistty-send-key)
+;;          ("M-<left>" . mistty-send-key)
+;;          ("M-<right>" . mistty-send-key)))
 
 ;; (profiler-start 'cpu)
 ;; (org-agenda nil "c")
