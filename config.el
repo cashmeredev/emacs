@@ -724,8 +724,8 @@
   (org-babel-do-load-languages
    'org-babel-load-languages
    '((emacs-lisp . t)
-    ;;  (nushell . t)
      (shell . t)
+	 (python . t)
      (dot . t)
 	 (C . t)
 	 (makefile . t))))
@@ -829,17 +829,16 @@ and convert it to Org using the pandoc utility."
   :after org-super-agenda
   :config
   (setq org-agenda-custom-commands
-        '(("t" "Project Task Overview"
-           ((org-ql-block '(and (tags "project")
-                                (not (done)))
-                          ((org-ql-block-header "Project Tasks")
-                           (org-super-agenda-groups
-                            '((:discard (:todo "FUN"))  
-                              (:name "ACTIVE" :todo "ACTIVE")
-                              (:name "NEXT" :todo "NEXT")
-                              (:name "TODO" :todo "TODO")
-                              (:name "WAIT" :todo "WAIT")))))))
-
+		'(("t" "Project Task Overview"
+		   ((org-ql-block '(and (tags "project")
+								(not (done)))
+						  ((org-ql-block-header "Project Tasks")
+						   (org-super-agenda-groups
+							'((:discard (:todo "FUN"))  
+							  (:name "ACTIVE" :todo "ACTIVE")
+							  (:name "NEXT" :todo "NEXT")
+							  (:name "TODO" :todo "TODO")
+							  (:name "WAIT" :todo "WAIT")))))))
           ("p" "Personal Task Overview"
            ((org-ql-block '(and (or (tags "self")
                                     (tags "university"))
@@ -852,7 +851,6 @@ and convert it to Org using the pandoc utility."
                               (:name "NEXT" :todo "NEXT")
                               (:name "TODO" :todo "TODO")
                               (:name "WAIT" :todo "WAIT")))))))
-
           ("w" "Weekly Overview"
            ((org-ql-block '(and (or (deadline auto)
                                     (scheduled :to 7))
@@ -1356,7 +1354,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :config
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
-                 '(python-mode . ("pyrefly" "--stdio")))))
+                 '(python-mode . ("ty" "--stdio")))))
 
 (use-package python-black
   :ensure t
@@ -1597,7 +1595,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (general-create-definer my-local-leader
     :states '(normal visual)
     :keymaps 'override
-    :prefix "m"))
+    :prefix ","))
 
 (use-package evil
   :ensure t
