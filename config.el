@@ -9,6 +9,7 @@
 (setq package-enable-at-startup nil)
 (setq display-graphic-p t)
 (setq-default mode-line-format t)
+(setq custom-safe-themes t)
 (setq default-frame-alist '((undecorated . t)))
 (setq gc-cons-threshold 100000000)
 
@@ -1999,13 +2000,13 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;   (custom-set-faces
 ;;    `(diff-hl-insert ((t (:background unspecified :foreground ,(catppuccin-get-color 'green)))))))
 
-(use-package modus-catppuccin
-  :ensure t
-  :straight (:type git
-             :repo "https://gitlab.com/magus/modus-catppuccin"
-             :branch "main")
-  :config
-  (load-theme 'catppuccin-mocha :no-confirm))
+;; (use-package modus-catppuccin
+;;   :ensure t
+;;   :straight (:type git
+;;              :repo "https://gitlab.com/magus/modus-catppuccin"
+;;              :branch "main")
+;;   :config
+;;   (load-theme 'catppuccin-mocha :no-confirm))
 
 ;; (use-package modus-themes
 ;;   :ensure nil
@@ -2129,10 +2130,12 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;   :init
 ;;   (load-theme 'modus-operandi t))
 
-;; (use-package kanagawa-themes
-;;   :ensure t
-;;   :config
-;;   (load-theme 'kanagawa-wave t))
+(use-package kanagawa-themes
+  :ensure t
+  :config
+  (setq kanagawa-themes-org-height nil)
+  (setq kanagawa-themes-org-highlight t)
+  (load-theme 'kanagawa-lotus t))
 
 (use-package dirvish
   :straight t
@@ -2351,32 +2354,28 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "ps" '(consult-ripgrep :wk "search")
   "pb" '(consult-projectile-buffer :wk "buffers") 
   "pk" '(projectile-kill-buffers :wk "kill buffers") 
-  ;; "pd" '(projectile-dired :wk "root dir")
   "pd" '(projectile-remove-known-project :wk "delete project")
   "pr" '(projectile-recentf :wk "recent files")
   "pa" '(projectile-add-known-project :wk "add project")
-  ;; "pc" '(projectile-compile-project :wk "compile")
-  ;; "pt" '(projectile-test-project :wk "test")
   "pi" '(projectile-invalidate-cache :wk "invalidate cache")
 
   "g" '(:ignore t :wk "git")
-  "gc" '(magit-clone :wk "clone")
-  "gg" '(magit-status :wk "status")
-  "gl" '(magit-log-current :wk "log")
-  "gi" '(magit-init :wk "init")
+  "gc" '(majutsu-git-clone :wk "clone")
+  "gg" '(majutsu-log :wk "status")
+  "gl" '(majutsu-log :wk "log")
+  "gi" '(majutsu-git-init :wk "init")
   "gd" '(xref-find-definitions :wk "go to definition") 
   "gD" '((lambda () (interactive) 
            (let ((current-prefix-arg 4))
              (call-interactively #'xref-find-definitions)))
          :wk "definition other window")
-  ;; "gi" '(eglot-find-implementation :wk "go to implementation")
   "gI" '((lambda () (interactive) 
            (let ((current-prefix-arg 4))
              (call-interactively #'eglot-find-implementation)))
          :wk "implementation other window")
   "gt" '(eglot-find-typeDefinition :wk "go to type definition")
   "gr" '(xref-find-references :wk "find references")
-  "gs" '(magit-file-stage :wk "stage file")
+  "gs" '(majutsu-stage :wk "stage file")
   "gb" '(vc-annotate :wk "blame")
 
   "o" '(:ignore t :wk "open")
@@ -2406,6 +2405,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "ca" '(eglot-code-actions :wk "code actions")
   "cr" '(eglot-rename :wk "lsp rename")
   "cf" '(eglot-format :wk "format buffer")
+  "cs" '(yas-insert-snippet :wk "snippets")
 
   "q" '(:ignore t :wk "quit")
   "qq" '(save-buffers-kill-terminal :wk "quit emacs")

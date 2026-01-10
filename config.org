@@ -18,6 +18,7 @@
 (setq package-enable-at-startup nil)
 (setq display-graphic-p t)
 (setq-default mode-line-format t)
+(setq custom-safe-themes t)
 (setq default-frame-alist '((undecorated . t)))
 (setq gc-cons-threshold 100000000)
 
@@ -2864,13 +2865,13 @@ ily <3.
 [[https://gitlab.com/magus/modus-catppuccin][modus-catppuccin]]
 
 #+begin_src emacs-lisp
-(use-package modus-catppuccin
-  :ensure t
-  :straight (:type git
-             :repo "https://gitlab.com/magus/modus-catppuccin"
-             :branch "main")
-  :config
-  (load-theme 'catppuccin-mocha :no-confirm))
+;; (use-package modus-catppuccin
+;;   :ensure t
+;;   :straight (:type git
+;;              :repo "https://gitlab.com/magus/modus-catppuccin"
+;;              :branch "main")
+;;   :config
+;;   (load-theme 'catppuccin-mocha :no-confirm))
 #+end_src
 
 ** modus themes/catppuccin
@@ -3002,10 +3003,12 @@ ily <3.
 ** kanagawa-themes
 
 #+begin_src emacs-lisp
-;; (use-package kanagawa-themes
-;;   :ensure t
-;;   :config
-;;   (load-theme 'kanagawa-wave t))
+(use-package kanagawa-themes
+  :ensure t
+  :config
+  (setq kanagawa-themes-org-height nil)
+  (setq kanagawa-themes-org-highlight t)
+  (load-theme 'kanagawa-lotus t))
 #+end_src
 
 * dirvish
@@ -3288,32 +3291,28 @@ ily <3.
   "ps" '(consult-ripgrep :wk "search")
   "pb" '(consult-projectile-buffer :wk "buffers") 
   "pk" '(projectile-kill-buffers :wk "kill buffers") 
-  ;; "pd" '(projectile-dired :wk "root dir")
   "pd" '(projectile-remove-known-project :wk "delete project")
   "pr" '(projectile-recentf :wk "recent files")
   "pa" '(projectile-add-known-project :wk "add project")
-  ;; "pc" '(projectile-compile-project :wk "compile")
-  ;; "pt" '(projectile-test-project :wk "test")
   "pi" '(projectile-invalidate-cache :wk "invalidate cache")
 
   "g" '(:ignore t :wk "git")
-  "gc" '(magit-clone :wk "clone")
-  "gg" '(magit-status :wk "status")
-  "gl" '(magit-log-current :wk "log")
-  "gi" '(magit-init :wk "init")
+  "gc" '(majutsu-git-clone :wk "clone")
+  "gg" '(majutsu-log :wk "status")
+  "gl" '(majutsu-log :wk "log")
+  "gi" '(majutsu-git-init :wk "init")
   "gd" '(xref-find-definitions :wk "go to definition") 
   "gD" '((lambda () (interactive) 
            (let ((current-prefix-arg 4))
              (call-interactively #'xref-find-definitions)))
          :wk "definition other window")
-  ;; "gi" '(eglot-find-implementation :wk "go to implementation")
   "gI" '((lambda () (interactive) 
            (let ((current-prefix-arg 4))
              (call-interactively #'eglot-find-implementation)))
          :wk "implementation other window")
   "gt" '(eglot-find-typeDefinition :wk "go to type definition")
   "gr" '(xref-find-references :wk "find references")
-  "gs" '(magit-file-stage :wk "stage file")
+  "gs" '(majutsu-stage :wk "stage file")
   "gb" '(vc-annotate :wk "blame")
 
   "o" '(:ignore t :wk "open")
@@ -3343,6 +3342,7 @@ ily <3.
   "ca" '(eglot-code-actions :wk "code actions")
   "cr" '(eglot-rename :wk "lsp rename")
   "cf" '(eglot-format :wk "format buffer")
+  "cs" '(yas-insert-snippet :wk "snippets")
 
   "q" '(:ignore t :wk "quit")
   "qq" '(save-buffers-kill-terminal :wk "quit emacs")
