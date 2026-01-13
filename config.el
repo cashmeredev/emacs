@@ -1802,7 +1802,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :ensure nil
   :straight nil
   :config
-  (setq org-agenda-inhibit-startup t
+  (setq org-agenda-window-setup 'current-window
+   org-agenda-inhibit-startup t
 		org-agenda-use-tag-inheritance nil
 		org-agenda-dim-blocked-tasks nil
 		org-startup-indented nil
