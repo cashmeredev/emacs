@@ -7,9 +7,7 @@
 ;; (setq lsp-use-plists t)
 (setq pgtk-wait-for-event-timeout 0.001)
 (setq package-enable-at-startup nil)
-(setq display-graphic-p t)
 (setq-default mode-line-format t)
-(setq custom-safe-themes t)
 (setq default-frame-alist '((undecorated . t)))
 (setq gc-cons-threshold 100000000)
 
@@ -64,6 +62,7 @@
   :ensure nil
   :custom ;; Set custom variables to configure Emacs behavior.
   (setq modify-coding-system-alist 'file "" 'utf-8)
+  
   (column-number-mode t) ;; Display the column number in the mode line.
   (auto-save-default nil) ;; Disable automatic saving of buffers.
   (create-lockfiles nil) ;; Prevent the creation of lock files when editing.
@@ -95,7 +94,8 @@
 
   :config
   (add-to-list 'custom-theme-load-path user-emacs-directory)
-
+  
+  (setq custom-safe-themes t)
   ;; By default emacs gives you access to a lot of *special* buffers, while navigating with [b and ]b,
   ;; this might be confusing for newcomers. This settings make sure ]b and [b will always load a
   ;; file buffer. To see all buffers use <leader> SPC, <leader> b l, or <leader> b i.
@@ -563,17 +563,24 @@
   :straight nil
   :ensure t
   :config
-  (setq eldoc-idle-delay 0)                  ;; Automatically fetch doc help
-  (setq eldoc-echo-area-use-multiline-p nil) ;; We use the "K" floating help instead
-                                             ;; set to t if you want docs on the echo area
+  (setq eldoc-idle-delay 0)
+  (setq eldoc-echo-area-use-multiline-p nil)
   (setq eldoc-echo-area-display-truncation-message nil)
   :init
   (global-eldoc-mode))
 
 (use-package eldoc-box
   :ensure t
+  :defer t
   :config
-  :defer t)
+  (setq eldoc-box-max-pixel-width 800)
+  (setq eldoc-box-max-pixel-height 600))
+
+;; (use-package eldoc-box
+;;   :ensure t
+;;   :config
+;;   ;; (setq eldoc-box-at-point-position-function #'eldoc-box--default-at-point-position-function)
+;;   (setq eldoc-box-help-at-point-mode t))
 
 (use-package flymake
   :straight nil
@@ -681,16 +688,7 @@
         org-appear-autolinks      t   ;; Show links
         org-appear-autosubmarkers t)) ;; Show sub- and superscripts
 
-(setq org-agenda-inhibit-startup t
-	  org-agenda-use-tag-inheritance nil
-	  org-agenda-dim-blocked-tasks nil
-	  org-startup-indented nil
-	  org-startup-folded 'overview
-	  org-agenda-prefix-format
-	  '((agenda . " %i %?-12t% s")
-		(todo . " %i ")
-		(tags . " %i ")
-		(search . " %i ")))
+
 
 (use-package org-modern
   :ensure t)
@@ -701,6 +699,13 @@
 (setq org-modern-fold-stars '(("◉" . "○")))
 (setq org-modern-star 'replace)
 (setq org-modern-replace-stars "◉○◉○◉")
+
+(use-package org-fancy-priorities
+  :ensure t
+  :hook
+  (org-mode . org-fancy-priorities-mode)
+  :config
+  (setq org-fancy-priorities-list '("⚡" "⬆" "⬇" "☕")))
 
 ;; (setq org-agenda-start-on-weekday nil
 ;;       org-agenda-block-separator  nil
@@ -781,7 +786,7 @@ and convert it to Org using the pandoc utility."
     (find-file file-name)
     (goto-char (point-min))
     (forward-line 4)
-    (insert (format "* %s\nDEADLINE: <%s>\n\n" context deadline))
+    (insert (format "\n* %s\nDEADLINE: <%s>\n\n" context deadline))
     (current-buffer)))
 
 (defun my/org-capture-denote-scheduled ()
@@ -791,7 +796,7 @@ and convert it to Org using the pandoc utility."
     (find-file file-name)
     (goto-char (point-min))
     (forward-line 4)
-    (insert (format "* %s\nSCHEDULED: <%s>\n\n" context schedule))
+    (insert (format "\n* %s\nSCHEDULED: <%s>\n\n" context schedule))
     (current-buffer)))
 
 (defun my/org-capture-denote-task ()
@@ -889,7 +894,14 @@ and convert it to Org using the pandoc utility."
         (sequence "BACKLOG(b)" "PLAN(p)" "READY(r)" "ACTIVE(a)" "REVIEW(v)"
                   "FUN(f)" "|" "COMPLETED(c)" "CANC(k@)")))
 
+(use-package org-contrib
+  :ensure t)
+
+(require 'ox-extra)
+(ox-extras-activate '(ignore-headlines))
+
 (use-package ox-typst
+  :ensure t
   :straight (:host github :repo "jmpunkt/ox-typst")
   :after org)
 
@@ -1309,31 +1321,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :ensure t
   :after yasnippet)
 
-;; (use-package company
-;;   :straight t
-;;   :hook (after-init . global-company-mode)
-;;   :bind (:map company-active-map
-;;               ("C-n" . company-select-next)
-;;               ("C-p" . company-select-previous)
-;;               ("C-j" . company-select-next-or-abort)
-;;               ("C-k" . company-select-previous-or-abort)
-;;               ("M-j" . company-select-next)
-;;               ("M-k" . company-select-previous)
-;;               ("<tab>" . company-complete-selection)
-;;               ("TAB" . company-complete-selection))
-;;   :config
-;;   (setq company-minimum-prefix-length 1)
-;;   (setq company-idle-delay 0.1)
-;;   (setq company-show-numbers t)
-;;   (setq company-tooltip-align-annotations t)
-;;   (setq company-require-match nil)
-;;   (setq company-backends '((company-capf :with company-yasnippet)
-;;                            company-files
-;;                            company-dabbrev-code
-;;                            ))
-;;   (setq company-dabbrev-code-everywhere t)
-;;   (setq company-dabbrev-code-ignore-case t))
-
 (use-package nix-mode
   :ensure t
   :mode "\\.nix\\'"
@@ -1388,13 +1375,13 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :ensure t
   :hook (python-mode . ruff-format-on-save-mode))
 
-(use-package elm-mode
-  :ensure t
-  :mode  "\\.elm\\'"
-  :hook (elm-mode . eglot-ensure)
-  :config
-  (with-eval-after-load 'eglot-server-programs
-	'(elm-mode . ("elm-language-server"))))
+;; (use-package elm-mode
+;;   :ensure t
+;;   :mode  "\\.elm\\'"
+;;   :hook (elm-mode . eglot-ensure)
+;;   :config
+;;   (with-eval-after-load 'eglot-server-programs
+;; 	'(elm-mode . ("elm-language-server"))))
 
 (use-package rust-mode
   :ensure t
@@ -1502,6 +1489,10 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (use-package jinja2-mode
   :ensure t
   :defer t)
+
+(use-package protobuf-mode
+  :ensure t
+  :mode ("\\.proto\\'" . protobuf-mode))
 
 (use-package vterm
   :ensure t
@@ -1619,6 +1610,17 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (evil-set-initial-state 'ibuffer-mode 'normal))
 
 (modify-syntax-entry ?_ "w")
+
+(defun my/eldoc-and-jump ()
+  (interactive)
+  (if (display-graphic-p)
+      (call-interactively 'eldoc-box-help-at-point)
+    (progn
+      (eldoc-doc-buffer)
+      (when-let ((eldoc-win (get-buffer-window "*eldoc*")))
+        (select-window eldoc-win)))))
+
+(define-key evil-normal-state-map (kbd "K") #'my/eldoc-and-jump)
 
 ;; (setq select-enable-clipboard nil)
 ;; (setq select-enable-primary nil)
@@ -1795,6 +1797,21 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 (use-package envrc
   :hook (after-init . envrc-global-mode))
+
+(use-package org-agenda
+  :ensure nil
+  :straight nil
+  :config
+  (setq org-agenda-inhibit-startup t
+		org-agenda-use-tag-inheritance nil
+		org-agenda-dim-blocked-tasks nil
+		org-startup-indented nil
+		org-startup-folded 'overview
+		org-agenda-prefix-format
+		'((agenda . " %i %?-12t% s")
+		  (todo . " %i ")
+		  (tags . " %i ")
+		  (search . " %i "))))
 
 (use-package evil-org
   :ensure t
@@ -2000,13 +2017,68 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;   (custom-set-faces
 ;;    `(diff-hl-insert ((t (:background unspecified :foreground ,(catppuccin-get-color 'green)))))))
 
-;; (use-package modus-catppuccin
-;;   :ensure t
-;;   :straight (:type git
-;;              :repo "https://gitlab.com/magus/modus-catppuccin"
-;;              :branch "main")
-;;   :config
-;;   (load-theme 'catppuccin-mocha :no-confirm))
+(use-package modus-catppuccin
+  :ensure t
+  :straight (:type git
+             :repo "https://gitlab.com/magus/modus-catppuccin"
+             :branch "main")
+  :custom
+  (catppuccin-mocha-palette-overrides
+   '((base "#232136")
+     (mantle "#2d2a45")
+     (crust "#373354")
+     (surface0 "#373354")
+     (surface1 "#47407d")
+     (surface2 "#6e6a86")
+     (overlay0 "#6e6a86")
+     (overlay1 "#6e6a86")
+     (overlay2 "#6e6a86")
+     (subtext0 "#e0def4")
+     (subtext1 "#cdcbe0")
+     (text "#e2e0f7")
+     (rosewater "#eb98c3")
+     (flamingo "#ea9a97")
+     (pink "#eb98c3")
+     (mauve "#c4a7e7")
+     (red "#eb6f92")
+     (maroon "#eb6f92")
+     (peach "#ea9a97")
+     (yellow "#f6c177")
+     (green "#a3be8c")
+     (teal "#9ccfd8")
+     (sky "#9ccfd8")
+     (sapphire "#9ccfd8")
+     (blue "#569fba")
+     (lavender "#c4a7e7")))
+  (catppuccin-latte-palette-overrides
+   '((base "#f6f2ee")
+     (mantle "#e4dcd4")
+     (crust "#dbd1dd")
+     (surface0 "#d3c7bb")
+     (surface1 "#c4b8ac")
+     (surface2 "#b5a99d")
+     (overlay0 "#9ca0b0")
+     (overlay1 "#8c8fa1")
+     (overlay2 "#7c7f93")
+     (subtext0 "#6c6f85")
+     (subtext1 "#5c5f77")
+     (text "#3d2b5a")
+     (rosewater "#955f61")
+     (flamingo "#a5222f")
+     (pink "#a440b5")
+     (mauve "#6e33ce")
+     (red "#a5222f")
+     (maroon "#824d5b")
+     (peach "#955f61")
+     (yellow "#ac5402")
+     (green "#396847")
+     (teal "#287980")
+     (sky "#2d8a93")
+     (sapphire "#2d8a93")
+     (blue "#2848a9")
+     (lavender "#6e33ce")))
+  :config
+  (load-theme 'catppuccin-latte :no-confirm))
 
 ;; (use-package modus-themes
 ;;   :ensure nil
@@ -2130,12 +2202,40 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;   :init
 ;;   (load-theme 'modus-operandi t))
 
-(use-package kanagawa-themes
-  :ensure t
-  :config
-  (setq kanagawa-themes-org-height nil)
-  (setq kanagawa-themes-org-highlight t)
-  (load-theme 'kanagawa-lotus t))
+;; (use-package kanagawa-themes
+;;   :ensure t
+;;   :config
+;;   (setq kanagawa-themes-org-height nil)
+;;   (setq kanagawa-themes-org-highlight t)
+;;   (load-theme 'kanagawa-lotus t))
+
+;; (use-package base16-theme
+;;   :ensure t
+;;   :demand t
+;;   :config
+;;   (deftheme base16-duskfox)
+;;   (setq base16-distinct-fringe-background t)
+;;   (setq base16-highlight-mode-line t)
+;;   (setq base16-duskfox-colors
+;;         (list :base00 "#232136"
+;;               :base01 "#2d2a45"
+;;               :base02 "#373354"
+;;               :base03 "#47407d"
+;;               :base04 "#6e6a86"
+;;               :base05 "#e0def4"
+;;               :base06 "#cdcbe0"
+;;               :base07 "#e2e0f7"
+;;               :base08 "#eb6f92"
+;;               :base09 "#ea9a97"
+;;               :base0A "#f6c177"
+;;               :base0B "#a3be8c"
+;;               :base0C "#9ccfd8"
+;;               :base0D "#569fba"
+;;               :base0E "#c4a7e7"
+;;               :base0F "#eb98c3"))
+  
+;;   (base16-theme-define 'base16-duskfox base16-duskfox-colors)
+;;   (enable-theme 'base16-duskfox))
 
 (use-package dirvish
   :straight t
@@ -2273,36 +2373,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (pdf-loader-install)
   :hook (pdf-view-mode . (lambda () (display-line-numbers-mode -1))))
 
-(defun ek/lsp-describe-and-jump ()
-  (interactive)
-  (lspce-help-at-point)
-  (let ((help-buffer "*lsp-help*"))
-    (when (get-buffer help-buffer)
-      (switch-to-buffer-other-window help-buffer))))
-
-
-(defun my/eldoc-and-jump ()
-  "Zeige Eldoc-Dokumentation manuell an."
-  (interactive)
-  (if (>= emacs-major-version 31)
-      (eldoc-box-help-at-point)
-    (progn
-      (eldoc-doc-buffer)
-      (when-let ((eldoc-win (get-buffer-window "*eldoc*")))
-        (select-window eldoc-win)))))
-
-
-(evil-define-key 'normal 'global (kbd "K") #'my/eldoc-and-jump)
-
-;; (defun my/setup-eldoc-hover-keys ()
-;;   (when (string-match-p "\\*eldoc\\*" (buffer-name))
-;;     (evil-normalize-keymaps)
-;;     (evil-local-set-key 'normal (kbd "q") 'quit-window)))
-
-;; (add-hook 'buffer-list-update-hook #'my/setup-eldoc-hover-keys)
-
-;; (evil-define-key 'normal 'global (kbd "K") #'my/eldoc-and-jump)
-
 (defun my/format-buffer ()
   (interactive)
   (cond
@@ -2327,6 +2397,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "." '(find-file :wk "find file")
   "," '(consult-buffer :wk "switch buffer")
   ":" (lambda () (interactive) (execute-extended-command nil))
+  "K" 'my/eldoc-and-jump
 
   "d" '(:ignore t :wk "denote")
   "dd" '(denote-menu-list-notes t :wk "List all notes")
@@ -2360,10 +2431,10 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "pi" '(projectile-invalidate-cache :wk "invalidate cache")
 
   "g" '(:ignore t :wk "git")
-  "gc" '(majutsu-git-clone :wk "clone")
-  "gg" '(majutsu-log :wk "status")
-  "gl" '(majutsu-log :wk "log")
-  "gi" '(majutsu-git-init :wk "init")
+  "gc" '(magit-clone :wk "clone")
+  "gg" '(magit-status :wk "status")
+  "gl" '(magit-log-current :wk "log")
+  "gi" '(magit-init :wk "init")
   "gd" '(xref-find-definitions :wk "go to definition") 
   "gD" '((lambda () (interactive) 
            (let ((current-prefix-arg 4))
@@ -2375,7 +2446,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
          :wk "implementation other window")
   "gt" '(eglot-find-typeDefinition :wk "go to type definition")
   "gr" '(xref-find-references :wk "find references")
-  "gs" '(majutsu-stage :wk "stage file")
+  "gs" '(magit-file-stage :wk "stage file")
   "gb" '(vc-annotate :wk "blame")
 
   "o" '(:ignore t :wk "open")
@@ -2385,6 +2456,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "hf" '(describe-function :wk "function")
   "hv" '(describe-variable :wk "variable")
   "hk" '(describe-key :wk "key")
+  "ht" '(consult-theme :wk "load theme")
 
   "w w" '(evil-window-next :wk "Close window")
   "w c" '(evil-window-delete :wk "Close window")
@@ -2417,23 +2489,25 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "u" '(undo-tree-visualize :wk "undo tree")
   "P" '(consult-yank-from-kill-ring :wk "paste history"))
 
-
 (defun my/avy-enabled-p ()
-  (and (not (derived-mode-p 'magit-mode 'dired-mode 'ibuffer-mode))
-       (not (eq major-mode 'dirvish-mode))))
+(and (not (derived-mode-p 'magit-mode 'dired-mode 'ibuffer-mode))
+(not (eq major-mode 'dirvish-mode))))
+
+(defun my/s-key-dispatch ()
+  (interactive)
+  (if (derived-mode-p 'magit-mode)
+      (call-interactively 'magit-stage)
+    (when (my/avy-enabled-p)
+      (let ((scroll-margin 0)
+            (maximum-scroll-margin 0))
+        (call-interactively 'evil-avy-goto-char-timer)))))
 
 (general-def '(normal visual) 'override
-  "s" (lambda ()
-        (interactive)
-        (if (derived-mode-p 'magit-mode)
-            (call-interactively 'magit-stage)
-          (when (my/avy-enabled-p)
-            (let ((scroll-margin 0)
-                  (maximum-scroll-margin 0))
-              (call-interactively 'evil-avy-goto-char-2))))))
+  "s" 'my/s-key-dispatch)
 
 
 (general-def 'normal 'override
+  "K" 'my/eldoc-and-jump
   "]d" 'flycheck-next-error
   "[d" 'flycheck-previous-error
   "]c" 'diff-hl-next-hunk
@@ -2735,32 +2809,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (use-package emacs-everywhere
   :ensure t)
 
-;; (use-package lispy
-;;   :ensure t
-;;   :hook ((emacs-lisp-mode . lispy-mode)
-;;          (clojure-mode . lispy-mode)
-;;          (scheme-mode . lispy-mode)
-;;          (lisp-mode . lispy-mode)))
-
-;; (use-package lispyville
-;;   :ensure t
-;;   :hook (lispy-mode . lispyville-mode)
-;;   :config
-;;   (lispyville-set-key-theme '(operators c-w additional)))
-
-;; (use-package mistty
-;;   :ensure t
-;;   :bind (("C-c s" . mistty)
-
-;;          ;; bind here the shortcuts you'd like the
-;;          ;; shell to handle instead of Emacs.
-;;          :map mistty-prompt-map
-
-;;          ;; fish: directory history
-;;          ("M-<up>" . mistty-send-key)
-;;          ("M-<down>" . mistty-send-key)
-;;          ("M-<left>" . mistty-send-key)
-;;          ("M-<right>" . mistty-send-key)))
+(use-package burly
+  :ensure t)
 
 ;; (profiler-start 'cpu)
 ;; (org-agenda nil "c")

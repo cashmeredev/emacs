@@ -5,7 +5,7 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(custom-safe-themes
-   '("c20728f5c0cb50972b50c929b004a7496d3f2e2ded387bf870f89da25793bb44"
+   '("677ca7dfb121eda37268397e4e0f9deddf8fce9433bc0a1eb8acfafb8227edc8"
 	 "d43860349c9f7a5b96a090ecf5f698ff23a8eb49cd1e5c8a83bb2068f24ea563"
 	 default))
  '(lambda-themes-set-vibrant t)
