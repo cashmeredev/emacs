@@ -1290,7 +1290,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   
   (add-hook 'eglot-managed-mode-hook 
             (lambda () 
-              (eglot-inlay-hints-mode -1)))
+              (eglot-inlay-hints-mode -1)
+              (eglot-semantic-tokens-mode 1)))
   
   (setq eglot-ignored-server-capabilities 
         '(:inlayhintprovider :documenthighlightprovider)))
@@ -1342,7 +1343,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :config
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
-                 '(python-mode . ("ty" "--stdio")))))
+                 '(python-mode . ("rass" "python")))))
 
 (use-package python-black
   :ensure t
@@ -1537,6 +1538,18 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
                                   (unknown . "┆")
                                   (ignored . "i"))))
 
+(use-package hl-todo
+  :ensure t
+  :straight (:host github :repo "tarsius/hl-todo")
+  :config
+  (global-hl-todo-mode) 
+  (setq hl-todo-keyword-faces
+        '(("TODO"   . "#FF0000")
+          ("FIXME"  . "#FF0000")
+          ("DEBUG"  . "#A020F0")
+          ("GOTCHA" . "#FF4500")
+          ("STUB"   . "#1E90FF"))))
+
 (use-package magit
   :ensure t
   :straight t
@@ -1611,16 +1624,20 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 (modify-syntax-entry ?_ "w")
 
+;; (defun my/eldoc-and-jump ()
+;;   (interactive)
+;;   (if (display-graphic-p)
+;;       (call-interactively 'eldoc-box-help-at-point)
+;;     (progn
+;;       (eldoc-doc-buffer)
+;;       (when-let ((eldoc-win (get-buffer-window "*eldoc*")))
+;;         (select-window eldoc-win)))))
+
 (defun my/eldoc-and-jump ()
   (interactive)
-  (if (display-graphic-p)
-      (call-interactively 'eldoc-box-help-at-point)
-    (progn
-      (eldoc-doc-buffer)
-      (when-let ((eldoc-win (get-buffer-window "*eldoc*")))
-        (select-window eldoc-win)))))
+      (call-interactively 'eldoc-box-help-at-point))
 
-(define-key evil-normal-state-map (kbd "K") #'my/eldoc-and-jump)
+;; (define-key evil-normal-state-map (kbd "K") #'my/eldoc-and-jump)
 
 ;; (setq select-enable-clipboard nil)
 ;; (setq select-enable-primary nil)
@@ -1991,7 +2008,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 (defvar cashmere/font-height 160)
 
-(set-face-attribute 'default nil :family "JetBrainsMono Nerd Font" :weight 'bold :height cashmere/font-height)
+(set-face-attribute 'default nil :family "MonoLisa" :weight 'medium :height cashmere/font-height)
 (set-face-attribute 'fixed-pitch nil :family "RobotoMono Nerd Font" :weight 'regular)
 (set-face-attribute 'variable-pitch nil :family "Poppins" :weight 'regular :height 1.1)
 
@@ -2285,7 +2302,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (define-globalized-minor-mode my/global-olivetti-mode olivetti-mode
  (lambda () (olivetti-mode 1)))
 (my/centered-cursor)
-(my/global-olivetti-mode)
+;; (my/global-olivetti-mode)
 
 (use-package org-modern-indent
   :straight (:host github :repo "jdtsmith/org-modern-indent")
@@ -2365,7 +2382,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :ensure t
   :config
   ;; (setq golden-ratio-auto-scale t)
-  (golden-ratio-mode 1))
+  ;; (golden-ratio-mode 1)
+)
 
 (use-package pdf-tools
   :straight (:type built-in)
@@ -2398,7 +2416,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "." '(find-file :wk "find file")
   "," '(consult-buffer :wk "switch buffer")
   ":" (lambda () (interactive) (execute-extended-command nil))
-  "K" 'my/eldoc-and-jump
 
   "d" '(:ignore t :wk "denote")
   "dd" '(denote-menu-list-notes t :wk "List all notes")
@@ -2413,12 +2430,12 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "ff" '(find-file :wk "find file")
   "fs" '(save-buffer :wk "save file")
 
-  "b" '(:ignore t :wk "buffers")
-  "bb" '(consult-buffer :wk "switch buffer")
+  "b" '(:ignore t :wk "buffer/bookmarks")
+  "bb" '(consult-bookmark :wk "display current bookmarks")
   "bi" '(ibuffer :wk "ibuffer")
-  "bd" '(kill-current-buffer :wk "kill buffer")
+  "bd" '(bookmark-delete :wk "delete bookmark")
   "bk" '(kill-current-buffer :wk "kill buffer")
-  "bs" '(save-buffer :wk "save buffer")
+  "bs" '(bookmark-set :wk "save bookmark")
 
   "p" '(:ignore t :wk "project")
   "pp" '(projectile-switch-project :wk "switch project")
@@ -2509,8 +2526,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 (general-def 'normal 'override
   "K" 'my/eldoc-and-jump
-  "]d" 'flycheck-next-error
-  "[d" 'flycheck-previous-error
+  "'d" 'flycheck-next-error
+  ";d" 'flycheck-previous-error
   "]c" 'diff-hl-next-hunk
   "[c" 'diff-hl-previous-hunk
   "'b" 'switch-to-next-buffer
@@ -2616,7 +2633,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "d" '(dashboard-open :wk "dashboard")
   "f" '(dirvish :wk "file manager")
   "t" '(multi-vterm :wk "terminal")
-  "z" '(zoom-mode :wk "zoom/golden ratio")
+  "z" '(golden-ratio-mode :wk "zoom/golden ratio")
   "m" '(mu4e :wk "mail")
   "p" '(pass :wk "pass")
   "o" '(my/global-olivetti-mode :wk "center buffer")
