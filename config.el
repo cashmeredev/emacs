@@ -616,6 +616,12 @@
 ;;   :ensure t
 ;;   :hook (flycheck-mode-hook . flyover-mode))
 
+(use-package flycheck-eglot
+  :ensure t
+  :after (flycheck eglot)
+  :config
+  (global-flycheck-eglot-mode 1))
+
 (use-package xref
   :straight nil
   :ensure nil)
@@ -691,14 +697,23 @@
 
 
 (use-package org-modern
-  :ensure t)
+  :ensure t
+  :config
+  (setq org-modern-hide-stars t)
+  (setq org-modern-star 'fold)
+  (setq org-modern-fold-stars '(("◉" . "○")))
+  (setq org-modern-star 'replace)
+  (setq org-modern-replace-stars "◉○◉○◉")
+  
+  (setq org-modern-todo-faces
+    '(("TODO" :background "#3a3a3a" :foreground "#e0e0e0" :weight bold)
+      ("NEXT" :background "#ff9800" :foreground "#1a1a1a" :weight bold)
+      ("ACTIVE" :background "#e91e63" :foreground "#ffffff" :weight bold)
+      ("WAIT" :background "#2196f3" :foreground "#ffffff" :weight bold)
+      ("DONE" :background "#4caf50" :foreground "#ffffff" :weight bold)
+      ("CANCELLED" :background "#757575" :foreground "#e0e0e0" :weight normal))))
 
 (with-eval-after-load 'org (global-org-modern-mode))
-
-(setq org-modern-star 'fold)
-(setq org-modern-fold-stars '(("◉" . "○")))
-(setq org-modern-star 'replace)
-(setq org-modern-replace-stars "◉○◉○◉")
 
 (use-package org-fancy-priorities
   :ensure t
@@ -706,6 +721,12 @@
   (org-mode . org-fancy-priorities-mode)
   :config
   (setq org-fancy-priorities-list '("⚡" "⬆" "⬇" "☕")))
+
+(setq org-priority-faces
+  '((?A . (:background "#e91e63" :foreground "#ffffff" :weight bold))
+    (?B . (:background "#ff9800" :foreground "#1a1a1a" :weight bold))
+    (?C . (:background "#2196f3" :foreground "#ffffff" :weight bold))
+    (?D . (:background "#795548" :foreground "#ffffff" :weight bold))))
 
 ;; (setq org-agenda-start-on-weekday nil
 ;;       org-agenda-block-separator  nil
@@ -802,7 +823,7 @@ and convert it to Org using the pandoc utility."
 (defun my/org-capture-denote-task ()
   (let* ((context (read-string "Task: "))
          (todo-state (completing-read "TODO state: "
-                                      '("ACTIVE" "NEXT" "TODO" "WAIT" "PLAN" "FUN")))
+                                      '("ACTIVE" "NEXT" "TODO" "WAIT" "PLAN")))
          (file-name (denote nil '("task"))))
     (find-file file-name)
     (goto-char (point-min))
@@ -830,69 +851,362 @@ and convert it to Org using the pandoc utility."
   :config
   (org-super-agenda-mode))
 
+(use-package org-reschedule-by-rule
+  :straight (:host github :repo "Raemi/org-reschedule-by-rule")
+  :ensure t
+  :after org
+  :config
+  (setq org-reschedule-by-rule-rules
+    '(
+      (:name "Overdue to tomorrow"
+       :condition (lambda ()
+         (and (org-entry-get (point) "SCHEDULED")
+              (not (org-entry-is-done-p))
+              (< (org-time-string-to-seconds
+                   (org-entry-get (point) "SCHEDULED"))
+                 (org-time-string-to-seconds (format-time-string "<%Y-%m-%d>")))))
+       :action (lambda ()
+         (org-schedule nil (format-time-string "<%Y-%m-%d>" (time-add (current-time) (days-to-time 1))))))
+
+      (:name "Weekly reset to Monday"
+       :condition (lambda ()
+         (and (org-entry-get (point) "SCHEDULED")
+              (org-entry-is-done-p)
+              (member (org-entry-get (point) "TODO") '("ACTIVE" "NEXT"))))
+       :action (lambda ()
+         (org-schedule nil (format-time-string "<%Y-%m-%d>" (org-read-date nil nil "next Monday")))))
+      )))
+
+;; (use-package org-ql
+;;   :ensure t
+;;   :after org-super-agenda
+;;   :config
+;;   (setq org-agenda-custom-commands
+;; 		'(("t" "Project Task Overview"
+;; 		   ((org-ql-block '(and (tags "project")
+;; 								(not (done)))
+;; 						  ((org-ql-block-header "Project Tasks")
+;; 						   (org-super-agenda-groups
+;; 							'((:discard (:todo "FUN"))  
+;; 							  (:name "ACTIVE" :todo "ACTIVE")
+;; 							  (:name "NEXT" :todo "NEXT")
+;; 							  (:name "TODO" :todo "TODO")
+;; 							  (:name "WAIT" :todo "WAIT")))))))
+;;           ("p" "Personal Task Overview"
+;;            ((org-ql-block '(and (or (tags "self")
+;;                                     (tags "university"))
+;;                                 (not (tags "project"))
+;;                                 (not (done)))
+;;                           ((org-ql-block-header "Personal & University Tasks")
+;;                            (org-super-agenda-groups
+;;                             '((:discard (:todo "FUN"))  
+;;                               (:name "ACTIVE" :todo "ACTIVE")
+;;                               (:name "NEXT" :todo "NEXT")
+;;                               (:name "TODO" :todo "TODO")
+;;                               (:name "WAIT" :todo "WAIT")))))))
+;;           ("w" "Weekly Overview"
+;;            ((org-ql-block '(and (or (deadline auto)
+;;                                     (scheduled :to 7))
+;;                                 (or (tags "self")
+;;                                     (tags "university"))
+;;                                 (not (tags "project"))
+;;                                 (not (done))
+;;                                 (not (habit)))
+;;                           ((org-ql-block-header "Weekly Tasks")
+;;                            (org-super-agenda-groups
+;;                             '((:name "Deadlines" :deadline t :order 1)
+;;                               (:name "Schedule" :scheduled t :order 2)
+;;                               (:discard (:anything t))))))
+;;             (org-ql-block '(and (ts-active :from today :to 7 :with-time t)
+;;                                 (or (tags "self")
+;;                                     (tags "university"))
+;;                                 (not (tags "project"))
+;;                                 (not (done))
+;;                                 (not (habit)))
+;;                           ((org-ql-block-header "Appointments")
+;;                            (org-super-agenda-groups
+;;                             '((:name "This Week" :anything t :order 1)))))
+;;             (org-ql-block '(and (habit)
+;;                                 (or (tags "self")
+;;                                     (tags "university"))
+;;                                 (not (tags "project"))
+;;                                 (not (done)))
+;;                           ((org-ql-block-header "Habits")
+;;                            (org-super-agenda-groups
+;;                             '((:name "Daily Habits" :habit t :order 1)
+;;                               (:discard (:anything t)))))))))))
 (use-package org-ql
   :ensure t
-  :after org-super-agenda
-  :config
-  (setq org-agenda-custom-commands
-		'(("t" "Project Task Overview"
-		   ((org-ql-block '(and (tags "project")
-								(not (done)))
-						  ((org-ql-block-header "Project Tasks")
-						   (org-super-agenda-groups
-							'((:discard (:todo "FUN"))  
-							  (:name "ACTIVE" :todo "ACTIVE")
-							  (:name "NEXT" :todo "NEXT")
-							  (:name "TODO" :todo "TODO")
-							  (:name "WAIT" :todo "WAIT")))))))
-          ("p" "Personal Task Overview"
-           ((org-ql-block '(and (or (tags "self")
-                                    (tags "university"))
-                                (not (tags "project"))
-                                (not (done)))
-                          ((org-ql-block-header "Personal & University Tasks")
-                           (org-super-agenda-groups
-                            '((:discard (:todo "FUN"))  
-                              (:name "ACTIVE" :todo "ACTIVE")
-                              (:name "NEXT" :todo "NEXT")
-                              (:name "TODO" :todo "TODO")
-                              (:name "WAIT" :todo "WAIT")))))))
-          ("w" "Weekly Overview"
-           ((org-ql-block '(and (or (deadline auto)
-                                    (scheduled :to 7))
-                                (or (tags "self")
-                                    (tags "university"))
-                                (not (tags "project"))
-                                (not (done))
-                                (not (habit)))
-                          ((org-ql-block-header "Weekly Tasks")
-                           (org-super-agenda-groups
-                            '((:name "Deadlines" :deadline t :order 1)
-                              (:name "Schedule" :scheduled t :order 2)
-                              (:discard (:anything t))))))
-            (org-ql-block '(and (ts-active :from today :to 7 :with-time t)
-                                (or (tags "self")
-                                    (tags "university"))
-                                (not (tags "project"))
-                                (not (done))
-                                (not (habit)))
-                          ((org-ql-block-header "Appointments")
-                           (org-super-agenda-groups
-                            '((:name "This Week" :anything t :order 1)))))
-            (org-ql-block '(and (habit)
-                                (or (tags "self")
-                                    (tags "university"))
-                                (not (tags "project"))
-                                (not (done)))
-                          ((org-ql-block-header "Habits")
-                           (org-super-agenda-groups
-                            '((:name "Daily Habits" :habit t :order 1)
-                              (:discard (:anything t)))))))))))
+  :after org-super-agenda)
+
+(setq org-agenda-custom-commands
+  '(
+    ("d" "Daily Dashboard"
+     (
+       (org-ql-block '(and (scheduled :to today)
+                           (not (done)))
+         ((org-ql-block-header "Today's Schedule")
+          (org-super-agenda-groups
+           '(
+             (:name "Morning Block (Before 12:00)"
+              :time-grid t
+              :order 1)
+             (:name "Afternoon Block (12:00-17:00)"
+              :time-grid t
+              :order 2)
+             (:name "Evening Block (After 17:00)"
+              :time-grid t
+              :order 3)
+             (:discard (:anything t))))))
+
+       (org-ql-block '(and (or (tags "self")
+                              (tags "university"))
+                           (not (scheduled))
+                           (not (tags "project"))
+                           (not (done)))
+         ((org-ql-block-header "Unscheduled Today")
+          (org-super-agenda-groups
+           '(
+             (:name "ACTIVE"
+              :todo "ACTIVE"
+              :order 1)
+             (:name "NEXT"
+              :todo "NEXT"
+              :order 2)
+             (:name "TODO"
+              :todo "TODO"
+              :order 3)
+             (:name "WAIT"
+              :todo "WAIT"
+              :order 4)
+             (:discard (:anything t))))))
+
+       (org-ql-block '(and (tags "project")
+                           (not (done)))
+         ((org-ql-block-header "Project Tasks")
+          (org-super-agenda-groups
+           '(
+             (:name "ACTIVE"
+              :todo "ACTIVE"
+              :order 1)
+             (:name "NEXT"
+              :todo "NEXT"
+              :order 2)
+             (:name "TODO"
+              :todo "TODO"
+              :order 3)
+             (:discard (:anything t)))))))
+     ((org-agenda-span 'day)))
+
+    ("p" "Project Overview"
+     ((org-ql-block '(and (tags "project")
+                          (not (done)))
+        ((org-ql-block-header "All Project Tasks")
+         (org-super-agenda-groups
+          '(
+            (:name "ACTIVE"
+             :todo "ACTIVE"
+             :order 1)
+            (:name "NEXT"
+             :todo "NEXT"
+             :order 2)
+            (:name "TODO"
+             :todo "TODO"
+             :order 3)
+            (:name "WAIT"
+             :todo "WAIT"
+             :order 4)
+            (:discard (:anything t)))))))
+     ((org-agenda-span 'day)))
+
+    ("e" "Evaluation Mode - Failed Tasks"
+     ((org-ql-block '(and (scheduled :to yesterday)
+                          (not (done))
+                          (not (habit)))
+        ((org-ql-block-header "Overdue Tasks")
+         (org-super-agenda-groups
+          '(
+            (:name "ACTIVE"
+             :todo "ACTIVE"
+             :order 1)
+            (:name "NEXT"
+             :todo "NEXT"
+             :order 2)
+            (:name "TODO"
+             :todo "TODO"
+             :order 3)
+            (:discard (:anything t))))))
+
+      (org-ql-block '(and (scheduled :from -7 :to -1)
+                          (not (done))
+                          (not (habit)))
+        ((org-ql-block-header "This Week's Unfinished")
+         (org-super-agenda-groups
+          '(
+            (:name "By Day"
+             :scheduled t
+             :order 1)
+            (:discard (:anything t)))))))
+     ((org-agenda-span 'week)))
+
+    ("w" "Weekly Overview"
+     ((org-ql-block '(and (or (deadline auto)
+                             (scheduled :to 7))
+                          (or (tags "self")
+                              (tags "university"))
+                          (not (tags "project"))
+                          (not (done))
+                          (not (habit)))
+        ((org-ql-block-header "Upcoming Deadlines & Scheduled")
+         (org-super-agenda-groups
+          '(
+            (:name "Deadlines"
+             :deadline t
+             :order 1)
+            (:name "Scheduled"
+             :scheduled t
+             :order 2)
+            (:discard (:anything t))))))
+
+      (org-ql-block '(and (ts-active :from today :to 7 :with-time t)
+                          (or (tags "self")
+                              (tags "university"))
+                          (not (tags "project"))
+                          (not (done)))
+        ((org-ql-block-header "Appointments This Week")
+         (org-super-agenda-groups
+          '(
+            (:name "By Time"
+             :anything t
+             :order 1)))))
+
+      (org-ql-block '(and (habit)
+                          (or (tags "self")
+                              (tags "university"))
+                          (not (tags "project")))
+        ((org-ql-block-header "Habits")
+         (org-super-agenda-groups
+          '(
+            (:name "Daily Habits"
+             :habit t
+             :order 1)
+            (:discard (:anything t)))))))
+     ((org-agenda-span 'week)))
+
+    ("s" "Self & University Tasks"
+     ((org-ql-block '(and (or (tags "self")
+                             (tags "university"))
+                          (not (tags "project"))
+                          (not (done)))
+        ((org-ql-block-header "All Self & University Tasks")
+         (org-super-agenda-groups
+          '(
+            (:name "ACTIVE"
+             :todo "ACTIVE"
+             :order 1)
+            (:name "NEXT"
+             :todo "NEXT"
+             :order 2)
+            (:name "TODO"
+             :todo "TODO"
+             :order 3)
+            (:name "WAIT"
+             :todo "WAIT"
+             :order 4)
+            (:discard (:anything t))))))))
+
+    ("c" "Complexity Matrix"
+     ((org-ql-block '(and (property "COMPLEXITY" "high")
+                          (property "EFFORT")
+                          (not (done)))
+        ((org-ql-block-header "High Complexity Tasks")
+         (org-super-agenda-groups
+          '(
+            (:name "ACTIVE"
+             :todo "ACTIVE"
+             :order 1)
+            (:name "NEXT"
+             :todo "NEXT"
+             :order 2)
+            (:discard (:anything t))))))
+
+      (org-ql-block '(and (property "COMPLEXITY" "low")
+                          (property "EFFORT")
+                          (not (done)))
+        ((org-ql-block-header "Quick Wins - Low Complexity")
+         (org-super-agenda-groups
+          '(
+            (:name "Tasks"
+             :not (:todo "WAIT")
+             :order 1)
+            (:discard (:anything t))))))))))
+
+(setq org-agenda-remove-tags t)
+
+(setq split-width-threshold 0)
+(setq split-height-threshold nil)
+
+
+(setq org-priority-faces
+  '((?A . (:foreground "#ff6b6b" :weight bold))
+    (?B . (:foreground "#ffd93d" :weight bold))
+    (?C . (:foreground "#6bcf7f" :weight bold))))
+
+(setq org-columns-default-format
+  "%40ITEM(Task) %10TODO(State) %10EFFORT(Effort) %10COMPLEXITY(Complexity) %PRIORITY")
+
+(setq org-global-properties
+  '(("EFFORT_ALL" . "0:15 0:30 1:00 2:00 3:00 5:00 8:00")
+    ("COMPLEXITY_ALL" . "low medium high")
+    ("PRIORITY_ALL" . "A B C")))
+
+(setq org-agenda-time-grid
+  '((daily today require-timed)
+    (800 1000 1200 1400 1600 1800 2000)
+    "......" "________________"))
+
+(setq org-agenda-current-time-string
+  "--- NOW ---------------")
 
 (setq org-todo-keywords
-      '((sequence "WAIT(w@/!)" "HABIT(h)" "TODO(t)" "NEXT(n)" "|" "DONE(d!)")
-        (sequence "BACKLOG(b)" "PLAN(p)" "READY(r)" "ACTIVE(a)" "REVIEW(v)"
-                  "FUN(f)" "|" "COMPLETED(c)" "CANC(k@)")))
+  '((sequence "TODO(t)" "NEXT(n)" "ACTIVE(a)" "WAIT(w)" "|" "DONE(d)" "CANCELLED(c)")))
+
+
+
+(defun org-set-effort-from-complexity ()
+  (interactive)
+  (let* ((complexity (org-entry-get (point) "COMPLEXITY"))
+         (effort (org-entry-get (point) "EFFORT")))
+    (unless effort
+      (cond
+       ((string= complexity "low") (org-set-property "EFFORT" "0:30"))
+       ((string= complexity "medium") (org-set-property "EFFORT" "2:00"))
+       ((string= complexity "high") (org-set-property "EFFORT" "5:00"))))))
+
+(define-key org-mode-map (kbd "C-c e") 'org-set-effort-from-complexity)
+
+(setq org-agenda-skip-function-global
+  (lambda ()
+    (let ((subtree-end (save-excursion (org-end-of-subtree t))))
+      (if (and (not (org-entry-is-done-p))
+               (save-excursion
+                 (or (org-search-forward-unencoded (org-get-heading t t t t) subtree-end t)
+                     nil)))
+          subtree-end
+        nil))))
+
+(defun my/org-agenda-remove-tags ()
+  (save-excursion
+    (goto-char (point-min))
+    (while (re-search-forward " +:[[:alnum:]_@#%:]+: *$" nil t)
+      (replace-match ""))))
+
+(add-hook 'org-agenda-finalize-hook #'my/org-agenda-remove-tags)
+
+;; (setq org-todo-keywords
+;;       '((sequence "WAIT(w@/!)" "HABIT(h)" "TODO(t)" "NEXT(n)" "|" "DONE(d!)")
+;;         (sequence "BACKLOG(b)" "PLAN(p)" "READY(r)" "ACTIVE(a)" "REVIEW(v)"
+;;                   "FUN(f)" "|" "COMPLETED(c)" "CANC(k@)")))
 
 (use-package org-contrib
   :ensure t)
@@ -2496,6 +2810,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "cr" '(eglot-rename :wk "lsp rename")
   "cf" '(eglot-format :wk "format buffer")
   "cs" '(yas-insert-snippet :wk "snippets")
+  "cl" '(flycheck-list-errors :wk "list errors")
 
   "q" '(:ignore t :wk "quit")
   "qq" '(save-buffers-kill-terminal :wk "quit emacs")
