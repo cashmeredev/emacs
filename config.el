@@ -1415,15 +1415,9 @@ Works on the base filename (without extension), e.g. matches \"-task\", \":task:
         (save-buffer)
         (kill-buffer)))))
 
-(defun my/leap-style-search ()
-  "Leap.nvim style: s{char1} shows preview, {char2} filters."
-  (interactive)
-  (let ((char1 (read-char "First char: "))
-        (char2 (read-char "Second char: ")))
-    (avy-jump
-     (regexp-quote (string char1 char2))
-     avy-style avy-all-windows
-     avy-rewind-mode avy-action)))
+(use-package casual-avy
+  :ensure t
+  :straight (:host github :repo "kickingvegas/casual-avy"))
 
 (use-package ox-json
   :ensure t
@@ -2349,190 +2343,189 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;   (custom-set-faces
 ;;    `(diff-hl-insert ((t (:background unspecified :foreground ,(catppuccin-get-color 'green)))))))
 
-(use-package modus-catppuccin
-  :ensure t
-  :straight (:type git
-             :repo "https://gitlab.com/magus/modus-catppuccin"
-             :branch "main")
-  :custom
-  (catppuccin-mocha-palette-overrides
-   '((base "#232136")
-     (mantle "#2d2a45")
-     (crust "#373354")
-     (surface0 "#373354")
-     (surface1 "#47407d")
-     (surface2 "#6e6a86")
-     (overlay0 "#6e6a86")
-     (overlay1 "#6e6a86")
-     (overlay2 "#6e6a86")
-     (subtext0 "#e0def4")
-     (subtext1 "#cdcbe0")
-     (text "#e2e0f7")
-     (rosewater "#eb98c3")
-     (flamingo "#ea9a97")
-     (pink "#eb98c3")
-     (mauve "#c4a7e7")
-     (red "#eb6f92")
-     (maroon "#eb6f92")
-     (peach "#ea9a97")
-     (yellow "#f6c177")
-     (green "#a3be8c")
-     (teal "#9ccfd8")
-     (sky "#9ccfd8")
-     (sapphire "#9ccfd8")
-     (blue "#569fba")
-     (lavender "#c4a7e7")))
-  (catppuccin-latte-palette-overrides
-   '((base "#f6f2ee")
-     (mantle "#e4dcd4")
-     (crust "#dbd1dd")
-     (surface0 "#d3c7bb")
-     (surface1 "#c4b8ac")
-     (surface2 "#b5a99d")
-     (overlay0 "#9ca0b0")
-     (overlay1 "#8c8fa1")
-     (overlay2 "#7c7f93")
-     (subtext0 "#6c6f85")
-     (subtext1 "#5c5f77")
-     (text "#3d2b5a")
-     (rosewater "#955f61")
-     (flamingo "#a5222f")
-     (pink "#a440b5")
-     (mauve "#6e33ce")
-     (red "#a5222f")
-     (maroon "#824d5b")
-     (peach "#955f61")
-     (yellow "#ac5402")
-     (green "#396847")
-     (teal "#287980")
-     (sky "#2d8a93")
-     (sapphire "#2d8a93")
-     (blue "#2848a9")
-     (lavender "#6e33ce")))
-  :config
-  (load-theme 'catppuccin-latte :no-confirm))
+;; (use-package modus-catppuccin
+;;   :ensure t
+;;   :straight (:type git
+;;              :repo "https://gitlab.com/magus/modus-catppuccin"
+;;              :branch "main")
+;;   :custom
+;;   (catppuccin-mocha-palette-overrides
+;;    '((base "#232136")
+;;      (mantle "#2d2a45")
+;;      (crust "#373354")
+;;      (surface0 "#373354")
+;;      (surface1 "#47407d")
+;;      (surface2 "#6e6a86")
+;;      (overlay0 "#6e6a86")
+;;      (overlay1 "#6e6a86")
+;;      (overlay2 "#6e6a86")
+;;      (subtext0 "#e0def4")
+;;      (subtext1 "#cdcbe0")
+;;      (text "#e2e0f7")
+;;      (rosewater "#eb98c3")
+;;      (flamingo "#ea9a97")
+;;      (pink "#eb98c3")
+;;      (mauve "#c4a7e7")
+;;      (red "#eb6f92")
+;;      (maroon "#eb6f92")
+;;      (peach "#ea9a97")
+;;      (yellow "#f6c177")
+;;      (green "#a3be8c")
+;;      (teal "#9ccfd8")
+;;      (sky "#9ccfd8")
+;;      (sapphire "#9ccfd8")
+;;      (blue "#569fba")
+;;      (lavender "#c4a7e7")))
+;;   (catppuccin-latte-palette-overrides
+;;    '((base "#f6f2ee")
+;;      (mantle "#e4dcd4")
+;;      (crust "#dbd1dd")
+;;      (surface0 "#d3c7bb")
+;;      (surface1 "#c4b8ac")
+;;      (surface2 "#b5a99d")
+;;      (overlay0 "#9ca0b0")
+;;      (overlay1 "#8c8fa1")
+;;      (overlay2 "#7c7f93")
+;;      (subtext0 "#6c6f85")
+;;      (subtext1 "#5c5f77")
+;;      (text "#3d2b5a")
+;;      (rosewater "#955f61")
+;;      (flamingo "#a5222f")
+;;      (pink "#a440b5")
+;;      (mauve "#6e33ce")
+;;      (red "#a5222f")
+;;      (maroon "#824d5b")
+;;      (peach "#955f61")
+;;      (yellow "#ac5402")
+;;      (green "#396847")
+;;      (teal "#287980")
+;;      (sky "#2d8a93")
+;;      (sapphire "#2d8a93")
+;;      (blue "#2848a9")
+;;      (lavender "#6e33ce")))
+;;   :config
+;;   (load-theme 'catppuccin-latte :no-confirm))
 
 ;; (use-package modus-themes
-;;   :ensure nil
-;;   :defer t
+;;   :ensure t
+;;   :demand t
 ;;   :custom
+;;   ;; Optional: Schriften schöner machen
 ;;   (modus-themes-italic-constructs t)
 ;;   (modus-themes-bold-constructs t)
-;;   (modus-themes-mixed-fonts nil)
 ;;   (modus-themes-prompts '(bold intense))
+  
+;;   ;; Hier injizieren wir DUSKFOX Farben in Modus Vivendi
 ;;   (modus-themes-common-palette-overrides
-;;    `((accent-0 "#1e66f5")
-;;      (accent-1 "#04a5e5")
-;;      (bg-active bg-main)
-;;      (bg-added "#d3f0d0")
-;;      (bg-added-refine "#b8e6b3")
-;;      (bg-changed "#dde5f5")
-;;      (bg-changed-refine "#c4d4f0")
-;;      (bg-completion "#ccd0da")
-;;      (bg-completion-match-0 "#eff1f5")
-;;      (bg-completion-match-1 "#eff1f5")
-;;      (bg-completion-match-2 "#eff1f5")
-;;      (bg-completion-match-3 "#eff1f5")
-;;      (bg-hl-line "#e6e9ef")
-;;      (bg-hover-secondary "#9ca0b0")
-;;      (bg-line-number-active unspecified)
-;;      (bg-line-number-inactive "#eff1f5")
-;;      (bg-main "#eff1f5")
-;;      (bg-mark-delete "#f5d9e0")
-;;      (bg-mark-select "#dde5f5")
-;;      (bg-mode-line-active "#e6e9ef")
-;;      (bg-mode-line-inactive "#e6e9ef")
-;;      (bg-prominent-err "#f5d9e0")
-;;      (bg-prompt unspecified)
-;;      (bg-prose-block-contents "#dce0e8")
-;;      (bg-prose-block-delimiter bg-prose-block-contents)
-;;      (bg-region "#9ca0b0")
-;;      (bg-removed "#f5d9e0")
-;;      (bg-removed-refine "#f0c9d1")
-;;      (bg-tab-bar      "#eff1f5")
-;;      (bg-tab-current  bg-main)
-;;      (bg-tab-other    "#eff1f5")
-;;      (border-mode-line-active nil)
-;;      (border-mode-line-inactive nil)
-;;      (builtin "#1e66f5")
-;;      (comment "#7c7f93")
-;;      (constant  "#d20f39")
-;;      (cursor  "#dc8a78")
-;;      (date-weekday "#1e66f5")
-;;      (date-weekend "#fe640b")
-;;      (docstring "#5c5f77")
-;;      (err     "#d20f39")
-;;      (fg-active fg-main)
-;;      (fg-completion "#4c4f69")
-;;      (fg-completion-match-0 "#1e66f5")
-;;      (fg-completion-match-1 "#d20f39")
-;;      (fg-completion-match-2 "#40a02b")
-;;      (fg-completion-match-3 "#fe640b")
-;;      (fg-heading-0 "#d20f39")
-;;      (fg-heading-1 "#fe640b")
-;;      (fg-heading-2 "#df8e1d")
-;;      (fg-heading-3 "#40a02b")
-;;      (fg-heading-4 "#04a5e5")
-;;      (fg-line-number-active "#7287fd")
-;;      (fg-line-number-inactive "#9ca0b0")
-;;      (fg-link  "#1e66f5")
-;;      (fg-main "#4c4f69")
-;;      (fg-mark-delete "#d20f39")
-;;      (fg-mark-select "#1e66f5")
-;;      (fg-mode-line-active "#4c4f69")
-;;      (fg-mode-line-inactive "#9ca0b0")
-;;      (fg-prominent-err "#d20f39")
-;;      (fg-prompt "#8839ef")
-;;      (fg-prose-block-delimiter "#7c7f93")
-;;      (fg-prose-verbatim "#40a02b")
-;;      (fg-region "#4c4f69")
-;;      (fnname    "#1e66f5")
-;;      (fringe "#eff1f5")
-;;      (identifier "#8839ef")
-;;      (info    "#179299")
-;;      (keyword   "#8839ef")
-;;      (keyword "#8839ef")
-;;      (name "#1e66f5")
-;;      (number "#fe640b")
-;;      (property "#1e66f5")
-;;      (string "#40a02b")
-;;      (type      "#df8e1d")
-;;      (variable  "#fe640b")
-;;      (warning "#df8e1d")))
+;;    '(
+;;      ;; --- Basis Farben (Duskfox) ---
+;;      (bg-main     "#232136")
+;;      (fg-main     "#e0def4")
+;;      (bg-dim      "#2d2a45") ; Etwas heller als Main
+;;      (fg-dim      "#9090c0") ; Abgedunkelter Text
+;;      (bg-active   "#393552") ; Aktive Zeile/Elemente
+
+;;      ;; --- Akzente (Duskfox) ---
+;;      (red         "#eb6f92")
+;;      (green       "#a3be8c")
+;;      (yellow      "#f6c177")
+;;      (blue        "#569fba")
+;;      (magenta     "#c4a7e7")
+;;      (cyan        "#9ccfd8")
+     
+;;      ;; --- Fein-Tuning (Mappings) ---
+;;      ;; Damit es nicht "arsch" aussieht, mappen wir wichtige Elemente neu:
+     
+;;      (border        "#47407d")
+;;      (cursor        magenta)
+     
+;;      ;; Modeline (Statusleiste)
+;;      (bg-mode-line-active   "#47407d")
+;;      (fg-mode-line-active   "#e0def4")
+;;      (bg-mode-line-inactive "#232136")
+;;      (fg-mode-line-inactive "#6e6a86")
+
+;;      ;; Syntax Highlighting Anpassungen
+;;      (keyword       magenta)   ; Keywords in Duskfox-Pink/Lila
+;;      (builtin       blue)      ; Builtins in Blau
+;;      (type          cyan)      ; Typen in Cyan
+;;      (string        green)     ; Strings in Grün
+;;      (constant      red)       ; Konstanten in Rot
+;;      (fnname        blue)      ; Funktionsnamen
+;;      (variable      cyan)      ; Variablen
+
+;;      ;; UI Elemente
+;;      (bg-region     "#393552") ; Selection Background
+;;      (fg-region     unspecified)
+;;      (bg-paren-match "#47407d")
+;;      (bg-hl-line    "#2d2a45")
+     
+;;      ;; Line Numbers
+;;      (bg-line-number-inactive "#232136")
+;;      (fg-line-number-inactive "#6e6a86")
+;;      (bg-line-number-active   "#2d2a45")
+;;      (fg-line-number-active   "#e0def4")
+;;      ))
 ;;   :config
-;;   (modus-themes-with-colors
-;;     (custom-set-faces
-;;      `(change-log-acknowledgment ((,c :foreground "#7287fd")))
-;;      `(change-log-date ((,c :foreground "#40a02b")))
-;;      `(change-log-name ((,c :foreground "#fe640b")))
-;;      `(diff-context ((,c :foreground "#1e66f5")))
-;;      `(diff-file-header ((,c :foreground "#ea76cb")))
-;;      `(diff-header ((,c :foreground "#1e66f5")))
-;;      `(diff-hunk-header ((,c :foreground "#fe640b")))
-;;      `(gnus-button ((,c :foreground "#1e66f5")))
-;;      `(gnus-group-mail-3 ((,c :foreground "#1e66f5")))
-;;      `(gnus-group-mail-3-empty ((,c :foreground "#1e66f5")))
-;;      `(gnus-header-content ((,c :foreground "#04a5e5")))
-;;      `(gnus-header-from ((,c :foreground "#8839ef")))
-;;      `(gnus-header-name ((,c :foreground "#40a02b")))
-;;      `(gnus-header-subject ((,c :foreground "#1e66f5")))
-;;      `(log-view-message ((,c :foreground "#7287fd")))
-;;      `(match ((,c :background "#c4d4f0" :foreground "#4c4f69")))
-;;      `(modus-themes-search-current ((,c :background "#d20f39" :foreground "#eff1f5")))
-;;      `(modus-themes-search-lazy ((,c :background "#c4d4f0" :foreground "#4c4f69")))
-;;      `(newsticker-extra-face ((,c :foreground "#7c7f93" :height 0.8 :slant italic)))
-;;      `(newsticker-feed-face ((,c :foreground "#d20f39" :height 1.2 :weight bold)))
-;;      `(newsticker-treeview-face ((,c :foreground "#4c4f69")))
-;;      `(newsticker-treeview-selection-face ((,c :background "#c4d4f0" :foreground "#4c4f69")))
-;;      `(tab-bar ((,c :background "#eff1f5" :foreground "#4c4f69")))
-;;      `(tab-bar-tab ((,c :background "#eff1f5" :underline t)))
-;;      `(tab-bar-tab-group-current ((,c :background "#eff1f5" :foreground "#4c4f69" :underline t)))
-;;      `(tab-bar-tab-group-inactive ((,c :background "#eff1f5" :foreground "#7c7f93")))
-;;      `(tab-bar-tab-inactive ((,c :background "#eff1f5" :foreground "#5c5f77")))
-;;      `(vc-dir-file ((,c :foreground "#1e66f5")))
-;;      `(vc-dir-header-value ((,c :foreground "#7287fd")))))
-;;   :init
-;;   (load-theme 'modus-operandi t))
+;;   ;; Lade das Basis-Theme (vivendi = dunkel)
+;;   (load-theme 'modus-vivendi :no-confirm))
+
+(use-package ef-themes
+  :ensure t
+  :demand t
+  :init
+  (ef-themes-take-over-modus-themes-mode 1)
+  
+  :custom
+  (modus-themes-italic-constructs t)
+  (modus-themes-bold-constructs t)
+  (modus-themes-prompts '(bold intense))
+  
+  (ef-duo-dark-palette-overrides
+   '(
+     (bg-main     "#232136")
+     (fg-main     "#e0def4")
+     (bg-dim      "#2d2a45")
+     (fg-dim      "#9090c0")
+     (bg-active   "#393552")
+
+     (red         "#eb6f92")
+     (green       "#a3be8c")
+     (yellow      "#f6c177")
+     (blue        "#569fba")
+     (magenta     "#c4a7e7")
+     (cyan        "#9ccfd8")
+     
+     (border        "#47407d")
+     (cursor        magenta)
+     
+     (bg-mode-line-active   "#47407d")
+     (fg-mode-line-active   "#e0def4")
+     (bg-mode-line-inactive "#232136")
+     (fg-mode-line-inactive "#6e6a86")
+
+     (builtin       blue)
+     (comment       yellow-faint)
+     (constant      red)
+     (fnname        blue)
+     (keyword       magenta)
+     (string        green)
+     (type          cyan)
+     (variable      blue-warmer)
+
+     (bg-region     "#393552")
+     (fg-region     unspecified)
+     (bg-paren-match "#47407d")
+     (bg-hl-line    "#2d2a45")
+     
+     (bg-line-number-inactive "#232136")
+     (fg-line-number-inactive "#6e6a86")
+     (bg-line-number-active   "#2d2a45")
+     (fg-line-number-active   "#e0def4")
+     ))
+  
+  :config
+  (load-theme 'ef-duo-dark :no-confirm))
 
 ;; (use-package kanagawa-themes
 ;;   :ensure t
@@ -2545,10 +2538,11 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;   :ensure t
 ;;   :demand t
 ;;   :config
-;;   (deftheme base16-duskfox)
 ;;   (setq base16-distinct-fringe-background t)
 ;;   (setq base16-highlight-mode-line t)
-;;   (setq base16-duskfox-colors
+  
+;;   (deftheme base24-duskfox)
+;;   (setq base24-duskfox-colors
 ;;         (list :base00 "#232136"
 ;;               :base01 "#2d2a45"
 ;;               :base02 "#373354"
@@ -2564,10 +2558,47 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;               :base0C "#9ccfd8"
 ;;               :base0D "#569fba"
 ;;               :base0E "#c4a7e7"
-;;               :base0F "#eb98c3"))
+;;               :base0F "#eb98c3"
+;;               :base10 "#47407d"
+;;               :base11 "#eb6f92"
+;;               :base12 "#a3be8c"
+;;               :base13 "#f6c177"
+;;               :base14 "#569fba"
+;;               :base15 "#c4a7e7"
+;;               :base16 "#9ccfd8"
+;;               :base17 "#e0def4"))
   
-;;   (base16-theme-define 'base16-duskfox base16-duskfox-colors)
-;;   (enable-theme 'base16-duskfox))
+;;   (base16-theme-define 'base24-duskfox base24-duskfox-colors)
+  
+;;   (deftheme base24-nightfox)
+;;   (setq base24-nightfox-colors
+;;         (list :base00 "#192330"
+;;               :base01 "#212e3f"
+;;               :base02 "#29394f"
+;;               :base03 "#575860"
+;;               :base04 "#71839b"
+;;               :base05 "#cdcecf"
+;;               :base06 "#aeafb0"
+;;               :base07 "#e4e4e5"
+;;               :base08 "#c94f6d"
+;;               :base09 "#f4a261"
+;;               :base0A "#dbc074"
+;;               :base0B "#81b29a"
+;;               :base0C "#63cdcf"
+;;               :base0D "#719cd6"
+;;               :base0E "#9d79d6"
+;;               :base0F "#d67ad2"
+;;               :base10 "#575860"
+;;               :base11 "#c94f6d"
+;;               :base12 "#81b29a"
+;;               :base13 "#dbc074"
+;;               :base14 "#719cd6"
+;;               :base15 "#9d79d6"
+;;               :base16 "#63cdcf"
+;;               :base17 "#cdcecf"))
+  
+;;   (base16-theme-define 'base24-nightfox base24-nightfox-colors)
+;;   (enable-theme 'base24-nightfox))
 
 (use-package dirvish
   :straight t
@@ -2601,6 +2632,9 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 	:straight (:host github :repo "jsadusk/tramp-hlo")
     :config
     (tramp-hlo-setup))
+
+(add-to-list 'load-path "/home/cashmere/.emacs.d/straight/repos/emacs-tramp-rpc/lisp")
+(require 'tramp-rpc)
 
 (use-package zoxide
   :ensure t)
@@ -2850,6 +2884,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "]t" 'tab-next
   "[t" 'tab-previous
   "P" 'consult-yank-from-kill-ring
+  "?" 'casual-avy-tmenu
   "gcc" (lambda ()
           (interactive)
           (unless (use-region-p)
