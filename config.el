@@ -284,8 +284,11 @@
   (setq dashboard-startup-banner "/home/cashmere/.emacs.d/image.jpg")
   (setq dashboard-image-banner-max-width 256)
   (setq dashboard-image-banner-max-height 256)
+  (setq dashboard-bookmarks-show-base t)
+  (setq dashboard-bookmarks-item-format "%s")
   (setq dashboard-projects-backend 'projectile)
-  (setq dashboard-items '((projects . 5)
+  (setq dashboard-items '((bookmarks . 5)
+						  (projects . 5)
                           (recents . 5)))
   (setq dashboard-projects-switch-function
         (lambda (proj)
@@ -427,6 +430,7 @@
           (280 . "#b4befe"))))
 
 (use-package ibuffer
+  :ensure nil
   :straight nil
   :config
   (setq ibuffer-expert t)
@@ -1813,12 +1817,11 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :defer t)
 
 (use-package olivetti
-  ;; :custom
-  ;; (olivetti-style 'fancy)  ; Keep margins visible
-  ;; (olivetti-margin-width 0)  ; No side margins
-  ;; (olivetti-fringe t)  ; Keep fringes visible
+  :custom
+  (olivetti-style 'fancy)  ; Keep margins visible
+  (olivetti-margin-width 10)  ; No side margins
   ;; (olivetti-shrink t)
-  ;; (olivetti-safe t)
+  (olivetti-safe t)
 )
 
 ;; (use-package visual-fill-column
@@ -1924,7 +1927,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (evil-mode 1)
   (define-key evil-normal-state-map "u" 'undo-tree-undo)
   (define-key evil-normal-state-map (kbd "C-r") 'undo-tree-redo)
-   
+  (setq evil-force-cursor t)
   (evil-set-initial-state 'help-mode 'emacs)
   (evil-set-initial-state 'messages-buffer-mode 'normal)
   (evil-set-initial-state 'dired-mode 'normal)
@@ -2149,9 +2152,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 (use-package nerd-icons
   :if ek-use-nerd-fonts                   ;; Load the package only if the user has configured to use nerd fonts.
-  :ensure t                               ;; Ensure the package is installed.
-  :straight t
-  :defer t)                               ;; Load the package only when needed to improve startup time.
+  :ensure t)                               ;; Ensure the package is installed.
+;; Load the package only when needed to improve startup time.
 
 (use-package nerd-icons-dired
   :if ek-use-nerd-fonts                   ;; Load the package only if the user has configured to use nerd fonts.
@@ -2263,22 +2265,62 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;     (setq-default mode-line-format (list "%_"))
 ;;     (setq mode-line-format (list "%_"))))
 
-(use-package doom-modeline
+;; (use-package doom-modeline
+;;   :ensure t
+;;   :hook (after-init . doom-modeline-mode)
+;;   :custom
+;;   (doom-modeline-time t)
+;;   (doom-modeline-time-icon t)
+;;   (doom-modeline-buffer-file-name-style 'buffer-name)
+;;   (doom-modeline-height 24)
+;;   (doom-modeline-buffer-encoding nil)
+;;   (doom-modeline-env-version t)
+;;   (doom-modeline-env-setup-rust nil)
+;;   :config
+;;   (setq display-time-24hr-format nil)
+;;   (display-time-mode 1))
+;;   ;; (set-face-attribute 'mode-line nil :height 180)
+;;   ;; (set-face-attribute 'mode-line-inactive nil :height 180))
+
+(use-package maple-modeline
   :ensure t
-  :hook (after-init . doom-modeline-mode)
-  :custom
-  (doom-modeline-time t)
-  (doom-modeline-time-icon t)
-  (doom-modeline-buffer-file-name-style 'buffer-name)
-  (doom-modeline-height 24)
-  (doom-modeline-buffer-encoding nil)
-  (doom-modeline-env-version t)
-  (doom-modeline-env-setup-rust nil)
+  :straight (:host github :repo "honmaple/emacs-maple-modeline")
+  :hook (after-init . maple-modeline-mode)
   :config
-  (setq display-time-24hr-format nil)
-  (display-time-mode 1))
-  ;; (set-face-attribute 'mode-line nil :height 180)
-  ;; (set-face-attribute 'mode-line-inactive nil :height 180))
+  (setq maple-modeline-separator 'nil)
+  (setq maple-modeline-height 25)
+
+  (defun maple-modeline-to-header-line ()
+    (setq-default header-line-format mode-line-format)
+    (setq-default mode-line-format nil))
+
+  (add-hook 'maple-modeline-mode-hook #'maple-modeline-to-header-line)
+
+  (display-time-mode 1)
+
+  (maple-modeline-define my-custom-style
+    :left ((evil :left (bar :left ""))
+           macro
+           buffer-info
+           ;; major-mode
+           flycheck
+           version-control
+           remote-host
+           region)
+    :right (narrow
+            python
+            ;; lsp
+            misc-info
+            process
+            count
+            position))
+
+  (setq maple-modeline-style 'my-custom-style)
+
+  :custom-face
+  (header-line ((t (:inherit mode-line :box nil))))
+  (mode-line ((t (:box nil))))
+  (mode-line-inactive ((t (:box nil)))))
 
 ;; (use-package punch-line
 ;;   :ensure t
@@ -2312,7 +2354,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (setq package-gnupghome-dir "~/.gnupg")
 
 (blink-cursor-mode 0)
-(setq-default cursor-type 'bar)
+(setq-default cursor-type 'box)
 
 (defvar cashmere/font-height 160)
 
@@ -2646,7 +2688,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :ensure t
   :after (dired-rsync transient))
 
-(setq-default olivetti-body-width 115)
+(setq-default olivetti-body-width 100)
 (define-globalized-minor-mode my/global-olivetti-mode olivetti-mode
  (lambda () (olivetti-mode 1)))
 (my/centered-cursor)
