@@ -2424,7 +2424,6 @@ ily <3.
   (evil-mode 1)
   (define-key evil-normal-state-map "u" 'undo-tree-undo)
   (define-key evil-normal-state-map (kbd "C-r") 'undo-tree-redo)
-  (setq evil-force-cursor t)
   (evil-set-initial-state 'help-mode 'emacs)
   (evil-set-initial-state 'messages-buffer-mode 'normal)
   (evil-set-initial-state 'dired-mode 'normal)
