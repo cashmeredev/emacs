@@ -3168,6 +3168,10 @@ ily <3.
 ** maple modeline
 
 #+begin_src emacs-lisp
+(setq mode-line-misc-info
+      (assq-delete-all 'eglot--managed-mode 
+                       (copy-sequence mode-line-misc-info)))
+
 (use-package maple-modeline
   :ensure t
   :straight (:host github :repo "honmaple/emacs-maple-modeline")
@@ -3252,7 +3256,7 @@ ily <3.
 (blink-cursor-mode 0)
 (setq-default cursor-type 'box)
 
-(defvar cashmere/font-height 160)
+(defvar cashmere/font-height 180)
 
 (set-face-attribute 'default nil :family "MonoLisa" :weight 'medium :height cashmere/font-height)
 (set-face-attribute 'fixed-pitch nil :family "RobotoMono Nerd Font" :weight 'regular)
@@ -3439,28 +3443,95 @@ ily <3.
   (modus-themes-bold-constructs t)
   (modus-themes-prompts '(bold intense))
   
-  (ef-duo-dark-palette-overrides
+  (ef-light-palette-overrides
    '(
-     (bg-main     "#232136")
-     (fg-main     "#e0def4")
-     (bg-dim      "#2d2a45")
-     (fg-dim      "#9090c0")
-     (bg-active   "#393552")
+     (bg-main     "#efefef")
+     (fg-main     "#313145")
+     (bg-dim      "#bebed2")
+     (fg-dim      "#7c7c98")
+     (bg-alt      "#9e9eaf")
+     (fg-alt      "#505063")
+     (bg-active   "#22223a")
+     (bg-inactive "#efefef")
 
-     (red         "#eb6f92")
-     (green       "#a3be8c")
-     (yellow      "#f6c177")
-     (blue        "#569fba")
-     (magenta     "#c4a7e7")
-     (cyan        "#9ccfd8")
+     (red         "#f43979")
+     (red-warmer  "#ff669b")
+     (red-cooler  "#d22a8b")
+     (red-faint   "#f43979")
      
-     (border        "#47407d")
-     (cursor        magenta)
+     (green       "#0073a8")
+     (green-warmer "#0073a8")
+     (green-cooler "#0073a8")
+     (green-faint  "#0073a8")
      
-     (bg-mode-line-active   "#47407d")
-     (fg-mode-line-active   "#e0def4")
-     (bg-mode-line-inactive "#232136")
-     (fg-mode-line-inactive "#6e6a86")
+     (yellow      "#ff669b")
+     (yellow-warmer "#f43979")
+     (yellow-cooler "#d22a8b")
+     (yellow-faint  "#ff669b")
+     
+     (blue        "#2155d6")
+     (blue-warmer "#0073a8")
+     (blue-cooler "#2155d6")
+     (blue-faint  "#2155d6")
+     
+     (magenta     "#6916b6")
+     (magenta-warmer "#8d17a5")
+     (magenta-cooler "#471397")
+     (magenta-faint  "#6916b6")
+     
+     (cyan        "#0073a8")
+     (cyan-warmer "#2155d6")
+     (cyan-cooler "#2155d6")
+     (cyan-faint  "#0073a8")
+
+     (bg-red-intense "#ff669b")
+     (bg-green-intense "#0073a8")
+     (bg-yellow-intense "#f43979")
+     (bg-blue-intense "#2155d6")
+     (bg-magenta-intense "#8d17a5")
+     (bg-cyan-intense "#0073a8")
+
+     (bg-red-subtle "#bebed2")
+     (bg-green-subtle "#bebed2")
+     (bg-yellow-subtle "#bebed2")
+     (bg-blue-subtle "#bebed2")
+     (bg-magenta-subtle "#bebed2")
+     (bg-cyan-subtle "#bebed2")
+
+     (bg-added "#bebed2")
+     (bg-added-faint "#efefef")
+     (bg-added-refine "#9e9eaf")
+     (fg-added "#0073a8")
+     
+     (bg-changed "#bebed2")
+     (bg-changed-faint "#efefef")
+     (bg-changed-refine "#9e9eaf")
+     (fg-changed "#f43979")
+     
+     (bg-removed "#bebed2")
+     (bg-removed-faint "#efefef")
+     (bg-removed-refine "#9e9eaf")
+     (fg-removed "#d22a8b")
+
+     (bg-mode-line "#9e9eaf")
+     (fg-mode-line "#313145")
+     (bg-mode-line-active "#9e9eaf")
+     (fg-mode-line-active "#313145")
+     (bg-mode-line-inactive "#efefef")
+     (fg-mode-line-inactive "#7c7c98")
+
+     (border        "#7c7c98")
+     (cursor        "#471397")
+     
+     (bg-region     "#bebed2")
+     (fg-region     unspecified)
+     (bg-paren-match "#9e9eaf")
+     (bg-hl-line    "#bebed2")
+     
+     (bg-line-number-inactive "#efefef")
+     (fg-line-number-inactive "#7c7c98")
+     (bg-line-number-active   "#bebed2")
+     (fg-line-number-active   "#313145")
 
      (builtin       blue)
      (comment       yellow-faint)
@@ -3471,19 +3542,42 @@ ily <3.
      (type          cyan)
      (variable      blue-warmer)
 
-     (bg-region     "#393552")
-     (fg-region     unspecified)
-     (bg-paren-match "#47407d")
-     (bg-hl-line    "#2d2a45")
+     (err red-warmer)
+     (warning yellow-warmer)
+     (info green)
      
-     (bg-line-number-inactive "#232136")
-     (fg-line-number-inactive "#6e6a86")
-     (bg-line-number-active   "#2d2a45")
-     (fg-line-number-active   "#e0def4")
+     (link blue-warmer)
+     (link-alt magenta)
+     (name magenta-cooler)
+     (keybind blue-cooler)
+     (identifier magenta-faint)
+     (prompt green-cooler)
+
+     (date-common cyan-cooler)
+     (date-deadline red)
+     (date-event fg-alt)
+     (date-holiday magenta-warmer)
+     (date-scheduled yellow)
+     (date-weekday cyan)
+     (date-weekend red-faint)
+
+     (mail-cite-0 blue-warmer)
+     (mail-cite-1 magenta)
+     (mail-cite-2 cyan-cooler)
+     (mail-cite-3 yellow-cooler)
+     (mail-recipient magenta-cooler)
+     (mail-subject blue-cooler)
+
+     (prose-code magenta-warmer)
+     (prose-done green)
+     (prose-macro green-cooler)
+     (prose-tag green-faint)
+     (prose-todo red-warmer)
+     (prose-verbatim blue-warmer)
      ))
   
   :config
-  (load-theme 'ef-duo-dark :no-confirm))
+  (load-theme 'ef-light :no-confirm))
 #+end_src
 
 ** kanagawa-themes
