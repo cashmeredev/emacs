@@ -1807,6 +1807,14 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :ensure t
   :mode ("\\.proto\\'" . protobuf-mode))
 
+(use-package janet-mode
+  :mode ("\\.js\\'" . js-mode)
+  :ensure t
+  :config
+  (with-eval-after-load 'eglot
+  (add-to-list 'eglot-server-programs
+               '(janet-mode . ("janet-lsp")))))
+
 (use-package vterm
   :ensure t
   :config
@@ -2674,7 +2682,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
     :config
     (tramp-hlo-setup))
 
-(add-to-list 'load-path "/home/cashmere/.emacs.d/straight/repos/emacs-tramp-rpc/lisp")
+(add-to-list 'load-path "/home/cashmere/.emacs.d/tramp-rpc/lisp")
 (require 'tramp-rpc)
 
 (use-package zoxide

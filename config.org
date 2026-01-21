@@ -1,4 +1,4 @@
-#+title:      config.org
+#+title:      config.ors
 #+date:       [2025-10-20 Mon 08:33]
 #+identifier: 20251020T083323
 #+PROPERTY: header-args 
@@ -2010,7 +2010,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :after yasnippet)
 #+end_src
 
-** nix mode
+** nix-mode
 
 #+begin_src emacs-lisp
 (use-package nix-mode
@@ -2034,7 +2034,7 @@ for automatic flake devshells.
   (envrc-global-mode))
 #+end_src
 
-** python mode
+** python-mode
 
 Because I have to and not want to.
 
@@ -2251,12 +2251,24 @@ ily <3.
   :defer t)
 #+end_src
 
-** protobuf mode
+** protobuf-mode
 
 #+begin_src emacs-lisp
 (use-package protobuf-mode
   :ensure t
   :mode ("\\.proto\\'" . protobuf-mode))
+#+end_src
+
+** janet-mode
+
+#+begin_src emacs-lisp
+(use-package janet-mode
+  :mode ("\\.js\\'" . js-mode)
+  :ensure t
+  :config
+  (with-eval-after-load 'eglot
+  (add-to-list 'eglot-server-programs
+               '(janet-mode . ("janet-lsp")))))
 #+end_src
 
 * vterm
@@ -3599,8 +3611,9 @@ ily <3.
 * tramp-rpc
 
 #+begin_src emacs-lisp
-(add-to-list 'load-path "/home/cashmere/.emacs.d/straight/repos/emacs-tramp-rpc/lisp")
+(add-to-list 'load-path "/home/cashmere/.emacs.d/tramp-rpc/lisp")
 (require 'tramp-rpc)
+
 #+end_src
 
 * zoxide
