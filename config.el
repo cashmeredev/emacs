@@ -847,39 +847,11 @@ and convert it to Org using the pandoc utility."
            (function my/org-capture-denote-scheduled)
            "" :immediate-finish t :jump-to-captured t))))
 
-(setq org-agenda-span 'day)
-
 (use-package org-super-agenda
   :after org-agenda
   :init
   :config
   (org-super-agenda-mode))
-
-(use-package org-reschedule-by-rule
-  :straight (:host github :repo "Raemi/org-reschedule-by-rule")
-  :ensure t
-  :after org
-  :config
-  (setq org-reschedule-by-rule-rules
-    '(
-      (:name "Overdue to tomorrow"
-       :condition (lambda ()
-         (and (org-entry-get (point) "SCHEDULED")
-              (not (org-entry-is-done-p))
-              (< (org-time-string-to-seconds
-                   (org-entry-get (point) "SCHEDULED"))
-                 (org-time-string-to-seconds (format-time-string "<%Y-%m-%d>")))))
-       :action (lambda ()
-         (org-schedule nil (format-time-string "<%Y-%m-%d>" (time-add (current-time) (days-to-time 1))))))
-
-      (:name "Weekly reset to Monday"
-       :condition (lambda ()
-         (and (org-entry-get (point) "SCHEDULED")
-              (org-entry-is-done-p)
-              (member (org-entry-get (point) "TODO") '("ACTIVE" "NEXT"))))
-       :action (lambda ()
-         (org-schedule nil (format-time-string "<%Y-%m-%d>" (org-read-date nil nil "next Monday")))))
-      )))
 
 ;; (use-package org-ql
 ;;   :ensure t
@@ -1150,7 +1122,6 @@ and convert it to Org using the pandoc utility."
 (setq split-width-threshold 0)
 (setq split-height-threshold nil)
 
-
 (setq org-priority-faces
   '((?A . (:foreground "#ff6b6b" :weight bold))
     (?B . (:foreground "#ffd93d" :weight bold))
@@ -1175,7 +1146,27 @@ and convert it to Org using the pandoc utility."
 (setq org-todo-keywords
   '((sequence "TODO(t)" "NEXT(n)" "ACTIVE(a)" "WAIT(w)" "|" "DONE(d)" "CANCELLED(c)")))
 
+(setq org-todo-keyword-faces
+  '(("TODO" . (:inherit (warning org-todo)))
+    ("NEXT" . (:inherit (font-lock-type-face org-todo)))
+    ("ACTIVE" . (:inherit (bold org-todo)))
+    ("WAIT" . (:inherit (shadow org-todo)))
+    ("DONE" . (:inherit (success org-todo)))
+    ("CANCELLED" . (:inherit (shadow org-done)))))
 
+(defun my/update-org-modern-faces ()
+  (setq org-modern-todo-faces
+    `(("TODO" :background ,(face-attribute 'warning :foreground)
+               :foreground ,(face-attribute 'default :background))
+      ("ACTIVE" :background ,(face-attribute 'error :foreground)
+                 :foreground ,(face-attribute 'default :background))
+      ("DONE" :background ,(face-attribute 'success :foreground)
+               :foreground ,(face-attribute 'default :background))
+      ("CANCELLED" :background ,(face-attribute 'shadow :foreground)
+                    :foreground ,(face-attribute 'default :background)))))
+
+(add-hook 'after-load-theme-hook #'my/update-org-modern-faces)
+(my/update-org-modern-faces)
 
 (defun org-set-effort-from-complexity ()
   (interactive)
@@ -1188,16 +1179,6 @@ and convert it to Org using the pandoc utility."
        ((string= complexity "high") (org-set-property "EFFORT" "5:00"))))))
 
 (define-key org-mode-map (kbd "C-c e") 'org-set-effort-from-complexity)
-
-(setq org-agenda-skip-function-global
-  (lambda ()
-    (let ((subtree-end (save-excursion (org-end-of-subtree t))))
-      (if (and (not (org-entry-is-done-p))
-               (save-excursion
-                 (or (org-search-forward-unencoded (org-get-heading t t t t) subtree-end t)
-                     nil)))
-          subtree-end
-        nil))))
 
 (defun my/org-agenda-remove-tags ()
   (save-excursion
@@ -1384,8 +1365,7 @@ Works on the base filename (without extension), e.g. matches \"-task\", \":task:
   :ensure t
   :defer t
   :config
-  (setq denote-menu-title-column-width 40
-        denote-menu-show-file-type nil))
+  (setq denote-menu-title-column-width 60))
 
 (use-package denote-org
     :ensure t)
@@ -1444,6 +1424,10 @@ Works on the base filename (without extension), e.g. matches \"-task\", \":task:
       '(title subtitle identifier date last_updated_at
               aliases tags category skip_archive has_code
               og_image og_description og_video_id))
+
+(use-package tmr
+  :ensure t
+  :straight (:host github :repo "protesilaos/tmr"))
 
 (use-package which-key
   :ensure t
@@ -1547,7 +1531,20 @@ Works on the base filename (without extension), e.g. matches \"-task\", \":task:
   :ensure t
   :mode ("README\\.md\\'" . gfm-mode)            
   :init 
-  (setq markdown-command "multimarkdown"))
+  (setq markdown-command "multimarkdown")
+  :config
+  (setq markdown-header-scaling t)
+  (setq markdown-hide-markup t)
+  (setq markdown-fontify-code-blocks-natively t)
+  
+  (custom-set-faces
+   '(markdown-header-face-1 ((t (:inherit markdown-header-face :height 1.8 :foreground "#A3BE8C" :weight extra-bold))))
+   '(markdown-header-face-2 ((t (:inherit markdown-header-face :height 1.4 :foreground "#EBCB8B" :weight extra-bold))))
+   '(markdown-header-face-3 ((t (:inherit markdown-header-face :height 1.2 :foreground "#D08770" :weight extra-bold))))
+   '(markdown-header-face-4 ((t (:inherit markdown-header-face :height 1.15 :foreground "#BF616A" :weight extra-bold))))
+   '(markdown-header-face-5 ((t (:inherit markdown-header-face :height 1.11 :foreground "#b48ead" :weight extra-bold))))
+   '(markdown-header-face-6 ((t (:inherit markdown-header-face :height 1.06 :foreground "#5e81ac" :weight extra-bold))))
+   '(markdown-header-delimiter-face ((t (:foreground "#616161" :height 0.9))))))
 
 ;; (use-package treesit-auto
 ;;   :ensure t
@@ -1831,6 +1828,18 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   ;; (olivetti-shrink t)
   (olivetti-safe t)
 )
+
+(defun my-org-sidecar-left ()
+  "Org-Datei interaktiv als Sidecar links (25%)."
+  (interactive)
+  (let ((file (read-file-name "Org-Sidecar: " nil nil t)))
+    (display-buffer-in-side-window
+     (find-file-noselect file)
+     '((side . left)
+       (window-width . 0.25)
+       (slot . 0)))))
+
+(global-set-key (kbd "C-c o s") #'my-org-sidecar-left)
 
 ;; (use-package visual-fill-column
 ;;   :hook ((text-mode . visual-line-mode)        ;; Soft-Wrapping aktivieren
@@ -2133,6 +2142,10 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (use-package envrc
   :hook (after-init . envrc-global-mode))
 
+(add-hook 'org-agenda-mode-hook
+          (lambda ()
+            (add-hook 'auto-save-hook 'org-save-all-org-buffers nil t)
+            (auto-save-mode)))
 (use-package org-agenda
   :ensure nil
   :straight nil
@@ -2302,7 +2315,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (setq maple-modeline-height 25)
 
   (defun maple-modeline-to-header-line ()
-    (setq-default header-line-format mode-line-format)
+    (setq-default tab-line-format mode-line-format)
     (setq-default mode-line-format nil))
 
   (add-hook 'maple-modeline-mode-hook #'maple-modeline-to-header-line)
@@ -2369,7 +2382,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 (defvar cashmere/font-height 180)
 
-(set-face-attribute 'default nil :family "MonoLisa" :weight 'medium :height cashmere/font-height)
+(set-face-attribute 'default nil :family "MonoLisa Nerd Font" :weight 'medium :height cashmere/font-height)
 (set-face-attribute 'fixed-pitch nil :family "RobotoMono Nerd Font" :weight 'regular)
 (set-face-attribute 'variable-pitch nil :family "Poppins" :weight 'regular :height 1.1)
 
@@ -3027,7 +3040,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "]t" 'tab-next
   "[t" 'tab-previous
   "P" 'consult-yank-from-kill-ring
-  "?" 'casual-avy-tmenu
+  ;; "?" 'casual-avy-tmenu
   "gcc" (lambda ()
           (interactive)
           (unless (use-region-p)
