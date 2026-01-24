@@ -2322,6 +2322,27 @@ ily <3.
 * diff-hl
 
 #+begin_src emacs-lisp
+;; (use-package diff-hl
+;;   :defer t
+;;   :straight t
+;;   :ensure t
+;;   :hook
+;;   (find-file . (lambda ()
+;;                  (global-diff-hl-mode)           ;; Enable Diff-HL mode for all files.
+;;                  (diff-hl-flydiff-mode)          ;; Automatically refresh diffs.
+;;                  (diff-hl-margin-mode)))         ;; Show diff indicators in the margin.
+;;   :custom
+;;   (diff-hl-side 'left)                           ;; Set the side for diff indicators.
+;;   (diff-hl-margin-symbols-alist '((insert . "┃") ;; Customize symbols for each change type.
+;;                                   (delete . "-")
+;;                                   (change . "┃")
+;;                                   (unknown . "┆")
+;;                                   (ignored . "i"))))
+#+end_src
+
+* diff-hl
+
+#+begin_src emacs-lisp
 (use-package diff-hl
   :defer t
   :straight t
@@ -2338,6 +2359,56 @@ ily <3.
                                   (change . "┃")
                                   (unknown . "┆")
                                   (ignored . "i"))))
+#+end_src
+
+* hl-todo
+
+#+begin_src emacs-lisp
+(use-package hl-todo
+  :ensure t
+  :straight (:host github :repo "tarsius/hl-todo")
+  :config
+  (global-hl-todo-mode) 
+  (setq hl-todo-keyword-faces
+        '(("TODO"   . "#FF0000")
+          ("FIXME"  . "#FF0000")
+          ("DEBUG"  . "#A020F0")
+          ("GOTCHA" . "#FF4500")
+          ("STUB"   . "#1E90FF"))))
+#+end_src
+
+* magit
+
+#+begin_src emacs-lisp
+(use-package magit
+  :ensure t
+  :straight t
+  :config
+  (if ek-use-nerd-fonts
+	  (setopt magit-format-file-function #'magit-format-file-nerd-icons))
+  :custom
+  (magit-display-buffer-function #'magit-display-buffer-same-window-except-diff-v1))
+
+(defun my/magit-kill-buffers ()
+  (interactive)
+  (let ((buffers (magit-mode-get-buffers)))
+	(magit-restore-window-configuration)
+	(mapc #'kill-buffer buffers)))
+
+(setq switch-to-prev-buffer-skip
+      (lambda (window buffer bury-or-kill)
+        (string-match-p "\\*magit" (buffer-name buffer))))
+#+end_src
+
+** conventional-commit
+
+#+begin_src emacs-lisp
+(use-package conventional-commit
+  :ensure t
+  :straight (:host github :repo "akirak/conventional-commit.el")
+  :after git-commit
+  :hook
+  (git-commit-mode . conventional-commit-setup))
 #+end_src
 
 * hl-todo

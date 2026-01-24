@@ -1849,6 +1849,23 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;   (visual-fill-column-center-text t) ;; Text zentrieren!
 ;;   (visual-fill-column-enable-sensible-window-split t))
 
+;; (use-package diff-hl
+;;   :defer t
+;;   :straight t
+;;   :ensure t
+;;   :hook
+;;   (find-file . (lambda ()
+;;                  (global-diff-hl-mode)           ;; Enable Diff-HL mode for all files.
+;;                  (diff-hl-flydiff-mode)          ;; Automatically refresh diffs.
+;;                  (diff-hl-margin-mode)))         ;; Show diff indicators in the margin.
+;;   :custom
+;;   (diff-hl-side 'left)                           ;; Set the side for diff indicators.
+;;   (diff-hl-margin-symbols-alist '((insert . "┃") ;; Customize symbols for each change type.
+;;                                   (delete . "-")
+;;                                   (change . "┃")
+;;                                   (unknown . "┆")
+;;                                   (ignored . "i"))))
+
 (use-package diff-hl
   :defer t
   :straight t
@@ -1865,6 +1882,44 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
                                   (change . "┃")
                                   (unknown . "┆")
                                   (ignored . "i"))))
+
+(use-package hl-todo
+  :ensure t
+  :straight (:host github :repo "tarsius/hl-todo")
+  :config
+  (global-hl-todo-mode) 
+  (setq hl-todo-keyword-faces
+        '(("TODO"   . "#FF0000")
+          ("FIXME"  . "#FF0000")
+          ("DEBUG"  . "#A020F0")
+          ("GOTCHA" . "#FF4500")
+          ("STUB"   . "#1E90FF"))))
+
+(use-package magit
+  :ensure t
+  :straight t
+  :config
+  (if ek-use-nerd-fonts
+	  (setopt magit-format-file-function #'magit-format-file-nerd-icons))
+  :custom
+  (magit-display-buffer-function #'magit-display-buffer-same-window-except-diff-v1))
+
+(defun my/magit-kill-buffers ()
+  (interactive)
+  (let ((buffers (magit-mode-get-buffers)))
+	(magit-restore-window-configuration)
+	(mapc #'kill-buffer buffers)))
+
+(setq switch-to-prev-buffer-skip
+      (lambda (window buffer bury-or-kill)
+        (string-match-p "\\*magit" (buffer-name buffer))))
+
+(use-package conventional-commit
+  :ensure t
+  :straight (:host github :repo "akirak/conventional-commit.el")
+  :after git-commit
+  :hook
+  (git-commit-mode . conventional-commit-setup))
 
 (use-package hl-todo
   :ensure t
@@ -3331,6 +3386,9 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (add-hook 'message-send-mail-hook 'mu4e-set-msmtp-account))
 
 (use-package emacs-everywhere
+  :ensure t)
+
+(use-package md4rd
   :ensure t)
 
 (use-package burly
