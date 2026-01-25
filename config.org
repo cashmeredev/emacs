@@ -795,6 +795,7 @@ Not necessary but an eyecandy to look at!
 
   (setq org-startup-folded 'nil)
   (setq org-adapt-indentation t
+		;; org-time-stamp-rounding-minutes '(5 5)	
 		org-return-follows-link t
         org-hide-leading-stars t
         org-pretty-entities t
@@ -824,14 +825,17 @@ Not necessary but an eyecandy to look at!
                                 prepend))) t))
 #+end_src
 
-** org-workbench
+*** prompt timestamps with time
 
 #+begin_src emacs-lisp
-(use-package org-workbench
-  :straight (:host github :repo "yibie/org-workbench")
-  :after  denote
-  :config
-  (org-workbench-setup))
+(defun my-org-read-date-always-with-time (orig-fun &optional org-with-time to-time from-string prompt default-time default-input inactive)
+  (cl-letf (((symbol-function 'org-read-date--get-current-time)
+             (lambda () (or default-time (current-time)))))
+    (let* ((default-input (or default-input 
+                              (format-time-string "%H:%M" (or default-time (current-time))))))
+      (funcall orig-fun t to-time from-string prompt default-time default-input inactive))))
+
+(advice-add 'org-read-date :around #'my-org-read-date-always-with-time)
 #+end_src
 
 ** org-appear
@@ -865,8 +869,8 @@ Not necessary but an eyecandy to look at!
   (setq org-modern-replace-stars "◉○◉○◉")
   
   (setq org-modern-todo-faces
-    '(("TODO" :background "#3a3a3a" :foreground "#e0e0e0" :weight bold)
-      ("NEXT" :background "#ff9800" :foreground "#1a1a1a" :weight bold)
+    '(("TODO" :background "#3a3a3a" :foreground "#e0e0e0" :weight normal)
+      ("NEXT" :background "#ff9800" :foreground "#1a1a1a" :weight normal)
       ("ACTIVE" :background "#e91e63" :foreground "#ffffff" :weight bold)
       ("WAIT" :background "#2196f3" :foreground "#ffffff" :weight bold)
       ("DONE" :background "#4caf50" :foreground "#ffffff" :weight bold)
@@ -1059,68 +1063,9 @@ and convert it to Org using the pandoc utility."
 ** org-ql
 
 #+begin_src emacs-lisp
-;; (use-package org-ql
-;;   :ensure t
-;;   :after org-super-agenda
-;;   :config
-;;   (setq org-agenda-custom-commands
-;; 		'(("t" "Project Task Overview"
-;; 		   ((org-ql-block '(and (tags "project")
-;; 								(not (done)))
-;; 						  ((org-ql-block-header "Project Tasks")
-;; 						   (org-super-agenda-groups
-;; 							'((:discard (:todo "FUN"))  
-;; 							  (:name "ACTIVE" :todo "ACTIVE")
-;; 							  (:name "NEXT" :todo "NEXT")
-;; 							  (:name "TODO" :todo "TODO")
-;; 							  (:name "WAIT" :todo "WAIT")))))))
-;;           ("p" "Personal Task Overview"
-;;            ((org-ql-block '(and (or (tags "self")
-;;                                     (tags "university"))
-;;                                 (not (tags "project"))
-;;                                 (not (done)))
-;;                           ((org-ql-block-header "Personal & University Tasks")
-;;                            (org-super-agenda-groups
-;;                             '((:discard (:todo "FUN"))  
-;;                               (:name "ACTIVE" :todo "ACTIVE")
-;;                               (:name "NEXT" :todo "NEXT")
-;;                               (:name "TODO" :todo "TODO")
-;;                               (:name "WAIT" :todo "WAIT")))))))
-;;           ("w" "Weekly Overview"
-;;            ((org-ql-block '(and (or (deadline auto)
-;;                                     (scheduled :to 7))
-;;                                 (or (tags "self")
-;;                                     (tags "university"))
-;;                                 (not (tags "project"))
-;;                                 (not (done))
-;;                                 (not (habit)))
-;;                           ((org-ql-block-header "Weekly Tasks")
-;;                            (org-super-agenda-groups
-;;                             '((:name "Deadlines" :deadline t :order 1)
-;;                               (:name "Schedule" :scheduled t :order 2)
-;;                               (:discard (:anything t))))))
-;;             (org-ql-block '(and (ts-active :from today :to 7 :with-time t)
-;;                                 (or (tags "self")
-;;                                     (tags "university"))
-;;                                 (not (tags "project"))
-;;                                 (not (done))
-;;                                 (not (habit)))
-;;                           ((org-ql-block-header "Appointments")
-;;                            (org-super-agenda-groups
-;;                             '((:name "This Week" :anything t :order 1)))))
-;;             (org-ql-block '(and (habit)
-;;                                 (or (tags "self")
-;;                                     (tags "university"))
-;;                                 (not (tags "project"))
-;;                                 (not (done)))
-;;                           ((org-ql-block-header "Habits")
-;;                            (org-super-agenda-groups
-;;                             '((:name "Daily Habits" :habit t :order 1)
-;;                               (:discard (:anything t)))))))))))
 (use-package org-ql
   :ensure t
   :after org-super-agenda)
-
 #+end_src
 
 
@@ -1331,8 +1276,8 @@ and convert it to Org using the pandoc utility."
 
 (setq org-agenda-remove-tags t)
 
-(setq split-width-threshold 0)
-(setq split-height-threshold nil)
+;; (setq split-width-threshold 0)
+;; (setq split-height-threshold nil)
 
 (setq org-priority-faces
   '((?A . (:foreground "#ff6b6b" :weight bold))
@@ -1399,15 +1344,6 @@ and convert it to Org using the pandoc utility."
       (replace-match ""))))
 
 (add-hook 'org-agenda-finalize-hook #'my/org-agenda-remove-tags)
-#+end_src
-
-** TODO org-todo-keywords
-
-#+begin_src emacs-lisp
-;; (setq org-todo-keywords
-;;       '((sequence "WAIT(w@/!)" "HABIT(h)" "TODO(t)" "NEXT(n)" "|" "DONE(d!)")
-;;         (sequence "BACKLOG(b)" "PLAN(p)" "READY(r)" "ACTIVE(a)" "REVIEW(v)"
-;;                   "FUN(f)" "|" "COMPLETED(c)" "CANC(k@)")))
 #+end_src
 
 
@@ -1500,8 +1436,7 @@ Org Backend exporter for typst templates written and configured in org mode.
 #+begin_src emacs-lisp
 (use-package ox-pandoc
   :ensure t
-  :after org
-  )
+  :after org)
 #+end_src
 
 * denote
@@ -1530,6 +1465,15 @@ Denote fitself focused on the last versions to have a core for note taking and t
   :config
   (setq denote-agenda-include-regexp "task")
   (denote-agenda-insinuate))
+#+end_src
+
+** denote-journal
+
+#+begin_src emacs-lisp
+(use-package denote-journal
+  :ensure t
+  :config
+  (setopt denote-journal-title-format 'day-date-month-year))
 #+end_src
 
 ** config
@@ -1620,11 +1564,6 @@ Works on the base filename (without extension), e.g. matches \"-task\", \":task:
 (add-hook 'org-after-todo-state-change-hook #'my/denote-remove-task-filetag-and-silent-rename)
 #+end_src
 
-** configuration
-
-#+begin_src emacs-lisp
-#+end_src
-
 ** denote-menu
 
 #+begin_src emacs-lisp
@@ -1634,7 +1573,6 @@ Works on the base filename (without extension), e.g. matches \"-task\", \":task:
   :config
   (setq denote-menu-title-column-width 60))
 #+end_src
-
 
 ** denote-org
 
@@ -1682,14 +1620,6 @@ Some goodies for better integration with org files.
         (kill-buffer)))))
 #+end_src
 
-** casual-avy
-
-#+begin_src emacs-lisp
-(use-package casual-avy
-  :ensure t
-  :straight (:host github :repo "kickingvegas/casual-avy"))
-#+end_src
-
 ** ox-json
 
 #+begin_src emacs-lisp
@@ -1729,7 +1659,14 @@ Some goodies for better integration with org files.
 #+begin_src emacs-lisp
 (use-package tmr
   :ensure t
-  :straight (:host github :repo "protesilaos/tmr"))
+  :straight (:host github :repo "protesilaos/tmr")
+  :config
+  (setq tmr-sound-file "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga"
+        tmr-notification-urgency 'normal
+        tmr-description-list 'tmr-description-history)
+  
+  (define-key global-map (kbd "C-c t") #'tmr-prefix-map))
+
 #+end_src
 
 * which-key
@@ -1816,6 +1753,29 @@ Some goodies for better integration with org files.
   :after corfu
   :init
   (corfu-terminal-mode +1))
+#+end_src
+
+*** cape
+
+#+begin_src emacs-lisp
+(use-package cape
+  :ensure t
+  ;; Bind prefix keymap providing all Cape commands under a mnemonic key.
+  ;; Press C-c p ? to for help.
+  ;; Alternatively bind Cape commands individually.
+  ;; :bind (("C-c p d" . cape-dabbrev)
+  ;;        ("C-c p h" . cape-history)
+  ;;        ("C-c p f" . cape-file)
+  ;;        ...)
+  :init
+  ;; Add to the global default value of `completion-at-point-functions' which is
+  ;; used by `completion-at-point'.  The order of the functions matters, the
+  ;; first function returning a result wins.  Note that the list of buffer-local
+  ;; completion functions takes precedence over the global list.
+  (add-hook 'completion-at-point-functions #'cape-file)
+  ;; (add-hook 'completion-at-point-functions #'cape-history)
+  ;; ...
+)
 #+end_src
 
 * consult
@@ -2711,7 +2671,24 @@ ily <3.
         avy-style 'at-full
         avy-keys '(?a ?s ?d ?f ?g ?h ?j ?k ?l))
 
-  (evil-define-avy-motion evil-avy-goto-char-timer inclusive))
+  (evil-define-avy-motion emacs-flash-jump inclusive))
+#+end_src
+
+** emacs-flash
+
+#+begin_src emacs-lisp
+(use-package flash-emacs
+  :ensure t
+  :straight (:host github :repo "JiaweiChenC/flash-emacs"))
+#+end_src
+
+** avy-flash
+
+#+begin_src emacs-lisp
+;; ZenScriptor/avy-flash
+(use-package avy-flash
+  :ensure t
+  :straight (:host github :repo "ZenScriptor/avy-flash"))
 #+end_src
 
 * undo-tree
@@ -3261,28 +3238,29 @@ ily <3.
   :config
   (setq maple-modeline-separator 'nil)
   (setq maple-modeline-height 25)
-
+  (setq maple-modeline-icon t)
+  
   (defun maple-modeline-to-header-line ()
     (setq-default tab-line-format mode-line-format)
     (setq-default mode-line-format nil))
 
   (add-hook 'maple-modeline-mode-hook #'maple-modeline-to-header-line)
 
-  (display-time-mode 1)
+  (maple-modeline-define-segment my-modeline-time
+    :format (propertize (downcase (format-time-string " %I:%M %p "))
+                        'face 'bold))
 
   (maple-modeline-define my-custom-style
     :left ((evil :left (bar :left ""))
            macro
            buffer-info
-           ;; major-mode
            flycheck
            version-control
            remote-host
            region)
     :right (narrow
             python
-            ;; lsp
-            misc-info
+            my-modeline-time
             process
             count
             position))
@@ -3978,9 +3956,11 @@ ily <3.
 
   "d" '(:ignore t :wk "denote")
   "dd" '(denote-menu-list-notes t :wk "List all notes")
-  "dg" '(denote-grep t :wk "Search")
+  "dg" '(consult-denote-grep t :wk "Search")
   "dn" '(denote t :wk "Create a new note")
   "dr" '(denote-rename-file t :wk "Rename Note")
+  "dtl" '(tmr-list-timers :wk "list timer")
+  "dtt" '(tmr :wk "set timer")
 
   "f" '(:ignore t :wk "files")
   "fd" '(dired :wk "dired")
@@ -3991,7 +3971,8 @@ ily <3.
 
   "b" '(:ignore t :wk "buffer/bookmarks")
   "bb" '(consult-bookmark :wk "display current bookmarks")
-  "bi" '(ibuffer :wk "ibuffer")
+  "bI" '(ibuffer :wk "ibuffer")
+  "bi" '(projectile-ibuffer :wk "ibuffer project")
   "bd" '(bookmark-delete :wk "delete bookmark")
   "bk" '(kill-current-buffer :wk "kill buffer")
   "bs" '(bookmark-set :wk "save bookmark")
@@ -4078,7 +4059,7 @@ ily <3.
     (when (my/avy-enabled-p)
       (let ((scroll-margin 0)
             (maximum-scroll-margin 0))
-        (call-interactively 'evil-avy-goto-char-timer)))))
+        (call-interactively 'flash-emacs-jump)))))
 
 (general-def '(normal visual) 'override
   "s" 'my/s-key-dispatch)
@@ -4118,24 +4099,27 @@ ily <3.
 ** org mode keymaps
 
 #+begin_src emacs-lisp
-(my-local-leader
-  :keymaps 'org-mode-map
-  "h" '(consult-org-heading :wk "search headings")
-  "n" '(my-toggle-org-tree-indirect-buffer :wk "toggle narrow"))
-
 (my-leader
   :keymaps 'org-mode-map
-  "c" '(:wk "Clock" :ignore)
+  "m" '(:ignore :wk "org")
 
-  "cs" '(org-schedule :wk "Schedule")
-  "cd" '(org-deadline :wk "Deadline")
+  "mt" '(org-todo :wk "TODO")
+  "ma" '(org-add-note :wk "add note")
+  "mC" '(org-capture :wk "capture")
 
-  "l" '(:wk "Link" :ignore)
-  "lc" '(org-cliplink :wk "Cliplink")
-  "li" '(org-download-clipboard :wk "Image")
-  "ll" '(org-insert-link :wk "Link various things")
+  "mc" '(:wk "set" :ignore)
+  "mcd" '(org-deadline :wk "deadline")
+  "mcs" '(org-schedule :wk "schedule")
+  "mce" '(org-set-effort :wk "effort")
+  "mcr" '(org-clock-report :wk "clock report")
+  "m," '(org-priority :wk "priority")
+  "mI" '(org-clock-in :wk "clock in")
+  "mO" '(org-clock-out :wk "clock out")
+  "l" '(:ignore :wk "link")
+  "lc" '(org-cliplink :wk "cliplink")
+  "li" '(org-download-clipboard :wk "image")
+  "ll" '(org-insert-link :wk "link various things"))
 
-  "t" '(org-todo :wk "TODO"))
 (evil-define-key 'normal org-mode-map (kbd "RET") 'org-open-at-point)
 #+end_src
 
@@ -4154,18 +4138,15 @@ ily <3.
   "mf" '(fill-paragraph :wk "fill paragraph"))
 #+end_src
 
-** python-mode keymaps
+** rust-mode keymaps
 
 #+begin_src emacs-lisp
 (my-leader
-  :keymaps 'python-mode-map
-  "m" '(:wk "Python mode" :ignore)
-  "mf" '(ruff-format-buffer :wk "format buffer")
-  ;; "mt" '(jinja2-insert-tag :wk "tag")
-  ;; "mc" '(jinja2-insert-comment :wk "comment")
-  
-  ;; "mf" '(fill-paragraph :wk "fill paragraph")
-  )
+  :keymaps '(rust-mode-map rust-ts-mode-map)
+  "m" '(:wk "rust mode" :ignore)
+  "mr" '(rust-run :wk "run")
+  "mc" '(rust-run-clippy :wk "clippy")
+  "mC" '(rust-check :wk "check"))
 #+end_src
 
 ** denote-menu keymaps
@@ -4177,6 +4158,21 @@ ily <3.
     "c" 'denote-menu-clear-filters
     "e" 'denote-menu-export-to-dired
     "o" 'denote-menu-filter-out-keyword))
+#+end_src
+
+** tmr keynmaps
+
+#+begin_src emacs-lisp
+(with-eval-after-load 'tmr
+  (general-def 'normal tmr-tabulated-mode-map
+    "y" 'tmr-clone
+    "c" 'tmr-cancel
+    "d" 'tmr-remove
+    "D" 'tmr-remove-finished
+    "n" 'tmr
+    "N" 'tmr-with-details
+    "e" 'tmr-edit-description
+    "r" 'tmr-reschedule))
 #+end_src
 
 ** dirvish keymaps

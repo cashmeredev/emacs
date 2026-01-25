@@ -655,6 +655,7 @@
 
   (setq org-startup-folded 'nil)
   (setq org-adapt-indentation t
+		;; org-time-stamp-rounding-minutes '(5 5)	
 		org-return-follows-link t
         org-hide-leading-stars t
         org-pretty-entities t
@@ -683,11 +684,14 @@
                                        display (space :align-to (- right ,(org-string-width (match-string 2)) 3)))
                                 prepend))) t))
 
-(use-package org-workbench
-  :straight (:host github :repo "yibie/org-workbench")
-  :after  denote
-  :config
-  (org-workbench-setup))
+(defun my-org-read-date-always-with-time (orig-fun &optional org-with-time to-time from-string prompt default-time default-input inactive)
+  (cl-letf (((symbol-function 'org-read-date--get-current-time)
+             (lambda () (or default-time (current-time)))))
+    (let* ((default-input (or default-input 
+                              (format-time-string "%H:%M" (or default-time (current-time))))))
+      (funcall orig-fun t to-time from-string prompt default-time default-input inactive))))
+
+(advice-add 'org-read-date :around #'my-org-read-date-always-with-time)
 
 (use-package org-appear
   :commands (org-appear-mode)
@@ -710,8 +714,8 @@
   (setq org-modern-replace-stars "◉○◉○◉")
   
   (setq org-modern-todo-faces
-    '(("TODO" :background "#3a3a3a" :foreground "#e0e0e0" :weight bold)
-      ("NEXT" :background "#ff9800" :foreground "#1a1a1a" :weight bold)
+    '(("TODO" :background "#3a3a3a" :foreground "#e0e0e0" :weight normal)
+      ("NEXT" :background "#ff9800" :foreground "#1a1a1a" :weight normal)
       ("ACTIVE" :background "#e91e63" :foreground "#ffffff" :weight bold)
       ("WAIT" :background "#2196f3" :foreground "#ffffff" :weight bold)
       ("DONE" :background "#4caf50" :foreground "#ffffff" :weight bold)
@@ -784,6 +788,10 @@ and convert it to Org using the pandoc utility."
   :ensure t
   :mode ("\\.epub\\'" . nov-mode))
 
+(use-package org-generate
+  :ensure t
+  :defer t)
+
 (use-package yequake
   :custom
   (yequake-frames
@@ -853,64 +861,6 @@ and convert it to Org using the pandoc utility."
   :config
   (org-super-agenda-mode))
 
-;; (use-package org-ql
-;;   :ensure t
-;;   :after org-super-agenda
-;;   :config
-;;   (setq org-agenda-custom-commands
-;; 		'(("t" "Project Task Overview"
-;; 		   ((org-ql-block '(and (tags "project")
-;; 								(not (done)))
-;; 						  ((org-ql-block-header "Project Tasks")
-;; 						   (org-super-agenda-groups
-;; 							'((:discard (:todo "FUN"))  
-;; 							  (:name "ACTIVE" :todo "ACTIVE")
-;; 							  (:name "NEXT" :todo "NEXT")
-;; 							  (:name "TODO" :todo "TODO")
-;; 							  (:name "WAIT" :todo "WAIT")))))))
-;;           ("p" "Personal Task Overview"
-;;            ((org-ql-block '(and (or (tags "self")
-;;                                     (tags "university"))
-;;                                 (not (tags "project"))
-;;                                 (not (done)))
-;;                           ((org-ql-block-header "Personal & University Tasks")
-;;                            (org-super-agenda-groups
-;;                             '((:discard (:todo "FUN"))  
-;;                               (:name "ACTIVE" :todo "ACTIVE")
-;;                               (:name "NEXT" :todo "NEXT")
-;;                               (:name "TODO" :todo "TODO")
-;;                               (:name "WAIT" :todo "WAIT")))))))
-;;           ("w" "Weekly Overview"
-;;            ((org-ql-block '(and (or (deadline auto)
-;;                                     (scheduled :to 7))
-;;                                 (or (tags "self")
-;;                                     (tags "university"))
-;;                                 (not (tags "project"))
-;;                                 (not (done))
-;;                                 (not (habit)))
-;;                           ((org-ql-block-header "Weekly Tasks")
-;;                            (org-super-agenda-groups
-;;                             '((:name "Deadlines" :deadline t :order 1)
-;;                               (:name "Schedule" :scheduled t :order 2)
-;;                               (:discard (:anything t))))))
-;;             (org-ql-block '(and (ts-active :from today :to 7 :with-time t)
-;;                                 (or (tags "self")
-;;                                     (tags "university"))
-;;                                 (not (tags "project"))
-;;                                 (not (done))
-;;                                 (not (habit)))
-;;                           ((org-ql-block-header "Appointments")
-;;                            (org-super-agenda-groups
-;;                             '((:name "This Week" :anything t :order 1)))))
-;;             (org-ql-block '(and (habit)
-;;                                 (or (tags "self")
-;;                                     (tags "university"))
-;;                                 (not (tags "project"))
-;;                                 (not (done)))
-;;                           ((org-ql-block-header "Habits")
-;;                            (org-super-agenda-groups
-;;                             '((:name "Daily Habits" :habit t :order 1)
-;;                               (:discard (:anything t)))))))))))
 (use-package org-ql
   :ensure t
   :after org-super-agenda)
@@ -1119,8 +1069,8 @@ and convert it to Org using the pandoc utility."
 
 (setq org-agenda-remove-tags t)
 
-(setq split-width-threshold 0)
-(setq split-height-threshold nil)
+;; (setq split-width-threshold 0)
+;; (setq split-height-threshold nil)
 
 (setq org-priority-faces
   '((?A . (:foreground "#ff6b6b" :weight bold))
@@ -1188,11 +1138,6 @@ and convert it to Org using the pandoc utility."
 
 (add-hook 'org-agenda-finalize-hook #'my/org-agenda-remove-tags)
 
-;; (setq org-todo-keywords
-;;       '((sequence "WAIT(w@/!)" "HABIT(h)" "TODO(t)" "NEXT(n)" "|" "DONE(d!)")
-;;         (sequence "BACKLOG(b)" "PLAN(p)" "READY(r)" "ACTIVE(a)" "REVIEW(v)"
-;;                   "FUN(f)" "|" "COMPLETED(c)" "CANC(k@)")))
-
 (use-package org-contrib
   :ensure t)
 
@@ -1256,8 +1201,7 @@ and convert it to Org using the pandoc utility."
 
 (use-package ox-pandoc
   :ensure t
-  :after org
-  )
+  :after org)
 
 (use-package denote
   :ensure t
@@ -1274,6 +1218,11 @@ and convert it to Org using the pandoc utility."
   :config
   (setq denote-agenda-include-regexp "task")
   (denote-agenda-insinuate))
+
+(use-package denote-journal
+  :ensure t
+  :config
+  (setopt denote-journal-title-format 'day-date-month-year))
 
 (defcustom my/denote-task-filename-component-regexp
   "\\(?:[-_.]\\|:\\)task\\(?:[-_.]\\|:\\|$\\)"
@@ -1359,8 +1308,6 @@ Works on the base filename (without extension), e.g. matches \"-task\", \":task:
 
 (add-hook 'org-after-todo-state-change-hook #'my/denote-remove-task-filetag-and-silent-rename)
 
-
-
 (use-package denote-menu
   :ensure t
   :defer t
@@ -1399,10 +1346,6 @@ Works on the base filename (without extension), e.g. matches \"-task\", \":task:
         (save-buffer)
         (kill-buffer)))))
 
-(use-package casual-avy
-  :ensure t
-  :straight (:host github :repo "kickingvegas/casual-avy"))
-
 (use-package ox-json
   :ensure t
   )
@@ -1427,7 +1370,24 @@ Works on the base filename (without extension), e.g. matches \"-task\", \":task:
 
 (use-package tmr
   :ensure t
-  :straight (:host github :repo "protesilaos/tmr"))
+  :straight (:host github :repo "protesilaos/tmr")
+  :config
+  (setq tmr-sound-file "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga"
+        tmr-notification-urgency 'normal
+        tmr-description-list 'tmr-description-history)
+  
+  (define-key global-map (kbd "C-c t") #'tmr-prefix-map))
+
+(with-eval-after-load 'tmr-tabulated-mode
+  (general-def 'normal tmr-tabulated-mode-hook
+    "y" 'tmr-clone
+    "c" 'tmr-cancel
+    "d" 'tmr-remove
+    "D" 'tmr-remove-finished
+	"n" 'tmr
+	"N" 'tmr-with-details
+	"e" 'tmr-edit-description
+	"r" 'tmr-reschedule))
 
 (use-package which-key
   :ensure t
@@ -1498,6 +1458,25 @@ Works on the base filename (without extension), e.g. matches \"-task\", \":task:
   :after corfu
   :init
   (corfu-terminal-mode +1))
+
+(use-package cape
+  :ensure t
+  ;; Bind prefix keymap providing all Cape commands under a mnemonic key.
+  ;; Press C-c p ? to for help.
+  ;; Alternatively bind Cape commands individually.
+  ;; :bind (("C-c p d" . cape-dabbrev)
+  ;;        ("C-c p h" . cape-history)
+  ;;        ("C-c p f" . cape-file)
+  ;;        ...)
+  :init
+  ;; Add to the global default value of `completion-at-point-functions' which is
+  ;; used by `completion-at-point'.  The order of the functions matters, the
+  ;; first function returning a result wins.  Note that the list of buffer-local
+  ;; completion functions takes precedence over the global list.
+  (add-hook 'completion-at-point-functions #'cape-file)
+  ;; (add-hook 'completion-at-point-functions #'cape-history)
+  ;; ...
+)
 
 (use-package consult
   :ensure t
@@ -2163,7 +2142,16 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
         avy-style 'at-full
         avy-keys '(?a ?s ?d ?f ?g ?h ?j ?k ?l))
 
-  (evil-define-avy-motion evil-avy-goto-char-timer inclusive))
+  (evil-define-avy-motion emacs-flash-jump inclusive))
+
+(use-package flash-emacs
+  :ensure t
+  :straight (:host github :repo "JiaweiChenC/flash-emacs"))
+
+;; ZenScriptor/avy-flash
+(use-package avy-flash
+  :ensure t
+  :straight (:host github :repo "ZenScriptor/avy-flash"))
 
 (use-package undo-tree
   :defer t
@@ -2368,28 +2356,29 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :config
   (setq maple-modeline-separator 'nil)
   (setq maple-modeline-height 25)
-
+  (setq maple-modeline-icon t)
+  
   (defun maple-modeline-to-header-line ()
     (setq-default tab-line-format mode-line-format)
     (setq-default mode-line-format nil))
 
   (add-hook 'maple-modeline-mode-hook #'maple-modeline-to-header-line)
 
-  (display-time-mode 1)
+  (maple-modeline-define-segment my-modeline-time
+    :format (propertize (downcase (format-time-string " %I:%M %p "))
+                        'face 'bold))
 
   (maple-modeline-define my-custom-style
     :left ((evil :left (bar :left ""))
            macro
            buffer-info
-           ;; major-mode
            flycheck
            version-control
            remote-host
            region)
     :right (narrow
             python
-            ;; lsp
-            misc-info
+            my-modeline-time
             process
             count
             position))
@@ -2591,152 +2580,152 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;   ;; Lade das Basis-Theme (vivendi = dunkel)
 ;;   (load-theme 'modus-vivendi :no-confirm))
 
-(use-package ef-themes
-  :ensure t
-  :demand t
-  :init
-  (ef-themes-take-over-modus-themes-mode 1)
+;; (use-package ef-themes
+;;   :ensure t
+;;   :demand t
+;;   :init
+;;   (ef-themes-take-over-modus-themes-mode 1)
   
-  :custom
-  (modus-themes-italic-constructs t)
-  (modus-themes-bold-constructs t)
-  (modus-themes-prompts '(bold intense))
+;;   :custom
+;;   (modus-themes-italic-constructs t)
+;;   (modus-themes-bold-constructs t)
+;;   (modus-themes-prompts '(bold intense))
   
-  (ef-light-palette-overrides
-   '(
-     (bg-main     "#efefef")
-     (fg-main     "#313145")
-     (bg-dim      "#bebed2")
-     (fg-dim      "#7c7c98")
-     (bg-alt      "#9e9eaf")
-     (fg-alt      "#505063")
-     (bg-active   "#22223a")
-     (bg-inactive "#efefef")
+;;   (ef-light-palette-overrides
+;;    '(
+;;      (bg-main     "#efefef")
+;;      (fg-main     "#313145")
+;;      (bg-dim      "#bebed2")
+;;      (fg-dim      "#7c7c98")
+;;      (bg-alt      "#9e9eaf")
+;;      (fg-alt      "#505063")
+;;      (bg-active   "#22223a")
+;;      (bg-inactive "#efefef")
 
-     (red         "#f43979")
-     (red-warmer  "#ff669b")
-     (red-cooler  "#d22a8b")
-     (red-faint   "#f43979")
+;;      (red         "#f43979")
+;;      (red-warmer  "#ff669b")
+;;      (red-cooler  "#d22a8b")
+;;      (red-faint   "#f43979")
      
-     (green       "#0073a8")
-     (green-warmer "#0073a8")
-     (green-cooler "#0073a8")
-     (green-faint  "#0073a8")
+;;      (green       "#0073a8")
+;;      (green-warmer "#0073a8")
+;;      (green-cooler "#0073a8")
+;;      (green-faint  "#0073a8")
      
-     (yellow      "#ff669b")
-     (yellow-warmer "#f43979")
-     (yellow-cooler "#d22a8b")
-     (yellow-faint  "#ff669b")
+;;      (yellow      "#ff669b")
+;;      (yellow-warmer "#f43979")
+;;      (yellow-cooler "#d22a8b")
+;;      (yellow-faint  "#ff669b")
      
-     (blue        "#2155d6")
-     (blue-warmer "#0073a8")
-     (blue-cooler "#2155d6")
-     (blue-faint  "#2155d6")
+;;      (blue        "#2155d6")
+;;      (blue-warmer "#0073a8")
+;;      (blue-cooler "#2155d6")
+;;      (blue-faint  "#2155d6")
      
-     (magenta     "#6916b6")
-     (magenta-warmer "#8d17a5")
-     (magenta-cooler "#471397")
-     (magenta-faint  "#6916b6")
+;;      (magenta     "#6916b6")
+;;      (magenta-warmer "#8d17a5")
+;;      (magenta-cooler "#471397")
+;;      (magenta-faint  "#6916b6")
      
-     (cyan        "#0073a8")
-     (cyan-warmer "#2155d6")
-     (cyan-cooler "#2155d6")
-     (cyan-faint  "#0073a8")
+;;      (cyan        "#0073a8")
+;;      (cyan-warmer "#2155d6")
+;;      (cyan-cooler "#2155d6")
+;;      (cyan-faint  "#0073a8")
 
-     (bg-red-intense "#ff669b")
-     (bg-green-intense "#0073a8")
-     (bg-yellow-intense "#f43979")
-     (bg-blue-intense "#2155d6")
-     (bg-magenta-intense "#8d17a5")
-     (bg-cyan-intense "#0073a8")
+;;      (bg-red-intense "#ff669b")
+;;      (bg-green-intense "#0073a8")
+;;      (bg-yellow-intense "#f43979")
+;;      (bg-blue-intense "#2155d6")
+;;      (bg-magenta-intense "#8d17a5")
+;;      (bg-cyan-intense "#0073a8")
 
-     (bg-red-subtle "#bebed2")
-     (bg-green-subtle "#bebed2")
-     (bg-yellow-subtle "#bebed2")
-     (bg-blue-subtle "#bebed2")
-     (bg-magenta-subtle "#bebed2")
-     (bg-cyan-subtle "#bebed2")
+;;      (bg-red-subtle "#bebed2")
+;;      (bg-green-subtle "#bebed2")
+;;      (bg-yellow-subtle "#bebed2")
+;;      (bg-blue-subtle "#bebed2")
+;;      (bg-magenta-subtle "#bebed2")
+;;      (bg-cyan-subtle "#bebed2")
 
-     (bg-added "#bebed2")
-     (bg-added-faint "#efefef")
-     (bg-added-refine "#9e9eaf")
-     (fg-added "#0073a8")
+;;      (bg-added "#bebed2")
+;;      (bg-added-faint "#efefef")
+;;      (bg-added-refine "#9e9eaf")
+;;      (fg-added "#0073a8")
      
-     (bg-changed "#bebed2")
-     (bg-changed-faint "#efefef")
-     (bg-changed-refine "#9e9eaf")
-     (fg-changed "#f43979")
+;;      (bg-changed "#bebed2")
+;;      (bg-changed-faint "#efefef")
+;;      (bg-changed-refine "#9e9eaf")
+;;      (fg-changed "#f43979")
      
-     (bg-removed "#bebed2")
-     (bg-removed-faint "#efefef")
-     (bg-removed-refine "#9e9eaf")
-     (fg-removed "#d22a8b")
+;;      (bg-removed "#bebed2")
+;;      (bg-removed-faint "#efefef")
+;;      (bg-removed-refine "#9e9eaf")
+;;      (fg-removed "#d22a8b")
 
-     (bg-mode-line "#9e9eaf")
-     (fg-mode-line "#313145")
-     (bg-mode-line-active "#9e9eaf")
-     (fg-mode-line-active "#313145")
-     (bg-mode-line-inactive "#efefef")
-     (fg-mode-line-inactive "#7c7c98")
+;;      (bg-mode-line "#9e9eaf")
+;;      (fg-mode-line "#313145")
+;;      (bg-mode-line-active "#9e9eaf")
+;;      (fg-mode-line-active "#313145")
+;;      (bg-mode-line-inactive "#efefef")
+;;      (fg-mode-line-inactive "#7c7c98")
 
-     (border        "#7c7c98")
-     (cursor        "#471397")
+;;      (border        "#7c7c98")
+;;      (cursor        "#471397")
      
-     (bg-region     "#bebed2")
-     (fg-region     unspecified)
-     (bg-paren-match "#9e9eaf")
-     (bg-hl-line    "#bebed2")
+;;      (bg-region     "#bebed2")
+;;      (fg-region     unspecified)
+;;      (bg-paren-match "#9e9eaf")
+;;      (bg-hl-line    "#bebed2")
      
-     (bg-line-number-inactive "#efefef")
-     (fg-line-number-inactive "#7c7c98")
-     (bg-line-number-active   "#bebed2")
-     (fg-line-number-active   "#313145")
+;;      (bg-line-number-inactive "#efefef")
+;;      (fg-line-number-inactive "#7c7c98")
+;;      (bg-line-number-active   "#bebed2")
+;;      (fg-line-number-active   "#313145")
 
-     (builtin       blue)
-     (comment       yellow-faint)
-     (constant      red)
-     (fnname        blue)
-     (keyword       magenta)
-     (string        green)
-     (type          cyan)
-     (variable      blue-warmer)
+;;      (builtin       blue)
+;;      (comment       yellow-faint)
+;;      (constant      red)
+;;      (fnname        blue)
+;;      (keyword       magenta)
+;;      (string        green)
+;;      (type          cyan)
+;;      (variable      blue-warmer)
 
-     (err red-warmer)
-     (warning yellow-warmer)
-     (info green)
+;;      (err red-warmer)
+;;      (warning yellow-warmer)
+;;      (info green)
      
-     (link blue-warmer)
-     (link-alt magenta)
-     (name magenta-cooler)
-     (keybind blue-cooler)
-     (identifier magenta-faint)
-     (prompt green-cooler)
+;;      (link blue-warmer)
+;;      (link-alt magenta)
+;;      (name magenta-cooler)
+;;      (keybind blue-cooler)
+;;      (identifier magenta-faint)
+;;      (prompt green-cooler)
 
-     (date-common cyan-cooler)
-     (date-deadline red)
-     (date-event fg-alt)
-     (date-holiday magenta-warmer)
-     (date-scheduled yellow)
-     (date-weekday cyan)
-     (date-weekend red-faint)
+;;      (date-common cyan-cooler)
+;;      (date-deadline red)
+;;      (date-event fg-alt)
+;;      (date-holiday magenta-warmer)
+;;      (date-scheduled yellow)
+;;      (date-weekday cyan)
+;;      (date-weekend red-faint)
 
-     (mail-cite-0 blue-warmer)
-     (mail-cite-1 magenta)
-     (mail-cite-2 cyan-cooler)
-     (mail-cite-3 yellow-cooler)
-     (mail-recipient magenta-cooler)
-     (mail-subject blue-cooler)
+;;      (mail-cite-0 blue-warmer)
+;;      (mail-cite-1 magenta)
+;;      (mail-cite-2 cyan-cooler)
+;;      (mail-cite-3 yellow-cooler)
+;;      (mail-recipient magenta-cooler)
+;;      (mail-subject blue-cooler)
 
-     (prose-code magenta-warmer)
-     (prose-done green)
-     (prose-macro green-cooler)
-     (prose-tag green-faint)
-     (prose-todo red-warmer)
-     (prose-verbatim blue-warmer)
-     ))
+;;      (prose-code magenta-warmer)
+;;      (prose-done green)
+;;      (prose-macro green-cooler)
+;;      (prose-tag green-faint)
+;;      (prose-todo red-warmer)
+;;      (prose-verbatim blue-warmer)
+;;      ))
   
-  :config
-  (load-theme 'ef-light :no-confirm))
+;;   :config
+;;   (load-theme 'ef-light :no-confirm))
 
 ;; (use-package kanagawa-themes
 ;;   :ensure t
@@ -2978,9 +2967,11 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
   "d" '(:ignore t :wk "denote")
   "dd" '(denote-menu-list-notes t :wk "List all notes")
-  "dg" '(denote-grep t :wk "Search")
+  "dg" '(consult-denote-grep t :wk "Search")
   "dn" '(denote t :wk "Create a new note")
   "dr" '(denote-rename-file t :wk "Rename Note")
+  "dtl" '(tmr-list-timers :wk "list timer")
+  "dtt" '(tmr :wk "set timer")
 
   "f" '(:ignore t :wk "files")
   "fd" '(dired :wk "dired")
@@ -3078,7 +3069,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
     (when (my/avy-enabled-p)
       (let ((scroll-margin 0)
             (maximum-scroll-margin 0))
-        (call-interactively 'evil-avy-goto-char-timer)))))
+        (call-interactively 'flash-emacs-jump)))))
 
 (general-def '(normal visual) 'override
   "s" 'my/s-key-dispatch)
@@ -3111,24 +3102,27 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
             (region-beginning)
             (region-end)))))
 
-(my-local-leader
-  :keymaps 'org-mode-map
-  "h" '(consult-org-heading :wk "search headings")
-  "n" '(my-toggle-org-tree-indirect-buffer :wk "toggle narrow"))
-
 (my-leader
   :keymaps 'org-mode-map
-  "c" '(:wk "Clock" :ignore)
+  "m" '(:ignore :wk "org")
 
-  "cs" '(org-schedule :wk "Schedule")
-  "cd" '(org-deadline :wk "Deadline")
+  "mt" '(org-todo :wk "TODO")
+  "ma" '(org-add-note :wk "add note")
+  "mC" '(org-capture :wk "capture")
 
-  "l" '(:wk "Link" :ignore)
-  "lc" '(org-cliplink :wk "Cliplink")
-  "li" '(org-download-clipboard :wk "Image")
-  "ll" '(org-insert-link :wk "Link various things")
+  "mc" '(:wk "set" :ignore)
+  "mcd" '(org-deadline :wk "deadline")
+  "mcs" '(org-schedule :wk "schedule")
+  "mce" '(org-set-effort :wk "effort")
+  "mcr" '(org-clock-report :wk "clock report")
+  "m," '(org-priority :wk "priority")
+  "mI" '(org-clock-in :wk "clock in")
+  "mO" '(org-clock-out :wk "clock out")
+  "l" '(:ignore :wk "link")
+  "lc" '(org-cliplink :wk "cliplink")
+  "li" '(org-download-clipboard :wk "image")
+  "ll" '(org-insert-link :wk "link various things"))
 
-  "t" '(org-todo :wk "TODO"))
 (evil-define-key 'normal org-mode-map (kbd "RET") 'org-open-at-point)
 
 ;; jinja2-mode-map
@@ -3142,14 +3136,11 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "mf" '(fill-paragraph :wk "fill paragraph"))
 
 (my-leader
-  :keymaps 'python-mode-map
-  "m" '(:wk "Python mode" :ignore)
-  "mf" '(ruff-format-buffer :wk "format buffer")
-  ;; "mt" '(jinja2-insert-tag :wk "tag")
-  ;; "mc" '(jinja2-insert-comment :wk "comment")
-  
-  ;; "mf" '(fill-paragraph :wk "fill paragraph")
-  )
+  :keymaps '(rust-mode-map rust-ts-mode-map)
+  "m" '(:wk "rust mode" :ignore)
+  "mr" '(rust-run :wk "run")
+  "mc" '(rust-clippy :wk "clippy")
+  "mC" '(rust-check :wk "check"))
 
 (with-eval-after-load 'denote-menu
   (general-def 'normal denote-menu-mode-map
@@ -3157,6 +3148,17 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
     "c" 'denote-menu-clear-filters
     "e" 'denote-menu-export-to-dired
     "o" 'denote-menu-filter-out-keyword))
+
+(with-eval-after-load 'tmr
+  (general-def 'normal tmr-tabulated-mode-map
+    "y" 'tmr-clone
+    "c" 'tmr-cancel
+    "d" 'tmr-remove
+    "D" 'tmr-remove-finished
+    "n" 'tmr
+    "N" 'tmr-with-details
+    "e" 'tmr-edit-description
+    "r" 'tmr-reschedule))
 
 (general-def 'normal dirvish-mode-map
   "?" 'dirvish-dispatch
@@ -3198,6 +3200,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "m" '(mu4e :wk "mail")
   "p" '(pass :wk "pass")
   "o" '(my/global-olivetti-mode :wk "center buffer")
+  "i" '(projectile-ibuffer :wk "ibuffer project")
 
   "g" '(:wk "gptel" :ignore)
 
@@ -3386,9 +3389,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (add-hook 'message-send-mail-hook 'mu4e-set-msmtp-account))
 
 (use-package emacs-everywhere
-  :ensure t)
-
-(use-package md4rd
   :ensure t)
 
 (use-package burly
