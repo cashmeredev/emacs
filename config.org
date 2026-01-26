@@ -108,6 +108,7 @@
   :hook ;; Add hooks to enable specific features in certain modes.
   (prog-mode . display-line-numbers-mode)
   (org-mode . display-line-numbers-mode)
+  (markdown-mode . display-line-numbers-mode)
 
   :config
   (add-to-list 'custom-theme-load-path user-emacs-directory)
@@ -1812,25 +1813,49 @@ Some goodies for better integration with org files.
 * markdown-mode
 
 #+begin_src emacs-lisp
+(setq-default abbrev-mode t)
+
 (use-package markdown-mode
-  :defer t
-  :ensure t
-  :mode ("README\\.md\\'" . gfm-mode)            
-  :init 
-  (setq markdown-command "multimarkdown")
+  :hook
+  (markdown-mode . nb/markdown-unhighlight)
   :config
-  (setq markdown-header-scaling t)
-  (setq markdown-hide-markup t)
-  (setq markdown-fontify-code-blocks-natively t)
-  
-  (custom-set-faces
-   '(markdown-header-face-1 ((t (:inherit markdown-header-face :height 1.8 :foreground "#A3BE8C" :weight extra-bold))))
-   '(markdown-header-face-2 ((t (:inherit markdown-header-face :height 1.4 :foreground "#EBCB8B" :weight extra-bold))))
-   '(markdown-header-face-3 ((t (:inherit markdown-header-face :height 1.2 :foreground "#D08770" :weight extra-bold))))
-   '(markdown-header-face-4 ((t (:inherit markdown-header-face :height 1.15 :foreground "#BF616A" :weight extra-bold))))
-   '(markdown-header-face-5 ((t (:inherit markdown-header-face :height 1.11 :foreground "#b48ead" :weight extra-bold))))
-   '(markdown-header-face-6 ((t (:inherit markdown-header-face :height 1.06 :foreground "#5e81ac" :weight extra-bold))))
-   '(markdown-header-delimiter-face ((t (:foreground "#616161" :height 0.9))))))
+  (defvar nb/current-line '(0 . 0)
+    "(start . end) of current line in current buffer")
+  (make-variable-buffer-local 'nb/current-line)
+
+  (defun nb/unhide-current-line (limit)
+    "Font-lock function"
+    (let ((start (max (point) (car nb/current-line)))
+          (end (min limit (cdr nb/current-line))))
+      (when (< start end)
+        (remove-text-properties start end
+                                '(invisible t display "" composition ""))
+        (goto-char limit)
+        t)))
+
+  (defun nb/refontify-on-linemove ()
+    "Post-command-hook"
+    (let* ((start (line-beginning-position))
+           (end (line-beginning-position 2))
+           (needs-update (not (equal start (car nb/current-line)))))
+      (setq nb/current-line (cons start end))
+      (when needs-update
+        (font-lock-fontify-block 3))))
+
+  (defun nb/markdown-unhighlight ()
+    "Enable markdown concealling"
+    (interactive)
+    (markdown-toggle-markup-hiding 'toggle)
+    (font-lock-add-keywords nil '((nb/unhide-current-line)) t)
+    (add-hook 'post-command-hook #'nb/refontify-on-linemove nil t))
+  :custom-face
+  (markdown-header-delimiter-face ((t (:foreground "#616161" :height 0.9))))
+  (markdown-header-face-1 ((t (:height 1.6  :foreground "#A3BE8C" :weight extra-bold :inherit markdown-header-face))))
+  (markdown-header-face-2 ((t (:height 1.4  :foreground "#EBCB8B" :weight extra-bold :inherit markdown-header-face))))
+  (markdown-header-face-3 ((t (:height 1.2  :foreground "#D08770" :weight extra-bold :inherit markdown-header-face))))
+  (markdown-header-face-4 ((t (:height 1.15 :foreground "#BF616A" :weight bold :inherit markdown-header-face))))
+  (markdown-header-face-5 ((t (:height 1.1  :foreground "#b48ead" :weight bold :inherit markdown-header-face))))
+  (markdown-header-face-6 ((t (:height 1.05 :foreground "#5e81ac" :weight semi-bold :inherit markdown-header-face)))))
 #+end_src
 
 * treesit-auto
@@ -2270,13 +2295,14 @@ ily <3.
 * visual-fill-column
 
 #+begin_src emacs-lisp
-;; (use-package visual-fill-column
-;;   :hook ((text-mode . visual-line-mode)        ;; Soft-Wrapping aktivieren
-;;          (text-mode . visual-fill-column-mode)) ;; Das Zentrieren aktivieren
-;;   :custom
-;;   (visual-fill-column-width 110)      ;; Maximale Breite des Textes (statt 0.67 relativ)
-;;   (visual-fill-column-center-text t) ;; Text zentrieren!
-;;   (visual-fill-column-enable-sensible-window-split t))
+(use-package visual-fill-column
+  :ensure t
+  :hook ((text-mode . visual-line-mode)        ;; Soft-Wrapping aktivieren
+         (text-mode . visual-fill-column-mode)) ;; Das Zentrieren aktivieren
+  :custom
+  (visual-fill-column-width 110)      ;; Maximale Breite des Textes (statt 0.67 relativ)
+  (visual-fill-column-center-text t) ;; Text zentrieren!
+  (visual-fill-column-enable-sensible-window-split t))
 #+end_src
 
 * diff-hl
@@ -2300,27 +2326,6 @@ ily <3.
 ;;                                   (ignored . "i"))))
 #+end_src
 
-* diff-hl
-
-#+begin_src emacs-lisp
-(use-package diff-hl
-  :defer t
-  :straight t
-  :ensure t
-  :hook
-  (find-file . (lambda ()
-                 (global-diff-hl-mode)           ;; Enable Diff-HL mode for all files.
-                 (diff-hl-flydiff-mode)          ;; Automatically refresh diffs.
-                 (diff-hl-margin-mode)))         ;; Show diff indicators in the margin.
-  :custom
-  (diff-hl-side 'left)                           ;; Set the side for diff indicators.
-  (diff-hl-margin-symbols-alist '((insert . "┃") ;; Customize symbols for each change type.
-                                  (delete . "-")
-                                  (change . "┃")
-                                  (unknown . "┆")
-                                  (ignored . "i"))))
-#+end_src
-
 * hl-todo
 
 #+begin_src emacs-lisp
@@ -2358,67 +2363,6 @@ ily <3.
 (setq switch-to-prev-buffer-skip
       (lambda (window buffer bury-or-kill)
         (string-match-p "\\*magit" (buffer-name buffer))))
-#+end_src
-
-** conventional-commit
-
-#+begin_src emacs-lisp
-(use-package conventional-commit
-  :ensure t
-  :straight (:host github :repo "akirak/conventional-commit.el")
-  :after git-commit
-  :hook
-  (git-commit-mode . conventional-commit-setup))
-#+end_src
-
-* hl-todo
-
-#+begin_src emacs-lisp
-(use-package hl-todo
-  :ensure t
-  :straight (:host github :repo "tarsius/hl-todo")
-  :config
-  (global-hl-todo-mode) 
-  (setq hl-todo-keyword-faces
-        '(("TODO"   . "#FF0000")
-          ("FIXME"  . "#FF0000")
-          ("DEBUG"  . "#A020F0")
-          ("GOTCHA" . "#FF4500")
-          ("STUB"   . "#1E90FF"))))
-#+end_src
-
-* magit
-
-#+begin_src emacs-lisp
-(use-package magit
-  :ensure t
-  :straight t
-  :config
-  (if ek-use-nerd-fonts
-	  (setopt magit-format-file-function #'magit-format-file-nerd-icons))
-  :custom
-  (magit-display-buffer-function #'magit-display-buffer-same-window-except-diff-v1))
-
-(defun my/magit-kill-buffers ()
-  (interactive)
-  (let ((buffers (magit-mode-get-buffers)))
-	(magit-restore-window-configuration)
-	(mapc #'kill-buffer buffers)))
-
-(setq switch-to-prev-buffer-skip
-      (lambda (window buffer bury-or-kill)
-        (string-match-p "\\*magit" (buffer-name buffer))))
-#+end_src
-
-** conventional-commit
-
-#+begin_src emacs-lisp
-(use-package conventional-commit
-  :ensure t
-  :straight (:host github :repo "akirak/conventional-commit.el")
-  :after git-commit
-  :hook
-  (git-commit-mode . conventional-commit-setup))
 #+end_src
 
 * indent-guide
@@ -3316,7 +3260,7 @@ ily <3.
 (blink-cursor-mode 0)
 (setq-default cursor-type 'box)
 
-(defvar cashmere/font-height 180)
+(defvar cashmere/font-height 120)
 
 (set-face-attribute 'default nil :family "MonoLisa Nerd Font" :weight 'medium :height cashmere/font-height)
 (set-face-attribute 'fixed-pitch nil :family "RobotoMono Nerd Font" :weight 'regular)
@@ -3492,152 +3436,152 @@ ily <3.
 *** ef-themes
 
 #+begin_src emacs-lisp
-(use-package ef-themes
-  :ensure t
-  :demand t
-  :init
-  (ef-themes-take-over-modus-themes-mode 1)
+;; (use-package ef-themes
+;;   :ensure t
+;;   :demand t
+;;   :init
+;;   (ef-themes-take-over-modus-themes-mode 1)
   
-  :custom
-  (modus-themes-italic-constructs t)
-  (modus-themes-bold-constructs t)
-  (modus-themes-prompts '(bold intense))
+;;   :custom
+;;   (modus-themes-italic-constructs t)
+;;   (modus-themes-bold-constructs t)
+;;   (modus-themes-prompts '(bold intense))
   
-  (ef-light-palette-overrides
-   '(
-     (bg-main     "#efefef")
-     (fg-main     "#313145")
-     (bg-dim      "#bebed2")
-     (fg-dim      "#7c7c98")
-     (bg-alt      "#9e9eaf")
-     (fg-alt      "#505063")
-     (bg-active   "#22223a")
-     (bg-inactive "#efefef")
+;;   (ef-light-palette-overrides
+;;    '(
+;;      (bg-main     "#efefef")
+;;      (fg-main     "#313145")
+;;      (bg-dim      "#bebed2")
+;;      (fg-dim      "#7c7c98")
+;;      (bg-alt      "#9e9eaf")
+;;      (fg-alt      "#505063")
+;;      (bg-active   "#22223a")
+;;      (bg-inactive "#efefef")
 
-     (red         "#f43979")
-     (red-warmer  "#ff669b")
-     (red-cooler  "#d22a8b")
-     (red-faint   "#f43979")
+;;      (red         "#f43979")
+;;      (red-warmer  "#ff669b")
+;;      (red-cooler  "#d22a8b")
+;;      (red-faint   "#f43979")
      
-     (green       "#0073a8")
-     (green-warmer "#0073a8")
-     (green-cooler "#0073a8")
-     (green-faint  "#0073a8")
+;;      (green       "#0073a8")
+;;      (green-warmer "#0073a8")
+;;      (green-cooler "#0073a8")
+;;      (green-faint  "#0073a8")
      
-     (yellow      "#ff669b")
-     (yellow-warmer "#f43979")
-     (yellow-cooler "#d22a8b")
-     (yellow-faint  "#ff669b")
+;;      (yellow      "#ff669b")
+;;      (yellow-warmer "#f43979")
+;;      (yellow-cooler "#d22a8b")
+;;      (yellow-faint  "#ff669b")
      
-     (blue        "#2155d6")
-     (blue-warmer "#0073a8")
-     (blue-cooler "#2155d6")
-     (blue-faint  "#2155d6")
+;;      (blue        "#2155d6")
+;;      (blue-warmer "#0073a8")
+;;      (blue-cooler "#2155d6")
+;;      (blue-faint  "#2155d6")
      
-     (magenta     "#6916b6")
-     (magenta-warmer "#8d17a5")
-     (magenta-cooler "#471397")
-     (magenta-faint  "#6916b6")
+;;      (magenta     "#6916b6")
+;;      (magenta-warmer "#8d17a5")
+;;      (magenta-cooler "#471397")
+;;      (magenta-faint  "#6916b6")
      
-     (cyan        "#0073a8")
-     (cyan-warmer "#2155d6")
-     (cyan-cooler "#2155d6")
-     (cyan-faint  "#0073a8")
+;;      (cyan        "#0073a8")
+;;      (cyan-warmer "#2155d6")
+;;      (cyan-cooler "#2155d6")
+;;      (cyan-faint  "#0073a8")
 
-     (bg-red-intense "#ff669b")
-     (bg-green-intense "#0073a8")
-     (bg-yellow-intense "#f43979")
-     (bg-blue-intense "#2155d6")
-     (bg-magenta-intense "#8d17a5")
-     (bg-cyan-intense "#0073a8")
+;;      (bg-red-intense "#ff669b")
+;;      (bg-green-intense "#0073a8")
+;;      (bg-yellow-intense "#f43979")
+;;      (bg-blue-intense "#2155d6")
+;;      (bg-magenta-intense "#8d17a5")
+;;      (bg-cyan-intense "#0073a8")
 
-     (bg-red-subtle "#bebed2")
-     (bg-green-subtle "#bebed2")
-     (bg-yellow-subtle "#bebed2")
-     (bg-blue-subtle "#bebed2")
-     (bg-magenta-subtle "#bebed2")
-     (bg-cyan-subtle "#bebed2")
+;;      (bg-red-subtle "#bebed2")
+;;      (bg-green-subtle "#bebed2")
+;;      (bg-yellow-subtle "#bebed2")
+;;      (bg-blue-subtle "#bebed2")
+;;      (bg-magenta-subtle "#bebed2")
+;;      (bg-cyan-subtle "#bebed2")
 
-     (bg-added "#bebed2")
-     (bg-added-faint "#efefef")
-     (bg-added-refine "#9e9eaf")
-     (fg-added "#0073a8")
+;;      (bg-added "#bebed2")
+;;      (bg-added-faint "#efefef")
+;;      (bg-added-refine "#9e9eaf")
+;;      (fg-added "#0073a8")
      
-     (bg-changed "#bebed2")
-     (bg-changed-faint "#efefef")
-     (bg-changed-refine "#9e9eaf")
-     (fg-changed "#f43979")
+;;      (bg-changed "#bebed2")
+;;      (bg-changed-faint "#efefef")
+;;      (bg-changed-refine "#9e9eaf")
+;;      (fg-changed "#f43979")
      
-     (bg-removed "#bebed2")
-     (bg-removed-faint "#efefef")
-     (bg-removed-refine "#9e9eaf")
-     (fg-removed "#d22a8b")
+;;      (bg-removed "#bebed2")
+;;      (bg-removed-faint "#efefef")
+;;      (bg-removed-refine "#9e9eaf")
+;;      (fg-removed "#d22a8b")
 
-     (bg-mode-line "#9e9eaf")
-     (fg-mode-line "#313145")
-     (bg-mode-line-active "#9e9eaf")
-     (fg-mode-line-active "#313145")
-     (bg-mode-line-inactive "#efefef")
-     (fg-mode-line-inactive "#7c7c98")
+;;      (bg-mode-line "#9e9eaf")
+;;      (fg-mode-line "#313145")
+;;      (bg-mode-line-active "#9e9eaf")
+;;      (fg-mode-line-active "#313145")
+;;      (bg-mode-line-inactive "#efefef")
+;;      (fg-mode-line-inactive "#7c7c98")
 
-     (border        "#7c7c98")
-     (cursor        "#471397")
+;;      (border        "#7c7c98")
+;;      (cursor        "#471397")
      
-     (bg-region     "#bebed2")
-     (fg-region     unspecified)
-     (bg-paren-match "#9e9eaf")
-     (bg-hl-line    "#bebed2")
+;;      (bg-region     "#bebed2")
+;;      (fg-region     unspecified)
+;;      (bg-paren-match "#9e9eaf")
+;;      (bg-hl-line    "#bebed2")
      
-     (bg-line-number-inactive "#efefef")
-     (fg-line-number-inactive "#7c7c98")
-     (bg-line-number-active   "#bebed2")
-     (fg-line-number-active   "#313145")
+;;      (bg-line-number-inactive "#efefef")
+;;      (fg-line-number-inactive "#7c7c98")
+;;      (bg-line-number-active   "#bebed2")
+;;      (fg-line-number-active   "#313145")
 
-     (builtin       blue)
-     (comment       yellow-faint)
-     (constant      red)
-     (fnname        blue)
-     (keyword       magenta)
-     (string        green)
-     (type          cyan)
-     (variable      blue-warmer)
+;;      (builtin       blue)
+;;      (comment       yellow-faint)
+;;      (constant      red)
+;;      (fnname        blue)
+;;      (keyword       magenta)
+;;      (string        green)
+;;      (type          cyan)
+;;      (variable      blue-warmer)
 
-     (err red-warmer)
-     (warning yellow-warmer)
-     (info green)
+;;      (err red-warmer)
+;;      (warning yellow-warmer)
+;;      (info green)
      
-     (link blue-warmer)
-     (link-alt magenta)
-     (name magenta-cooler)
-     (keybind blue-cooler)
-     (identifier magenta-faint)
-     (prompt green-cooler)
+;;      (link blue-warmer)
+;;      (link-alt magenta)
+;;      (name magenta-cooler)
+;;      (keybind blue-cooler)
+;;      (identifier magenta-faint)
+;;      (prompt green-cooler)
 
-     (date-common cyan-cooler)
-     (date-deadline red)
-     (date-event fg-alt)
-     (date-holiday magenta-warmer)
-     (date-scheduled yellow)
-     (date-weekday cyan)
-     (date-weekend red-faint)
+;;      (date-common cyan-cooler)
+;;      (date-deadline red)
+;;      (date-event fg-alt)
+;;      (date-holiday magenta-warmer)
+;;      (date-scheduled yellow)
+;;      (date-weekday cyan)
+;;      (date-weekend red-faint)
 
-     (mail-cite-0 blue-warmer)
-     (mail-cite-1 magenta)
-     (mail-cite-2 cyan-cooler)
-     (mail-cite-3 yellow-cooler)
-     (mail-recipient magenta-cooler)
-     (mail-subject blue-cooler)
+;;      (mail-cite-0 blue-warmer)
+;;      (mail-cite-1 magenta)
+;;      (mail-cite-2 cyan-cooler)
+;;      (mail-cite-3 yellow-cooler)
+;;      (mail-recipient magenta-cooler)
+;;      (mail-subject blue-cooler)
 
-     (prose-code magenta-warmer)
-     (prose-done green)
-     (prose-macro green-cooler)
-     (prose-tag green-faint)
-     (prose-todo red-warmer)
-     (prose-verbatim blue-warmer)
-     ))
+;;      (prose-code magenta-warmer)
+;;      (prose-done green)
+;;      (prose-macro green-cooler)
+;;      (prose-tag green-faint)
+;;      (prose-todo red-warmer)
+;;      (prose-verbatim blue-warmer)
+;;      ))
   
-  :config
-  (load-theme 'ef-light :no-confirm))
+;;   :config
+;;   (load-theme 'ef-light :no-confirm))
 #+end_src
 
 ** kanagawa-themes
@@ -3963,7 +3907,7 @@ ily <3.
   "dtt" '(tmr :wk "set timer")
 
   "f" '(:ignore t :wk "files")
-  "fd" '(dired :wk "dired")
+  "fd" '(dired-jump :wk "dired")
   "fD" '(dired-jump :wk "dired jump")
   "fr" '(consult-recent-file :wk "recent files")
   "ff" '(find-file :wk "find file")
