@@ -4382,6 +4382,15 @@ ily <3.
   (add-hook 'message-send-mail-hook 'mu4e-set-msmtp-account))
 #+end_src
 
+* color-tools
+
+this package provides the ability to display rgb and hex colors.
+
+#+begin_src emacs-lisp
+(use-package ct
+  :ensure t)
+#+end_src
+
 * emacs-everywhere
 
 #+begin_src emacs-lisp
@@ -4390,15 +4399,6 @@ ily <3.
 #+end_src
 
 
-
-* burly
-
-burly is an emacs package to save and restore frames, windows and buffers.
-
-#+begin_src emacs-lisp
-(use-package burly
-  :ensure t)
-#+end_src
 
 * profiler
 
