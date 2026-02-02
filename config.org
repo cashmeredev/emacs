@@ -250,8 +250,8 @@
   (dired-listing-switches "-lah --group-directories-first")
   (dired-dwim-target t)
   (dired-guess-shell-alist-user
-   '(;; ("\\.\\(png\\|jpe?g\\|tiff\\)" "feh" "xdg-open" "open")
-     ("\\.\\(mp[34]\\|m4a\\|ogg\\|flac\\|webm\\|mkv\\)" "mpv" "xdg-open" "open")
+   '(;; ("\\\\.\\\\(png\\\\|jpe?g\\\\|tiff\\\\)" "feh" "xdg-open" "open")
+     ("\\\\.\\\\(mp[34]\\\\|m4a\\\\|ogg\\\\|flac\\\\|webm\\\\|mkv\\\\)" "mpv" "xdg-open" "open")
      (".*" "open" "xdg-open")))
   (dired-kill-when-opening-new-dired-buffer t)
   (dired-create-destination-dirs 'always)
@@ -271,6 +271,13 @@
     (lambda () 
       (interactive) 
       (mailcap-view-file (dired-get-filename))))
+  
+  (advice-add 'dired-create-directory :around
+              (lambda (orig-fun dirname)
+                (let ((current-buffer (current-buffer)))
+                  (funcall orig-fun dirname)
+                  (with-current-buffer current-buffer
+                    (revert-buffer)))))
       
   (when (eq system-type 'darwin)
     (let ((gls (executable-find "gls")))
@@ -1629,6 +1636,12 @@ Some goodies for better integration with org files.
   )
 #+end_src
 
+** denote-project-notes
+
+#+begin_src emacs-lisp
+
+#+end_src
+
 ** denote-explore
 
 #+begin_src emacs-lisp
@@ -1813,11 +1826,11 @@ Some goodies for better integration with org files.
 * markdown-mode
 
 #+begin_src emacs-lisp
-(setq-default abbrev-mode t)
-
 (use-package markdown-mode
-  :hook
-  (markdown-mode . nb/markdown-unhighlight)
+  :ensure t
+  :hook (markdown-mode . nb/markdown-unhighlight)
+  :init
+  (setq-default abbrev-mode t)
   :config
   (defvar nb/current-line '(0 . 0)
     "(start . end) of current line in current buffer")
@@ -1840,21 +1853,25 @@ Some goodies for better integration with org files.
            (needs-update (not (equal start (car nb/current-line)))))
       (setq nb/current-line (cons start end))
       (when needs-update
-        (font-lock-fontify-block 3))))
+        ;; FIX: Verwende jit-lock-refontify statt font-lock-fontify-block
+        (jit-lock-refontify start end))))
 
   (defun nb/markdown-unhighlight ()
     "Enable markdown concealling"
     (interactive)
     (markdown-toggle-markup-hiding 'toggle)
     (font-lock-add-keywords nil '((nb/unhide-current-line)) t)
+    ;; FIX: Stelle sicher dass jit-lock aktiv ist
+    (jit-lock-register #'font-lock-fontify-region)
     (add-hook 'post-command-hook #'nb/refontify-on-linemove nil t))
+  
   :custom-face
   (markdown-header-delimiter-face ((t (:foreground "#616161" :height 0.9))))
-  (markdown-header-face-1 ((t (:height 1.6  :foreground "#A3BE8C" :weight extra-bold :inherit markdown-header-face))))
-  (markdown-header-face-2 ((t (:height 1.4  :foreground "#EBCB8B" :weight extra-bold :inherit markdown-header-face))))
-  (markdown-header-face-3 ((t (:height 1.2  :foreground "#D08770" :weight extra-bold :inherit markdown-header-face))))
+  (markdown-header-face-1 ((t (:height 1.6 :foreground "#A3BE8C" :weight extra-bold :inherit markdown-header-face))))
+  (markdown-header-face-2 ((t (:height 1.4 :foreground "#EBCB8B" :weight extra-bold :inherit markdown-header-face))))
+  (markdown-header-face-3 ((t (:height 1.2 :foreground "#D08770" :weight extra-bold :inherit markdown-header-face))))
   (markdown-header-face-4 ((t (:height 1.15 :foreground "#BF616A" :weight bold :inherit markdown-header-face))))
-  (markdown-header-face-5 ((t (:height 1.1  :foreground "#b48ead" :weight bold :inherit markdown-header-face))))
+  (markdown-header-face-5 ((t (:height 1.1 :foreground "#b48ead" :weight bold :inherit markdown-header-face))))
   (markdown-header-face-6 ((t (:height 1.05 :foreground "#5e81ac" :weight semi-bold :inherit markdown-header-face)))))
 #+end_src
 
@@ -3273,6 +3290,26 @@ ily <3.
          (LaTeX-mode . mixed-pitch-mode)))
 #+end_src
 
+* essentials
+
+** grip mode
+
+** grip mode
+
+#+begin_src emacs-lisp
+(use-package grip-mode
+  :ensure t
+  :config 
+  (setq grip-command 'auto)) ;; auto, grip, go-grip or mdopen
+#+end_src
+
+*** org mode grip dispatcher
+
+#+begin_src emacs-lisp
+(use-package ox-gfm
+  :ensure t)
+#+end_src
+
 * themes
 
 ** catppuccin-theme
@@ -3699,11 +3736,11 @@ ily <3.
 * tramp-hlo
 
 #+begin_src emacs-lisp
-(use-package tramp-hlo
-    :ensure t
-	:straight (:host github :repo "jsadusk/tramp-hlo")
-    :config
-    (tramp-hlo-setup))
+;; (use-package tramp-hlo
+;;     :ensure t
+;; 	:straight (:host github :repo "jsadusk/tramp-hlo")
+;;     :config
+;;     (tramp-hlo-setup))
 #+end_src
 
 * tramp-rpc
@@ -3899,6 +3936,7 @@ ily <3.
   ":" (lambda () (interactive) (execute-extended-command nil))
 
   "d" '(:ignore t :wk "denote")
+  "dj" '(denote-journal-new-or-existing-entry :wk "journal")
   "dd" '(denote-menu-list-notes t :wk "List all notes")
   "dg" '(consult-denote-grep t :wk "Search")
   "dn" '(denote t :wk "Create a new note")
@@ -3962,6 +4000,7 @@ ily <3.
 
   "w w" '(evil-window-next :wk "Close window")
   "w c" '(evil-window-delete :wk "Close window")
+  "w o" '(delete-other-windows :wk "Maximize window")
   "w n" '(evil-window-new :wk "New window")
   "w s" '(evil-window-split :wk "Horizontal split window")
   "w v" '(evil-window-vsplit :wk "Vertical split window")
@@ -4387,8 +4426,31 @@ ily <3.
 this package provides the ability to display rgb and hex colors.
 
 #+begin_src emacs-lisp
-(use-package ct
-  :ensure t)
+(use-package denote-project-notes
+  :ensure t
+  :after org
+  :config
+  (setq denote-project-notes-identifier '(project stayem)))
+#+end_src
+
+#+RESULTS:
+: t
+
+* snippy
+
+#+begin_src emacs-lisp
+;; (use-package snippy
+;;   :ensure t
+;;   :straight
+;;   (:host github
+;; 	   :repo "MiniApollo/snippy.git"
+;; 	   :branch "main"
+;; 	   :rev :newest)
+;;   :hook (after-init . global-snippy-minor-mode)
+;;   :custom
+;;   (snippy-global-languages '("global")) ;; Recomended
+;;   :config
+;;   (snippy-install-or-update-snippets)) ;; Autoupdate git repo
 #+end_src
 
 * emacs-everywhere

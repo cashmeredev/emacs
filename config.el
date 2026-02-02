@@ -91,6 +91,7 @@
   :hook ;; Add hooks to enable specific features in certain modes.
   (prog-mode . display-line-numbers-mode)
   (org-mode . display-line-numbers-mode)
+  (markdown-mode . display-line-numbers-mode)
 
   :config
   (add-to-list 'custom-theme-load-path user-emacs-directory)
@@ -219,8 +220,8 @@
   (dired-listing-switches "-lah --group-directories-first")
   (dired-dwim-target t)
   (dired-guess-shell-alist-user
-   '(;; ("\\.\\(png\\|jpe?g\\|tiff\\)" "feh" "xdg-open" "open")
-     ("\\.\\(mp[34]\\|m4a\\|ogg\\|flac\\|webm\\|mkv\\)" "mpv" "xdg-open" "open")
+   '(;; ("\\\\.\\\\(png\\\\|jpe?g\\\\|tiff\\\\)" "feh" "xdg-open" "open")
+     ("\\\\.\\\\(mp[34]\\\\|m4a\\\\|ogg\\\\|flac\\\\|webm\\\\|mkv\\\\)" "mpv" "xdg-open" "open")
      (".*" "open" "xdg-open")))
   (dired-kill-when-opening-new-dired-buffer t)
   (dired-create-destination-dirs 'always)
@@ -240,6 +241,13 @@
     (lambda () 
       (interactive) 
       (mailcap-view-file (dired-get-filename))))
+  
+  (advice-add 'dired-create-directory :around
+              (lambda (orig-fun dirname)
+                (let ((current-buffer (current-buffer)))
+                  (funcall orig-fun dirname)
+                  (with-current-buffer current-buffer
+                    (revert-buffer)))))
       
   (when (eq system-type 'darwin)
     (let ((gls (executable-find "gls")))
@@ -787,10 +795,6 @@ and convert it to Org using the pandoc utility."
 (use-package nov
   :ensure t
   :mode ("\\.epub\\'" . nov-mode))
-
-(use-package org-generate
-  :ensure t
-  :defer t)
 
 (use-package yequake
   :custom
@@ -1350,6 +1354,8 @@ Works on the base filename (without extension), e.g. matches \"-task\", \":task:
   :ensure t
   )
 
+
+
 (use-package denote-explore
   :ensure t
   )
@@ -1377,17 +1383,6 @@ Works on the base filename (without extension), e.g. matches \"-task\", \":task:
         tmr-description-list 'tmr-description-history)
   
   (define-key global-map (kbd "C-c t") #'tmr-prefix-map))
-
-(with-eval-after-load 'tmr-tabulated-mode
-  (general-def 'normal tmr-tabulated-mode-hook
-    "y" 'tmr-clone
-    "c" 'tmr-cancel
-    "d" 'tmr-remove
-    "D" 'tmr-remove-finished
-	"n" 'tmr
-	"N" 'tmr-with-details
-	"e" 'tmr-edit-description
-	"r" 'tmr-reschedule))
 
 (use-package which-key
   :ensure t
@@ -1506,24 +1501,52 @@ Works on the base filename (without extension), e.g. matches \"-task\", \":task:
           "\\`\\*Async-native-compile-log\\*\\'")))
 
 (use-package markdown-mode
-  :defer t
   :ensure t
-  :mode ("README\\.md\\'" . gfm-mode)            
-  :init 
-  (setq markdown-command "multimarkdown")
+  :hook (markdown-mode . nb/markdown-unhighlight)
+  :init
+  (setq-default abbrev-mode t)
   :config
-  (setq markdown-header-scaling t)
-  (setq markdown-hide-markup t)
-  (setq markdown-fontify-code-blocks-natively t)
+  (defvar nb/current-line '(0 . 0)
+    "(start . end) of current line in current buffer")
+  (make-variable-buffer-local 'nb/current-line)
+
+  (defun nb/unhide-current-line (limit)
+    "Font-lock function"
+    (let ((start (max (point) (car nb/current-line)))
+          (end (min limit (cdr nb/current-line))))
+      (when (< start end)
+        (remove-text-properties start end
+                                '(invisible t display "" composition ""))
+        (goto-char limit)
+        t)))
+
+  (defun nb/refontify-on-linemove ()
+    "Post-command-hook"
+    (let* ((start (line-beginning-position))
+           (end (line-beginning-position 2))
+           (needs-update (not (equal start (car nb/current-line)))))
+      (setq nb/current-line (cons start end))
+      (when needs-update
+        ;; FIX: Verwende jit-lock-refontify statt font-lock-fontify-block
+        (jit-lock-refontify start end))))
+
+  (defun nb/markdown-unhighlight ()
+    "Enable markdown concealling"
+    (interactive)
+    (markdown-toggle-markup-hiding 'toggle)
+    (font-lock-add-keywords nil '((nb/unhide-current-line)) t)
+    ;; FIX: Stelle sicher dass jit-lock aktiv ist
+    (jit-lock-register #'font-lock-fontify-region)
+    (add-hook 'post-command-hook #'nb/refontify-on-linemove nil t))
   
-  (custom-set-faces
-   '(markdown-header-face-1 ((t (:inherit markdown-header-face :height 1.8 :foreground "#A3BE8C" :weight extra-bold))))
-   '(markdown-header-face-2 ((t (:inherit markdown-header-face :height 1.4 :foreground "#EBCB8B" :weight extra-bold))))
-   '(markdown-header-face-3 ((t (:inherit markdown-header-face :height 1.2 :foreground "#D08770" :weight extra-bold))))
-   '(markdown-header-face-4 ((t (:inherit markdown-header-face :height 1.15 :foreground "#BF616A" :weight extra-bold))))
-   '(markdown-header-face-5 ((t (:inherit markdown-header-face :height 1.11 :foreground "#b48ead" :weight extra-bold))))
-   '(markdown-header-face-6 ((t (:inherit markdown-header-face :height 1.06 :foreground "#5e81ac" :weight extra-bold))))
-   '(markdown-header-delimiter-face ((t (:foreground "#616161" :height 0.9))))))
+  :custom-face
+  (markdown-header-delimiter-face ((t (:foreground "#616161" :height 0.9))))
+  (markdown-header-face-1 ((t (:height 1.6 :foreground "#A3BE8C" :weight extra-bold :inherit markdown-header-face))))
+  (markdown-header-face-2 ((t (:height 1.4 :foreground "#EBCB8B" :weight extra-bold :inherit markdown-header-face))))
+  (markdown-header-face-3 ((t (:height 1.2 :foreground "#D08770" :weight extra-bold :inherit markdown-header-face))))
+  (markdown-header-face-4 ((t (:height 1.15 :foreground "#BF616A" :weight bold :inherit markdown-header-face))))
+  (markdown-header-face-5 ((t (:height 1.1 :foreground "#b48ead" :weight bold :inherit markdown-header-face))))
+  (markdown-header-face-6 ((t (:height 1.05 :foreground "#5e81ac" :weight semi-bold :inherit markdown-header-face)))))
 
 ;; (use-package treesit-auto
 ;;   :ensure t
@@ -1820,13 +1843,14 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 (global-set-key (kbd "C-c o s") #'my-org-sidecar-left)
 
-;; (use-package visual-fill-column
-;;   :hook ((text-mode . visual-line-mode)        ;; Soft-Wrapping aktivieren
-;;          (text-mode . visual-fill-column-mode)) ;; Das Zentrieren aktivieren
-;;   :custom
-;;   (visual-fill-column-width 110)      ;; Maximale Breite des Textes (statt 0.67 relativ)
-;;   (visual-fill-column-center-text t) ;; Text zentrieren!
-;;   (visual-fill-column-enable-sensible-window-split t))
+(use-package visual-fill-column
+  :ensure t
+  :hook ((text-mode . visual-line-mode)        ;; Soft-Wrapping aktivieren
+         (text-mode . visual-fill-column-mode)) ;; Das Zentrieren aktivieren
+  :custom
+  (visual-fill-column-width 110)      ;; Maximale Breite des Textes (statt 0.67 relativ)
+  (visual-fill-column-center-text t) ;; Text zentrieren!
+  (visual-fill-column-enable-sensible-window-split t))
 
 ;; (use-package diff-hl
 ;;   :defer t
@@ -1845,23 +1869,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;                                   (unknown . "┆")
 ;;                                   (ignored . "i"))))
 
-(use-package diff-hl
-  :defer t
-  :straight t
-  :ensure t
-  :hook
-  (find-file . (lambda ()
-                 (global-diff-hl-mode)           ;; Enable Diff-HL mode for all files.
-                 (diff-hl-flydiff-mode)          ;; Automatically refresh diffs.
-                 (diff-hl-margin-mode)))         ;; Show diff indicators in the margin.
-  :custom
-  (diff-hl-side 'left)                           ;; Set the side for diff indicators.
-  (diff-hl-margin-symbols-alist '((insert . "┃") ;; Customize symbols for each change type.
-                                  (delete . "-")
-                                  (change . "┃")
-                                  (unknown . "┆")
-                                  (ignored . "i"))))
-
 (use-package hl-todo
   :ensure t
   :straight (:host github :repo "tarsius/hl-todo")
@@ -1892,51 +1899,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (setq switch-to-prev-buffer-skip
       (lambda (window buffer bury-or-kill)
         (string-match-p "\\*magit" (buffer-name buffer))))
-
-(use-package conventional-commit
-  :ensure t
-  :straight (:host github :repo "akirak/conventional-commit.el")
-  :after git-commit
-  :hook
-  (git-commit-mode . conventional-commit-setup))
-
-(use-package hl-todo
-  :ensure t
-  :straight (:host github :repo "tarsius/hl-todo")
-  :config
-  (global-hl-todo-mode) 
-  (setq hl-todo-keyword-faces
-        '(("TODO"   . "#FF0000")
-          ("FIXME"  . "#FF0000")
-          ("DEBUG"  . "#A020F0")
-          ("GOTCHA" . "#FF4500")
-          ("STUB"   . "#1E90FF"))))
-
-(use-package magit
-  :ensure t
-  :straight t
-  :config
-  (if ek-use-nerd-fonts
-	  (setopt magit-format-file-function #'magit-format-file-nerd-icons))
-  :custom
-  (magit-display-buffer-function #'magit-display-buffer-same-window-except-diff-v1))
-
-(defun my/magit-kill-buffers ()
-  (interactive)
-  (let ((buffers (magit-mode-get-buffers)))
-	(magit-restore-window-configuration)
-	(mapc #'kill-buffer buffers)))
-
-(setq switch-to-prev-buffer-skip
-      (lambda (window buffer bury-or-kill)
-        (string-match-p "\\*magit" (buffer-name buffer))))
-
-(use-package conventional-commit
-  :ensure t
-  :straight (:host github :repo "akirak/conventional-commit.el")
-  :after git-commit
-  :hook
-  (git-commit-mode . conventional-commit-setup))
 
 (use-package indent-guide
   :defer t
@@ -2424,7 +2386,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (blink-cursor-mode 0)
 (setq-default cursor-type 'box)
 
-(defvar cashmere/font-height 180)
+(defvar cashmere/font-height 120)
 
 (set-face-attribute 'default nil :family "MonoLisa Nerd Font" :weight 'medium :height cashmere/font-height)
 (set-face-attribute 'fixed-pitch nil :family "RobotoMono Nerd Font" :weight 'regular)
@@ -2435,6 +2397,14 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :defer t
   :hook ((org-mode   . mixed-pitch-mode)
          (LaTeX-mode . mixed-pitch-mode)))
+
+(use-package grip-mode
+  :ensure t
+  :config 
+  (setq grip-command 'auto)) ;; auto, grip, go-grip or mdopen
+
+(use-package ox-gfm
+  :ensure t)
 
 ;; (use-package catppuccin-theme
 ;;   :ensure t
@@ -2827,11 +2797,11 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (setq delete-by-moving-to-trash t)
   (setq dired-mouse-drag-files t))
 
-(use-package tramp-hlo
-    :ensure t
-	:straight (:host github :repo "jsadusk/tramp-hlo")
-    :config
-    (tramp-hlo-setup))
+;; (use-package tramp-hlo
+;;     :ensure t
+;; 	:straight (:host github :repo "jsadusk/tramp-hlo")
+;;     :config
+;;     (tramp-hlo-setup))
 
 (add-to-list 'load-path "/home/cashmere/.emacs.d/tramp-rpc/lisp")
 (require 'tramp-rpc)
@@ -2966,6 +2936,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   ":" (lambda () (interactive) (execute-extended-command nil))
 
   "d" '(:ignore t :wk "denote")
+  "dj" '(denote-journal-new-or-existing-entry :wk "journal")
   "dd" '(denote-menu-list-notes t :wk "List all notes")
   "dg" '(consult-denote-grep t :wk "Search")
   "dn" '(denote t :wk "Create a new note")
@@ -2974,7 +2945,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "dtt" '(tmr :wk "set timer")
 
   "f" '(:ignore t :wk "files")
-  "fd" '(dired :wk "dired")
+  "fd" '(dired-jump :wk "dired")
   "fD" '(dired-jump :wk "dired jump")
   "fr" '(consult-recent-file :wk "recent files")
   "ff" '(find-file :wk "find file")
@@ -2982,7 +2953,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
   "b" '(:ignore t :wk "buffer/bookmarks")
   "bb" '(consult-bookmark :wk "display current bookmarks")
-  "bi" '(ibuffer :wk "ibuffer")
+  "bI" '(ibuffer :wk "ibuffer")
+  "bi" '(projectile-ibuffer :wk "ibuffer project")
   "bd" '(bookmark-delete :wk "delete bookmark")
   "bk" '(kill-current-buffer :wk "kill buffer")
   "bs" '(bookmark-set :wk "save bookmark")
@@ -3028,6 +3000,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
   "w w" '(evil-window-next :wk "Close window")
   "w c" '(evil-window-delete :wk "Close window")
+  "w o" '(delete-other-windows :wk "Maximize window")
   "w n" '(evil-window-new :wk "New window")
   "w s" '(evil-window-split :wk "Horizontal split window")
   "w v" '(evil-window-vsplit :wk "Vertical split window")
@@ -3139,7 +3112,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :keymaps '(rust-mode-map rust-ts-mode-map)
   "m" '(:wk "rust mode" :ignore)
   "mr" '(rust-run :wk "run")
-  "mc" '(rust-clippy :wk "clippy")
+  "mc" '(rust-run-clippy :wk "clippy")
   "mC" '(rust-check :wk "check"))
 
 (with-eval-after-load 'denote-menu
@@ -3200,7 +3173,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "m" '(mu4e :wk "mail")
   "p" '(pass :wk "pass")
   "o" '(my/global-olivetti-mode :wk "center buffer")
-  "i" '(projectile-ibuffer :wk "ibuffer project")
 
   "g" '(:wk "gptel" :ignore)
 
@@ -3388,10 +3360,26 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   
   (add-hook 'message-send-mail-hook 'mu4e-set-msmtp-account))
 
-(use-package emacs-everywhere
-  :ensure t)
+(use-package denote-project-notes
+  :ensure t
+  :after org
+  :config
+  (setq denote-project-notes-identifier '(project stayem)))
 
-(use-package burly
+;; (use-package snippy
+;;   :ensure t
+;;   :straight
+;;   (:host github
+;; 	   :repo "MiniApollo/snippy.git"
+;; 	   :branch "main"
+;; 	   :rev :newest)
+;;   :hook (after-init . global-snippy-minor-mode)
+;;   :custom
+;;   (snippy-global-languages '("global")) ;; Recomended
+;;   :config
+;;   (snippy-install-or-update-snippets)) ;; Autoupdate git repo
+
+(use-package emacs-everywhere
   :ensure t)
 
 ;; (profiler-start 'cpu)
