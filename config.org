@@ -1,4 +1,4 @@
-#+title:      config.ors
+#+title:      config.org
 #+date:       [2025-10-20 Mon 08:33]
 #+identifier: 20251020T083323
 #+PROPERTY: header-args 
@@ -386,6 +386,8 @@
       (message "centered-cursor on"))))
 #+end_src
 
+* 
+
 * cursory
 
 #+begin_src emacs-lisp
@@ -665,6 +667,60 @@ Not necessary but an eyecandy to look at!
   (setq gptel-include-reasoning nil)
   (setq gptel-default-mode 'markdown-mode)
   (setq gptel-backends (list my/openrouter-backend)))
+#+end_src
+
+** claude-code
+
+#+begin_src emacs-lisp
+(use-package claude-code
+  :ensure t
+  :straight (:type git :host github :repo "stevemolitor/claude-code.el" :branch "main" :depth 1
+                   :files ("*.el" (:exclude "images/*")))
+  :bind-keymap
+  ("C-c c" . claude-code-command-map) ;; or your preferred key
+  ;; Optionally define a repeat map so that "M" will cycle thru Claude auto-accept/plan/confirm modes after invoking claude-code-cycle-mode / C-c M.
+  :bind
+  (:repeat-map my-claude-code-map ("M" . claude-code-cycle-mode))
+  :config
+  ;; optional IDE integration with Monet
+  (add-hook 'claude-code-process-environment-functions #'monet-start-server-function)
+  (monet-mode 1)
+  (setq claude-code-terminal-backend 'vterm)
+  (claude-code-mode))
+#+end_src
+
+*** inheritenv
+
+#+begin_src emacs-lisp
+(use-package inheritenv
+  :ensure t
+  :straight (:type git :host github :repo "purcell/inheritenv"))
+#+end_src
+
+** monet
+
+#+begin_src emacs-lisp
+(use-package monet
+  :ensure t
+  :straight (:host github :repo "stevemolitor/monet"))
+#+end_src
+
+* agent-shell
+
+#+begin_src emacs-lisp
+(use-package agent-shell
+    :ensure t
+    ;; Add agent installation configs here
+	:config
+	(setq agent-shell-highlight-blocks t)
+	)
+#+end_src
+
+** acp
+
+#+begin_src emacs-lisp
+(use-package acp
+  :ensure t)
 #+end_src
 
 * eldoc
@@ -966,6 +1022,474 @@ and convert it to Org using the pandoc utility."
 
 #+end_src
 
+** workflow enhancements
+
+These enhancements implement a comprehensive org-mode workflow based on GTD principles and your personal needs.
+
+*** org-log settings
+
+Track when and why tasks change state - essential for accountability and retrospectives.
+
+#+begin_src emacs-lisp
+(with-eval-after-load 'org
+  ;; Log state changes with timestamps
+  (setq org-log-done 'time
+        org-log-redeadline 'time
+        org-log-reschedule 'time
+        org-log-into-drawer t
+        org-enforce-todo-dependencies t)
+  
+  ;; Update TODO keywords to require notes for WAIT and CANCELLED
+  ;; @ means: prompt for note when entering state
+  ;; ! means: timestamp when leaving state
+  (setq org-todo-keywords
+        '((sequence "TODO(t)" "NEXT(n)" "ACTIVE(a!)" "WAIT(w@/!)" "PLAN(p)" "|" "DONE(d!)" "CANCELLED(c@)")))
+  
+  ;; Customize note prompts
+  (setq org-log-note-headings
+        '((done . "CLOSING NOTE %t")
+          (state . "State %-12s from %-12S %t")
+          (note . "Note taken on %t")
+          (reschedule . "Rescheduled from %S on %t")
+          (delschedule . "Not scheduled, was %S on %t")
+          (redeadline . "New deadline from %S on %t")
+          (deldeadline . "Removed deadline, was %S on %t")
+          (refile . "Refiled on %t")
+          (clock-out . ""))))
+#+end_src
+
+*** org-clock enhancements
+
+Automatic task state management when clocking in/out. Tasks automatically become ACTIVE when you start working.
+
+#+begin_src emacs-lisp
+(use-package org-clock
+  :after org
+  :straight nil
+  :ensure nil
+  :commands (org-clock-in org-clock-out org-clock-goto)
+  :config
+  ;; Setup hooks for clock persistence
+  (org-clock-persistence-insinuate)
+  (setq org-clock-clocked-in-display nil
+        org-clock-history-length 23
+        org-clock-in-switch-to-state 'my/clock-in-to-started
+        org-clock-out-when-done t
+        org-clock-persist t
+        org-clock-persist-query-resume nil)
+  
+  ;; Helper function: detect if heading is a project
+  (defun my/is-project-p ()
+    "Any task with a todo keyword subtask."
+    (save-restriction
+      (widen)
+      (let ((has-subtask)
+            (subtree-end (save-excursion (org-end-of-subtree t)))
+            (is-a-task (member (nth 2 (org-heading-components)) org-todo-keywords-1)))
+        (save-excursion
+          (forward-line 1)
+          (while (and (not has-subtask)
+                      (< (point) subtree-end)
+                      (re-search-forward "^\\*+ " subtree-end t))
+            (when (member (org-get-todo-state) org-todo-keywords-1)
+              (setq has-subtask t))))
+        (and is-a-task has-subtask))))
+
+  ;; Helper function: detect if heading is a task
+  (defun my/is-task-p ()
+    "Any task with a todo keyword and no subtask."
+    (save-restriction
+      (widen)
+      (let ((has-subtask)
+            (subtree-end (save-excursion (org-end-of-subtree t)))
+            (is-a-task (member (nth 2 (org-heading-components)) org-todo-keywords-1)))
+        (save-excursion
+          (forward-line 1)
+          (while (and (not has-subtask)
+                      (< (point) subtree-end)
+                      (re-search-forward "^\\*+ " subtree-end t))
+            (when (member (org-get-todo-state) org-todo-keywords-1)
+              (setq has-subtask t))))
+        (and is-a-task (not has-subtask)))))
+
+  ;; Auto-change state when clocking in
+  (defun my/clock-in-to-started (kw)
+    "Switch task from TODO/NEXT to ACTIVE when clocking in.
+Skips capture tasks and projects."
+    (when (not (and (boundp 'org-capture-mode) org-capture-mode))
+      (cond
+       ;; Change TODO/NEXT tasks to ACTIVE when clocking in
+       ((and (member (org-get-todo-state) (list "TODO" "NEXT"))
+             (my/is-task-p))
+        "ACTIVE")
+       ;; Change ACTIVE projects back to TODO (projects shouldn't be clocked directly)
+       ((and (member (org-get-todo-state) (list "ACTIVE"))
+             (my/is-project-p))
+        "TODO"))))
+  
+  :bind (("<f11>" . org-clock-goto)
+         ("C-c C-x C-i" . org-clock-in)
+         ("C-c C-x C-o" . org-clock-out)))
+#+end_src
+
+*** effort and complexity enhancements
+
+Better effort estimates for deep work sessions and automatic complexity mapping.
+
+#+begin_src emacs-lisp
+(with-eval-after-load 'org
+  ;; Update effort values for longer focus sessions (night owl, deep work)
+  ;; Added 4h, 8h, 16h, 40h for multi-hour deep work blocks
+  (setq org-global-properties
+        '(("EFFORT_ALL" . "0:30 1:00 2:00 4:00 8:00 16:00 40:00")
+          ("COMPLEXITY_ALL" . "low medium high")
+          ("PRIORITY_ALL" . "A B C D")))
+  
+  ;; Enhanced column view format with clocksum comparison
+  (setq org-columns-default-format
+        "%40ITEM(Task) %TODO %10EFFORT{+} %10CLOCKSUM %10PROGRESS %COMPLEXITY %DEADLINE")
+  
+  ;; Auto-set effort from complexity (already exists, keeping it here for reference)
+  ;; Low complexity = 30 min, Medium = 2h, High = 5h
+  (defun my/org-set-effort-from-complexity ()
+    "Auto-set EFFORT property based on COMPLEXITY property."
+    (interactive)
+    (let* ((complexity (org-entry-get (point) "COMPLEXITY"))
+           (effort (org-entry-get (point) "EFFORT")))
+      (unless effort
+        (cond
+         ((string= complexity "low") (org-set-property "EFFORT" "0:30"))
+         ((string= complexity "medium") (org-set-property "EFFORT" "2:00"))
+         ((string= complexity "high") (org-set-property "EFFORT" "5:00"))))))
+  
+  ;; Keybinding for manual effort setting
+  (define-key org-mode-map (kbd "C-c e") 'my/org-set-effort-from-complexity))
+#+end_src
+
+*** project templates
+
+Interactive project creation with denote - includes structure, deadlines, timers, and clocktables.
+
+#+begin_src emacs-lisp
+(defun my/create-project ()
+  "Create a new project file with denote and comprehensive project structure."
+  (interactive)
+  (let* ((project-name (read-string "Project name: "))
+         (tags (completing-read-multiple "Additional tags (comma-separated): " 
+                                         '("work" "personal" "university" "learning")))
+         (all-tags (cons "project" tags))
+         (deadline-str (org-read-date nil nil nil "Project deadline (optional, RET to skip): "))
+         (effort-str (completing-read "Estimated total effort: "
+                                      '("10h" "20h" "40h" "80h" "160h") nil nil "40h"))
+         (file-name (denote project-name all-tags)))
+    (find-file file-name)
+    (goto-char (point-max))
+    (insert "\n")
+    (insert "* " project-name "\n")
+    (insert ":PROPERTIES:\n")
+    (when (and deadline-str (not (string-empty-p deadline-str)))
+      (insert ":DEADLINE: <" deadline-str ">\n"))
+    (insert ":EFFORT: " effort-str "\n")
+    (insert ":PROGRESS: 0%\n")
+    (insert ":END:\n\n")
+    
+    (insert "** Overview\n\n")
+    (insert "- Goal :: \n")
+    (insert "- Why :: \n")
+    (insert "- Success Criteria :: \n")
+    (insert "- Status :: Planning\n\n")
+    
+    (insert "** Phases\n\n")
+    (insert "*** PLAN Phase 1: Planning & Research\n")
+    (when (and deadline-str (not (string-empty-p deadline-str)))
+      (insert "DEADLINE: <" deadline-str ">\n"))
+    (insert ":PROPERTIES:\n")
+    (insert ":CREATED: " (format-time-string "[%Y-%m-%d %a %H:%M]") "\n")
+    (insert ":END:\n\n")
+    (insert "- [ ] Define scope\n")
+    (insert "- [ ] Research requirements\n")
+    (insert "- [ ] Break down into tasks\n\n")
+    
+    (insert "*** PLAN Phase 2: Implementation\n")
+    (insert ":PROPERTIES:\n")
+    (insert ":CREATED: " (format-time-string "[%Y-%m-%d %a %H:%M]") "\n")
+    (insert ":END:\n\n")
+    
+    (insert "*** PLAN Phase 3: Review & Polish\n")
+    (insert ":PROPERTIES:\n")
+    (insert ":CREATED: " (format-time-string "[%Y-%m-%d %a %H:%M]") "\n")
+    (insert ":END:\n\n")
+    
+    (insert "** Resources\n\n")
+    (insert "- Links :: \n")
+    (insert "- Files :: \n")
+    (insert "- References :: \n\n")
+    
+    (insert "** Time Tracking\n\n")
+    (insert "#+BEGIN: clocktable :scope file :maxlevel 3 :emphasize nil :link t\n")
+    (insert "#+END:\n\n")
+    (insert "Update with C-c C-c on the BEGIN line\n\n")
+    
+    (insert "** Status Updates\n\n")
+    (insert "Use =C-c C-x C-c= for column view to update PROGRESS and see overview.\n\n")
+    
+    (insert "** Retrospective\n\n")
+    (insert "- What worked :: \n")
+    (insert "- What didn't :: \n")
+    (insert "- Lessons learned :: \n")
+    (insert "- Would do differently :: \n")
+    
+    (org-mode)
+    (goto-char (point-min))
+    (search-forward "- Goal :: " nil t)))
+
+#+end_src
+
+*** daily review - your way
+
+Flexible end-of-day closure ritual. Use whenever you feel like wrapping up the day.
+
+#+begin_src emacs-lisp
+(defun my/daily-review ()
+  "Append a simple daily review to today's journal - whenever you feel like it."
+  (interactive)
+  (require 'denote)
+  (require 'denote-journal)
+  (let* ((today (format-time-string "%Y-%m-%d"))
+         (journal-files (denote-directory-files "journal"))
+         (today-journal (seq-find
+                        (lambda (file)
+                          (string-match-p today (file-name-nondirectory file)))
+                        journal-files)))
+    
+    ;; Create or open today's journal
+    (if today-journal
+        (find-file today-journal)
+      (denote-journal-new-or-existing-entry))
+    
+    ;; Go to end and add review section
+    (goto-char (point-max))
+    (unless (save-excursion
+              (beginning-of-line)
+              (looking-at "^\\*\\* Day Closed"))
+      (insert "\n** Day Closed " (format-time-string "[%H:%M]") "\n\n"))
+    
+    (insert "*** What I did today\n")
+    (insert "#+BEGIN: clocktable :scope agenda :maxlevel 2 :block today\n")
+    (insert "#+END:\n\n")
+    
+    (insert "*** Brain dump\n")
+    (insert "Thoughts, notes, captures, whatever:\n\n")
+    
+    (insert "*** Projects check\n")
+    (insert "Quick status (or skip if nothing changed):\n")
+    (insert "- \n\n")
+    
+    (insert "*** Tomorrow\n")
+    (insert "What to focus on (1-3 things):\n")
+    (insert "- \n\n")
+    
+    (insert "*** How I felt\n")
+    (insert "- Energy: \n")
+    (insert "- Focus: \n")
+    (insert "- Notes: \n\n")
+    
+    (org-mode)
+    (goto-char (point-max))
+    (search-backward "*** Brain dump" nil t)
+    (forward-line 2)
+    (end-of-line)))
+#+end_src
+
+*** reflection template
+
+For when YOU feel like doing a bigger review - no schedule, no pressure.
+
+#+begin_src emacs-lisp
+(defun my/reflection ()
+  "Create a reflection note - use whenever you feel like reviewing progress."
+  (interactive)
+  (require 'denote)
+  (let* ((title (read-string "Reflection on: " "Recent progress"))
+         (file-name (denote title '("reflection"))))
+    (find-file file-name)
+    (goto-char (point-max))
+    (insert "\n* " title "\n\n")
+    
+    (insert "** Time spent recently\n\n")
+    (insert "#+BEGIN: clocktable :scope agenda :maxlevel 2 :block thisweek\n")
+    (insert "#+END:\n\n")
+    (insert "Or change to :block lastweek, :block thismonth, etc.\n\n")
+    
+    (insert "** What's working?\n")
+    (insert "- \n\n")
+    
+    (insert "** What's not working?\n")
+    (insert "- \n\n")
+    
+    (insert "** Projects status\n")
+    (insert "#+BEGIN: columnview :id global :match \"project\" :format \"%ITEM %PROGRESS %EFFORT\"\n")
+    (insert "#+END:\n\n")
+    
+    (insert "** What needs attention?\n")
+    (insert "- \n\n")
+    
+    (insert "** Ideas / Changes\n")
+    (insert "- \n")
+    
+    (org-mode)
+    (goto-char (point-min))
+    (search-forward "** What's working?" nil t)
+    (forward-line 1)
+    (end-of-line)))
+#+end_src
+
+*** time block captures
+
+Schedule everything - work, meals, personal time - with interactive time blocks.
+
+#+begin_src emacs-lisp
+(defun my/org-capture-timeblock-to-journal ()
+  "Capture a time block to today's journal (refile later if needed)."
+  (require 'denote)
+  (require 'denote-journal)
+  (let* ((description (read-string "What: "))
+         (datetime (org-read-date t nil nil "When (date + time): "))
+         (duration (completing-read "Duration: "
+                                    '("30m" "1h" "1h30m" "2h" "3h" "4h" "6h" "8h")
+                                    nil nil "2h"))
+         (type (completing-read "Type: "
+                               '("Work" "Personal" "Meal" "Break" "Focus" "Learning" "Exercise")
+                               nil nil "Work"))
+         (today (format-time-string "%Y-%m-%d"))
+         (journal-files (denote-directory-files "journal"))
+         (today-journal (seq-find
+                        (lambda (file)
+                          (string-match-p today (file-name-nondirectory file)))
+                        journal-files)))
+    
+    ;; Open or create today's journal
+    (if today-journal
+        (find-file today-journal)
+      (denote-journal-new-or-existing-entry))
+    
+    ;; Go to end and add time block
+    (goto-char (point-max))
+    (insert "\n* TODO " description "\n")
+    (insert "SCHEDULED: <" datetime ">\n")
+    (insert ":PROPERTIES:\n")
+    (insert ":DURATION: " duration "\n")
+    (insert ":TYPE: " type "\n")
+    (insert ":CREATED: " (format-time-string "[%Y-%m-%d %a %H:%M]") "\n")
+    (insert ":END:\n\n")
+    (insert "Capture in journal - refile with C-c C-w if needed\n")
+    (current-buffer)))
+
+(defun my/org-capture-recurring-to-journal ()
+  "Capture a recurring time block to today's journal (habits like meals, exercise)."
+  (require 'denote)
+  (require 'denote-journal)
+  (let* ((description (read-string "What (recurring): "))
+         (start-date (org-read-date nil nil nil "Start date: "))
+         (time (read-string "Time (HH:MM): " "12:00"))
+         (repeat (completing-read "Repeat: "
+                                 '(".+1d" ".+2d" ".+1w" ".+1m")
+                                 nil nil ".+1d"))
+         (duration (completing-read "Duration: "
+                                   '("15m" "30m" "1h" "1h30m" "2h")
+                                   nil nil "1h"))
+         (type (completing-read "Type: "
+                               '("Meal" "Exercise" "Break" "Routine")
+                               nil nil "Meal"))
+         (today (format-time-string "%Y-%m-%d"))
+         (journal-files (denote-directory-files "journal"))
+         (today-journal (seq-find
+                        (lambda (file)
+                          (string-match-p today (file-name-nondirectory file)))
+                        journal-files)))
+    
+    ;; Open or create today's journal
+    (if today-journal
+        (find-file today-journal)
+      (denote-journal-new-or-existing-entry))
+    
+    ;; Go to end and add recurring block
+    (goto-char (point-max))
+    (insert "\n* TODO " description "\n")
+    (insert "SCHEDULED: <" start-date " " time " " repeat ">\n")
+    (insert ":PROPERTIES:\n")
+    (insert ":STYLE: habit\n")
+    (insert ":DURATION: " duration "\n")
+    (insert ":TYPE: " type "\n")
+    (insert ":CREATED: " (format-time-string "[%Y-%m-%d %a %H:%M]") "\n")
+    (insert ":END:\n\n")
+    (insert "Recurring habit - tracked with org-habit. Refile with C-c C-w if needed.\n")
+    (current-buffer)))
+
+(defun my/org-capture-meeting-to-journal ()
+  "Capture a meeting to today's journal (can refile to separate file later if needed)."
+  (require 'denote)
+  (require 'denote-journal)
+  (let* ((topic (read-string "Meeting topic: "))
+         (datetime (org-read-date t nil nil "When (date + time): "))
+         (duration (completing-read "Duration: "
+                                   '("15m" "30m" "1h" "1h30m" "2h")
+                                   nil nil "1h"))
+         (participants (read-string "Participants (optional): "))
+         (today (format-time-string "%Y-%m-%d"))
+         (journal-files (denote-directory-files "journal"))
+         (today-journal (seq-find
+                        (lambda (file)
+                          (string-match-p today (file-name-nondirectory file)))
+                        journal-files)))
+    
+    ;; Open or create today's journal
+    (if today-journal
+        (find-file today-journal)
+      (denote-journal-new-or-existing-entry))
+    
+    ;; Go to end and add meeting
+    (goto-char (point-max))
+    (insert "\n* Meeting: " topic "\n")
+    (insert "SCHEDULED: <" datetime ">\n")
+    (insert ":PROPERTIES:\n")
+    (insert ":DURATION: " duration "\n")
+    (insert ":TYPE: Meeting\n")
+    (insert ":CREATED: " (format-time-string "[%Y-%m-%d %a %H:%M]") "\n")
+    (insert ":END:\n\n")
+    (when (and participants (not (string-empty-p participants)))
+      (insert "** Attendees\n")
+      (insert "- " participants "\n\n"))
+    (insert "** Agenda\n")
+    (insert "- \n\n")
+    (insert "** Notes\n\n")
+    (insert "** Action Items\n")
+    (insert "- [ ] \n\n")
+    (insert "Captured in journal - refile to separate meeting file with C-c C-w if needed\n")
+    (org-mode)
+    (search-backward "** Agenda" nil t)
+    (forward-line 1)
+    (end-of-line)
+    (current-buffer)))
+
+;; Add to org-capture-templates (captures to journal, refile later if needed)
+(with-eval-after-load 'org-capture
+  (add-to-list 'org-capture-templates
+               '("b" "Time Block" plain
+                 (function my/org-capture-timeblock-to-journal)
+                 "" :immediate-finish t :jump-to-captured t))
+  
+  (add-to-list 'org-capture-templates
+               '("r" "Recurring Block" plain
+                 (function my/org-capture-recurring-to-journal)
+                 "" :immediate-finish t :jump-to-captured t))
+  
+  (add-to-list 'org-capture-templates
+               '("m" "Meeting" plain
+                 (function my/org-capture-meeting-to-journal)
+                 "" :immediate-finish nil :jump-to-captured t)))
+#+end_src
+
 ** notation
 
 *** org-noter
@@ -1086,18 +1610,37 @@ and convert it to Org using the pandoc utility."
      (
        (org-ql-block '(and (scheduled :to today)
                            (not (done)))
-         ((org-ql-block-header "Today's Schedule")
+         ((org-ql-block-header "📅 Today's Schedule")
           (org-super-agenda-groups
            '(
-             (:name "Morning Block (Before 12:00)"
-              :time-grid t
+             (:name "🌙 Night (00:00-06:00)"
+              :and (:scheduled today :time-grid t)
+              :pred (lambda (item)
+                      (when-let ((time (org-get-scheduled-time (point))))
+                        (let ((hour (nth 2 (decode-time time))))
+                          (and (>= hour 0) (< hour 6)))))
               :order 1)
-             (:name "Afternoon Block (12:00-17:00)"
-              :time-grid t
+             (:name "🌅 Morning (06:00-12:00)"
+              :and (:scheduled today :time-grid t)
+              :pred (lambda (item)
+                      (when-let ((time (org-get-scheduled-time (point))))
+                        (let ((hour (nth 2 (decode-time time))))
+                          (and (>= hour 6) (< hour 12)))))
               :order 2)
-             (:name "Evening Block (After 17:00)"
-              :time-grid t
+             (:name "☀️ Afternoon (12:00-18:00)"
+              :and (:scheduled today :time-grid t)
+              :pred (lambda (item)
+                      (when-let ((time (org-get-scheduled-time (point))))
+                        (let ((hour (nth 2 (decode-time time))))
+                          (and (>= hour 12) (< hour 18)))))
               :order 3)
+             (:name "🌆 Evening (18:00-00:00)"
+              :and (:scheduled today :time-grid t)
+              :pred (lambda (item)
+                      (when-let ((time (org-get-scheduled-time (point))))
+                        (let ((hour (nth 2 (decode-time time))))
+                          (and (>= hour 18) (< hour 24)))))
+              :order 4)
              (:discard (:anything t))))))
 
        (org-ql-block '(and (or (tags "self")
@@ -1105,35 +1648,35 @@ and convert it to Org using the pandoc utility."
                            (not (scheduled))
                            (not (tags "project"))
                            (not (done)))
-         ((org-ql-block-header "Unscheduled Today")
+         ((org-ql-block-header "📋 Unscheduled Tasks")
           (org-super-agenda-groups
            '(
-             (:name "ACTIVE"
+             (:name "🔥 ACTIVE (Currently Working)"
               :todo "ACTIVE"
               :order 1)
-             (:name "NEXT"
+             (:name "⏭️ NEXT (Ready to Start)"
               :todo "NEXT"
               :order 2)
-             (:name "TODO"
+             (:name "📝 TODO (Backlog)"
               :todo "TODO"
               :order 3)
-             (:name "WAIT"
+             (:name "⏸️ WAIT (Blocked)"
               :todo "WAIT"
               :order 4)
              (:discard (:anything t))))))
 
        (org-ql-block '(and (tags "project")
                            (not (done)))
-         ((org-ql-block-header "Project Tasks")
+         ((org-ql-block-header "🎯 Project Tasks")
           (org-super-agenda-groups
            '(
-             (:name "ACTIVE"
+             (:name "🔥 ACTIVE Projects"
               :todo "ACTIVE"
               :order 1)
-             (:name "NEXT"
+             (:name "⏭️ NEXT Up"
               :todo "NEXT"
               :order 2)
-             (:name "TODO"
+             (:name "📝 TODO"
               :todo "TODO"
               :order 3)
              (:discard (:anything t)))))))
@@ -1295,10 +1838,7 @@ and convert it to Org using the pandoc utility."
 (setq org-columns-default-format
   "%40ITEM(Task) %10TODO(State) %10EFFORT(Effort) %10COMPLEXITY(Complexity) %PRIORITY")
 
-(setq org-global-properties
-  '(("EFFORT_ALL" . "0:15 0:30 1:00 2:00 3:00 5:00 8:00")
-    ("COMPLEXITY_ALL" . "low medium high")
-    ("PRIORITY_ALL" . "A B C")))
+;; org-global-properties now defined in workflow enhancements section above
 
 (setq org-agenda-time-grid
   '((daily today require-timed)
@@ -1308,8 +1848,7 @@ and convert it to Org using the pandoc utility."
 (setq org-agenda-current-time-string
   "--- NOW ---------------")
 
-(setq org-todo-keywords
-  '((sequence "TODO(t)" "NEXT(n)" "ACTIVE(a)" "WAIT(w)" "|" "DONE(d)" "CANCELLED(c)")))
+;; org-todo-keywords now defined in workflow enhancements section above
 
 (setq org-todo-keyword-faces
   '(("TODO" . (:inherit (warning org-todo)))
@@ -1333,17 +1872,7 @@ and convert it to Org using the pandoc utility."
 (add-hook 'after-load-theme-hook #'my/update-org-modern-faces)
 (my/update-org-modern-faces)
 
-(defun org-set-effort-from-complexity ()
-  (interactive)
-  (let* ((complexity (org-entry-get (point) "COMPLEXITY"))
-         (effort (org-entry-get (point) "EFFORT")))
-    (unless effort
-      (cond
-       ((string= complexity "low") (org-set-property "EFFORT" "0:30"))
-       ((string= complexity "medium") (org-set-property "EFFORT" "2:00"))
-       ((string= complexity "high") (org-set-property "EFFORT" "5:00"))))))
-
-(define-key org-mode-map (kbd "C-c e") 'org-set-effort-from-complexity)
+;; org-set-effort-from-complexity now defined in workflow enhancements section above
 
 (defun my/org-agenda-remove-tags ()
   (save-excursion
@@ -1704,7 +2233,7 @@ Some goodies for better integration with org files.
   :hook
   (after-init . vertico-mode)
   :custom
-  (vertico-count 10)
+  (vertico-count 16)
   (vertico-resize nil)
   (vertico-cycle nil)
   :bind (:map vertico-map
@@ -1724,20 +2253,20 @@ Some goodies for better integration with org files.
 ** vertico-posframe
 
 #+begin_src emacs-lisp
-;; (use-package vertico-posframe
-;;   :init
-;;   (setq vertico-posframe-parameters   '((left-fringe  . 12)    ;; Fringes
-;;                                         (right-fringe . 12)
-;; 										(accept-focus . t)))
-;;                                         ;; (undecorated  . nil) ;; Rounded frame
+(use-package vertico-posframe
+  :init
+  (setq vertico-posframe-parameters   '((left-fringe  . 12)    ;; Fringes
+                                        (right-fringe . 12)
+										(accept-focus . t)))
+                                        (undecorated  . nil) ;; Rounded frame
 										 
-;;   :config
-;;   (vertico-posframe-mode 1)
-;;   (setq vertico-posframe-width        96                       ;; Narrow frame
-;;         vertico-posframe-height       vertico-count            ;; Default height
-;;         ;; Don't create posframe for these commands
-;;         vertico-multiform-commands    '((consult-line    (:not posframe))
-;;                                         (consult-ripgrep (:not posframe)))))
+  :config
+  (vertico-posframe-mode 1)
+  (setq vertico-posframe-width        124                       ;; Narrow frame
+        vertico-posframe-height       vertico-count            ;; Default height
+        ;; Don't create posframe for these commands
+        vertico-multiform-commands    '((consult-line    (:not posframe))
+                                        (consult-ripgrep (:not posframe)))))
 #+end_src
 
 ** corfu
@@ -1953,10 +2482,11 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (setq eglot-events-buffer-size 0)
   (setq eglot-report-progress nil)
   
-  (add-hook 'eglot-managed-mode-hook 
-            (lambda () 
+  (add-hook 'eglot-managed-mode-hook
+            (lambda ()
               (eglot-inlay-hints-mode -1)
-              (eglot-semantic-tokens-mode 1)))
+              (when (fboundp 'eglot-semantic-tokens-mode)
+                (eglot-semantic-tokens-mode 1))))
   
   (setq eglot-ignored-server-capabilities 
         '(:inlayhintprovider :documenthighlightprovider)))
@@ -3197,7 +3727,7 @@ ily <3.
   :straight (:host github :repo "honmaple/emacs-maple-modeline")
   :hook (after-init . maple-modeline-mode)
   :config
-  (setq maple-modeline-separator 'nil)
+  (setq maple-modeline-separator 'arrow)
   (setq maple-modeline-height 25)
   (setq maple-modeline-icon t)
   
@@ -3219,7 +3749,8 @@ ily <3.
            version-control
            remote-host
            region)
-    :right (narrow
+    :right (misc-info
+			narrow
             python
             my-modeline-time
             process
@@ -3277,9 +3808,9 @@ ily <3.
 (blink-cursor-mode 0)
 (setq-default cursor-type 'box)
 
-(defvar cashmere/font-height 120)
+(defvar cashmere/font-height 140)
 
-(set-face-attribute 'default nil :family "MonoLisa Nerd Font" :weight 'medium :height cashmere/font-height)
+(set-face-attribute 'default nil :family "MonoLisa Nerd Font" :weight 'regular :height cashmere/font-height)
 (set-face-attribute 'fixed-pitch nil :family "RobotoMono Nerd Font" :weight 'regular)
 (set-face-attribute 'variable-pitch nil :family "Poppins" :weight 'regular :height 1.1)
 
@@ -3700,6 +4231,9 @@ ily <3.
   
 ;;   (base16-theme-define 'base24-nightfox base24-nightfox-colors)
 ;;   (enable-theme 'base24-nightfox))
+
+(add-to-list 'custom-theme-load-path "~/.emacs.d/themes/")
+(load-theme 'noctalia t)
 #+end_src
 
 * dirvish
@@ -3876,6 +4410,16 @@ ily <3.
     (setq auth-source-cache-expiry 300)))
 #+end_src
 
+* eshell
+#+begin_src emacs-lisp
+(use-package eshell
+  :ensure nil
+  :straight nil)
+
+(use-package eshell-prompt-extras
+  :ensure t)
+#+end_src
+
 * zoom
 
 #+begin_src emacs-lisp
@@ -3938,9 +4482,13 @@ ily <3.
   "d" '(:ignore t :wk "denote")
   "dj" '(denote-journal-new-or-existing-entry :wk "journal")
   "dd" '(denote-menu-list-notes t :wk "List all notes")
+  "dl" '(denote-link t :wk "Link note")
   "dg" '(consult-denote-grep t :wk "Search")
   "dn" '(denote t :wk "Create a new note")
   "dr" '(denote-rename-file t :wk "Rename Note")
+  "dp" '(my/create-project :wk "Create project")
+  "dR" '(my/daily-review :wk "Daily review")
+  "dD" '(my/reflection :wk "Reflection")
   "dtl" '(tmr-list-timers :wk "list timer")
   "dtt" '(tmr :wk "set timer")
 
@@ -3989,7 +4537,13 @@ ily <3.
   "gs" '(magit-file-stage :wk "stage file")
   "gb" '(vc-annotate :wk "blame")
 
-  "o" '(:ignore t :wk "open")
+  "o" '(:ignore t :wk "org/open")
+  "oa" '(:ignore t :wk "agenda")
+  "oad" '(org-agenda :wk "daily dashboard")
+  "oaw" '((lambda () (interactive) (org-agenda nil "w")) :wk "weekly overview")
+  "oap" '((lambda () (interactive) (org-agenda nil "p")) :wk "projects")
+  "oae" '((lambda () (interactive) (org-agenda nil "e")) :wk "evaluation")
+  "oac" '((lambda () (interactive) (org-agenda nil "c")) :wk "complexity matrix")
 
   "h" '(:ignore t :wk "help")
   "hm" '(describe-mode :wk "mode")
@@ -4131,6 +4685,7 @@ ily <3.
   "mc" '(rust-run-clippy :wk "clippy")
   "mC" '(rust-check :wk "check"))
 #+end_src
+
 
 ** denote-menu keymaps
 
@@ -4461,6 +5016,13 @@ this package provides the ability to display rgb and hex colors.
 #+end_src
 
 
+
+* rg
+
+#+begin_src emacs-lisp
+(use-package rg
+  :ensure t)
+#+end_src
 
 * profiler
 

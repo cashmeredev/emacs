@@ -19,6 +19,12 @@
 
 (straight-use-package '(project :type built-in))
 (straight-use-package '(xref :type built-in))
+(straight-use-package '(eglot :type built-in))
+(straight-use-package '(flymake :type built-in))
+(straight-use-package '(jsonrpc :type built-in))
+(straight-use-package '(eldoc :type built-in))
+(straight-use-package '(external-completion :type built-in))
+(straight-use-package '(seq :type built-in))
 (straight-use-package 'use-package)
 
 (setq straight-use-package-by-default t)
