@@ -4582,20 +4582,20 @@ ily <3.
   "u" '(undo-tree-visualize :wk "undo tree")
   "P" '(consult-yank-from-kill-ring :wk "paste history"))
 
-(defun my/avy-enabled-p ()
-(and (not (derived-mode-p 'magit-mode 'dired-mode 'ibuffer-mode))
-(not (eq major-mode 'dirvish-mode))))
+(defun my/flash-enabled-p ()
+  (and (not (derived-mode-p 'magit-mode 'dired-mode 'ibuffer-mode))
+       (not (eq major-mode 'dirvish-mode))))
 
 (defun my/s-key-dispatch ()
   (interactive)
   (if (derived-mode-p 'magit-mode)
       (call-interactively 'magit-stage)
-    (when (my/avy-enabled-p)
+    (when (my/flash-enabled-p)
       (let ((scroll-margin 0)
             (maximum-scroll-margin 0))
-        (call-interactively 'flash-emacs-jump)))))
+        (call-interactively 'flash-evil-jump)))))
 
-(general-def '(normal visual) 'override
+(general-def '(normal visual operator) 'override
   "s" 'my/s-key-dispatch)
 
 
