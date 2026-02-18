@@ -77,10 +77,8 @@
 (use-package emacs
   :straight nil
   :ensure nil
-  :custom ;; Set custom variables to configure Emacs behavior.
-  (setq modify-coding-system-alist 'file "" 'utf-8)
-  
-  (column-number-mode t) ;; Display the column number in the mode line.
+  :custom
+  (column-number-mode t)
   (auto-save-default nil) ;; Disable automatic saving of buffers.
   (create-lockfiles nil) ;; Prevent the creation of lock files when editing.
   (delete-by-moving-to-trash t) ;; Move deleted files to the trash instead of permanently deleting them.
@@ -154,7 +152,7 @@
   ;; (add-to-list 'default-frame-alist '(alpha-background . 80))
   (global-hl-line-mode -1) ;; Disable highlight of the current line
   (global-auto-revert-mode 1) ;; Enable global auto-revert mode to keep buffers up to date with their corresponding files.
-  (indent-tabs-mode -1) ;; Disable the use of tabs for indentation (use spaces instead).
+  (setq-default indent-tabs-mode nil)
   (recentf-mode 1) ;; Enable tracking of recently opened files.
   (savehist-mode 1) ;; Enable saving of command history.
   (save-place-mode 1) ;; Enable saving the place in files for easier return.
@@ -250,13 +248,12 @@
   (dired-listing-switches "-lah --group-directories-first")
   (dired-dwim-target t)
   (dired-guess-shell-alist-user
-   '(;; ("\\\\.\\\\(png\\\\|jpe?g\\\\|tiff\\\\)" "feh" "xdg-open" "open")
-     ("\\\\.\\\\(mp[34]\\\\|m4a\\\\|ogg\\\\|flac\\\\|webm\\\\|mkv\\\\)" "mpv" "xdg-open" "open")
+   '(("\\.\\(mp[34]\\|m4a\\|ogg\\|flac\\|webm\\|mkv\\)" "mpv" "xdg-open" "open")
      (".*" "open" "xdg-open")))
   (dired-kill-when-opening-new-dired-buffer t)
   (dired-create-destination-dirs 'always)
   :config
-  (setq dired-async-mode t)
+  (dired-async-mode 1)
   
   (require 'mailcap)
   
@@ -307,7 +304,7 @@
            :port 6697
            :nick "cashmere"
            :user "cashmere/libera.chat"
-           :password (password-store-get 'soju)
+           :password (password-store-get "soju")
 		   :id 'libera))
 #+end_src
 
@@ -641,6 +638,8 @@ Not necessary but an eyecandy to look at!
 #+begin_src emacs-lisp
 (use-package gptel
   :ensure t
+  :defer t
+  :commands (gptel gptel-send gptel-menu)
   :config
   (defun my/openrouter-key ()
     (string-trim
@@ -673,7 +672,7 @@ Not necessary but an eyecandy to look at!
   :straight nil
   :ensure t
   :config
-  (setq eldoc-idle-delay 0)
+  (setq eldoc-idle-delay 0.25)
   (setq eldoc-echo-area-use-multiline-p nil)
   (setq eldoc-echo-area-display-truncation-message nil)
   :init
@@ -801,7 +800,7 @@ Not necessary but an eyecandy to look at!
    '(outline-8          ((t (:height 1.2))))
    '(outline-9          ((t (:height 1.2)))))
 
-  (setq org-startup-folded 'nil)
+  (setq org-startup-folded 'overview)
   (setq org-adapt-indentation t
 		;; org-time-stamp-rounding-minutes '(5 5)	
 		org-return-follows-link t
@@ -871,18 +870,9 @@ Not necessary but an eyecandy to look at!
   :ensure t
   :config
   (setq org-modern-hide-stars t)
-  (setq org-modern-star 'fold)
-  (setq org-modern-fold-stars '(("◉" . "○")))
   (setq org-modern-star 'replace)
-  (setq org-modern-replace-stars "◉○◉○◉")
-  
-  (setq org-modern-todo-faces
-    '(("TODO" :background "#3a3a3a" :foreground "#e0e0e0" :weight normal)
-      ("NEXT" :background "#ff9800" :foreground "#1a1a1a" :weight normal)
-      ("ACTIVE" :background "#e91e63" :foreground "#ffffff" :weight bold)
-      ("WAIT" :background "#2196f3" :foreground "#ffffff" :weight bold)
-      ("DONE" :background "#4caf50" :foreground "#ffffff" :weight bold)
-      ("CANCELLED" :background "#757575" :foreground "#e0e0e0" :weight normal))))
+  (setq org-modern-fold-stars '(("◉" . "○")))
+  (setq org-modern-replace-stars "◉○◉○◉"))
 
 (with-eval-after-load 'org (global-org-modern-mode))
 
@@ -1524,7 +1514,7 @@ Skips capture tasks and projects."
                    :foreground ,(face-attribute 'default :background)))))
 
 (add-hook 'after-load-theme-hook #'my/update-org-modern-faces)
-(my/update-org-modern-faces)
+(add-hook 'after-init-hook #'my/update-org-modern-faces)
 
 ;;; --- Tag cleanup in agenda buffer ---
 
@@ -2151,7 +2141,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :ensure nil
   :config
   (setq eglot-autoshutdown t)
-  (setq eglot-sync-connect 1)
   (setq eglot-send-changes-idle-time 0.1)
   (setq eglot-sync-connect nil)
   (setq eglot-connect-timeout nil)
@@ -2191,7 +2180,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :config
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
-                 typst-ts-mode . ,(eglot-alternatives '("tinymist" "lsp")))))
+                 `(typst-ts-mode . ,(eglot-alternatives '("tinymist" "lsp"))))))
 #+end_src
 
 ** yasnippet
@@ -2222,13 +2211,12 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 *** envrc
 
-for automatic flake devshells.
+Automatic flake devshell activation.
 
 #+begin_src emacs-lisp
 (use-package envrc
   :ensure t
-  :config
-  (envrc-global-mode))
+  :hook (after-init . envrc-global-mode))
 #+end_src
 
 ** python-mode
@@ -2245,23 +2233,7 @@ Because I have to and not want to.
     (add-to-list 'eglot-server-programs
                  '(python-mode . ("rass" "python")))))
 
-(use-package python-black
-  :ensure t
-  :demand t
-  :after python)
 
-;; (use-package python-mode
-;;   :ensure t
-;;   :mode "\\.py\\'"
-;;   :hook (python-mode . eglot-ensure)
-;;   :config
-;;   (with-eval-after-load 'eglot
-;;     (setq eglot-server-programs
-;;           (assoc-delete-all 'python-mode eglot-server-programs))
-;;     (setq eglot-server-programs
-;;           (assoc-delete-all 'python-ts-mode eglot-server-programs))
-;;     (add-to-list 'eglot-server-programs
-;;                  '(python-mode . ("ty" "lsp")))))
 
 #+end_src
 
@@ -2276,14 +2248,6 @@ Because I have to and not want to.
   (add-hook 'python-mode-hook 
             (lambda ()
               (pyvenv-mode 1))))
-#+end_src
-
-*** ruff-formatter
-
-#+begin_src emacs-lisp
-(use-package ruff-format
-  :ensure t
-  :hook (python-mode . ruff-format-on-save-mode))
 #+end_src
 
 ** elm-mode
@@ -2460,7 +2424,7 @@ ily <3.
 
 #+begin_src emacs-lisp
 (use-package janet-mode
-  :mode ("\\.js\\'" . js-mode)
+  :mode "\\.janet\\'"
   :ensure t
   :config
   (with-eval-after-load 'eglot
@@ -2910,12 +2874,6 @@ ily <3.
   :config)
 #+end_src
 
-** envrc
-
-#+begin_src emacs-lisp
-(use-package envrc
-  :hook (after-init . envrc-global-mode))
-#+end_src
 * org agenda
 
 #+begin_src emacs-lisp
@@ -4095,7 +4053,7 @@ ily <3.
 (use-package pass
   :ensure t
   :defer t
-  :mode ("\\.gpg\\'" . pass-mode)
+  :commands (pass)
   :config
   (add-to-list 'display-buffer-alist
                '("\\*Pass.*\\*"
@@ -4159,9 +4117,9 @@ ily <3.
    ((eq major-mode 'rust-mode) (eglot-format-buffer))
    ((eq major-mode 'nix-mode) (eglot-format-buffer))  
    ((or (eq major-mode 'python-mode) 
-        (eq major-mode 'python-ts-mode)) (ruff-format-buffer))
+        (eq major-mode 'python-ts-mode)) (eglot-format-buffer))
    ((eq major-mode 'c-mode) (eglot-format-buffer))
-   ((bound-and-func-p eglot--managed-mode) (eglot-format-buffer))
+   ((bound-and-true-p eglot--managed-mode) (eglot-format-buffer))
    (t (message "No formatter for %s" major-mode))))
 
 (my-leader
@@ -4603,6 +4561,8 @@ ily <3.
 (use-package mu4e
   :straight nil
   :ensure nil
+  :defer t
+  :commands (mu4e mu4e-compose-new)
   :config
   
   (setq mu4e-mu-binary (executable-find "mu"))
