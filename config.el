@@ -294,13 +294,11 @@
   (setq dashboard-image-banner-max-height 256)
   (setq dashboard-bookmarks-show-base t)
   (setq dashboard-bookmarks-item-format "%s")
-  (setq dashboard-projects-backend 'project-el)
-  (setq dashboard-items '((bookmarks . 5)
-						  (projects . 5)
-                          (recents . 5)))
-  (setq dashboard-projects-switch-function
-        (lambda (proj)
-          (project-switch-project proj)))
+  (setq dashboard-projects-backend 'projectile)
+  (setq dashboard-items '((projects . 5)
+                          (recents . 5)
+                          (bookmarks . 5)))
+  (setq dashboard-projects-switch-function #'projectile-switch-project-by-name)
   (setq dashboard-center-content t)
   (setq dashboard-set-file-icons t)
   (setq dashboard-set-heading-icons t)
@@ -617,7 +615,8 @@
   :ensure t
   :config
   (setq flycheck-rust-check-tests nil)
-  (add-hook 'flycheck-mode-hook #'flycheck-rust-setup))
+  (add-hook 'rust-mode-hook #'flycheck-rust-setup)
+  (add-hook 'rust-ts-mode-hook #'flycheck-rust-setup))
 
 (use-package flycheck-python-ruff
   :straight (:host github :repo "v4n6/flycheck-python-ruff")
@@ -1557,7 +1556,6 @@ Works on the base filename (without extension), e.g. matches \"-agenda\", \":age
   (setq tmr-sound-file "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga"
         tmr-notification-urgency 'normal
         tmr-description-list 'tmr-description-history)
-  (tmr-mode-line-mode 1)
   (define-key global-map (kbd "C-c t") #'tmr-prefix-map))
 
 (use-package which-key
@@ -1777,8 +1775,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   
   (add-hook 'eglot-managed-mode-hook 
             (lambda () 
-              (eglot-inlay-hints-mode -1)
-              (eglot-semantic-tokens-mode 1)))
+              (eglot-inlay-hints-mode -1)))
   
   (setq eglot-ignored-server-capabilities 
         '(:inlayhintprovider :documenthighlightprovider)))
@@ -2532,11 +2529,13 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
                        'local-map (make-mode-line-mouse-map 'mouse-1 'org-clock-goto)))))
 
   (maple-modeline-define-segment tmr-timer
-    :if (and (bound-and-true-p tmr-mode-line-mode)
-             (fboundp 'tmr-mode-line--get-active-timers)
+    :if (and (fboundp 'tmr-mode-line--get-active-timers)
              (tmr-mode-line--get-active-timers))
     :format
-    (string-trim (or tmr-mode-line-string "")))
+    (let* ((timer (car (tmr-mode-line--get-active-timers)))
+           (remaining (tmr-mode-line--format-remaining timer))
+           (desc (tmr-mode-line--format-description timer)))
+      (concat remaining desc)))
 
   (maple-modeline-define my-custom-style
     :left ((evil :left (bar :left ""))
