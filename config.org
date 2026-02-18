@@ -4580,7 +4580,10 @@ ily <3.
 
   "a" '(embark-act :wk "embark")
   "u" '(undo-tree-visualize :wk "undo tree")
-  "P" '(consult-yank-from-kill-ring :wk "paste history"))
+  "P" '(consult-yank-from-kill-ring :wk "paste history")
+
+  "t" '(:ignore t :wk "treesitter")
+  "ts" '(flash-treesitter :wk "flash treesitter"))
 
 (defun my/flash-enabled-p ()
   (and (not (derived-mode-p 'magit-mode 'dired-mode 'ibuffer-mode))
