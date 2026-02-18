@@ -3143,43 +3143,40 @@ ily <3.
 
 #+end_src
 
-* avy
+* flash
 
 #+begin_src emacs-lisp
-(use-package avy
+(use-package flash
   :ensure t
-  :straight t
+  :straight (:host github :repo "Prgebish/flash")
   :after evil
-  :general
-  ;; (general-nmap "s" 'avy-goto-char-timer)
-  ;; (general-omap "s" 'evil-avy-goto-char-timer)
+  :custom
+  (flash-multi-window t)
+  (flash-backdrop t)
+  (flash-case-fold t)
+  (flash-autojump nil)
+  (flash-highlight-matches t)
+  (flash-label-position 'overlay)
+  (flash-jump-position 'start)
+  (flash-char-jump-labels t)
+  (flash-char-multi-line nil)
+  (flash-nohlsearch t)
+  (flash-jumplist t)
   :config
-  (setq avy-all-windows t
-        avy-all-windows-alt t
-        avy-background t
-        avy-case-fold-search t
-        avy-timeout-seconds 0.3
-        avy-style 'at-full
-        avy-keys '(?a ?s ?d ?f ?g ?h ?j ?k ?l))
+  ;; Evil integration: binds gs in normal/visual/operator + enhanced f/t/F/T
+  (require 'flash-evil)
+  (flash-evil-setup t)
 
-  (evil-define-avy-motion emacs-flash-jump inclusive))
-#+end_src
+  ;; Restore ; and , after flash-char overwrites them
+  ;; ; is used as prefix for prev-navigation (;b, ;d)
+  ;; , is the local leader
+  (evil-define-key* '(normal visual motion) 'global
+    (kbd ";") nil
+    (kbd ",") nil)
 
-** emacs-flash
-
-#+begin_src emacs-lisp
-(use-package flash-emacs
-  :ensure t
-  :straight (:host github :repo "JiaweiChenC/flash-emacs"))
-#+end_src
-
-** avy-flash
-
-#+begin_src emacs-lisp
-;; ZenScriptor/avy-flash
-(use-package avy-flash
-  :ensure t
-  :straight (:host github :repo "ZenScriptor/avy-flash"))
+  ;; Search integration: labels during C-s, /, ?
+  (require 'flash-isearch)
+  (flash-isearch-mode 1))
 #+end_src
 
 * undo-tree
