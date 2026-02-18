@@ -1,100 +1,78 @@
-;;; noctalia-theme.el --- Theme using Template SCSS variables -*- lexical-binding: t -*-
+;;; noctalia-theme.el --- Noctalia theme for Emacs -*- lexical-binding: t -*-
 
-;; Copyright (C) 2025 
+;; Copyright (C) 2025
 
-;; Author: Generated (Improved)
-;; Version: 1.2
+;; Author: Noctalia User Template (Fixed)
+;; Version: 2.0
 ;; Package-Requires: ((emacs "24.1"))
 ;; Keywords: faces
 
 ;;; Commentary:
 
-;; A theme using Template SCSS variables with quality of life improvements:
-;; - Better source block distinction
-;; - Improved text visibility when selected
-;; - Refined org-mode styling with hidden asterisks
-;; - Enhanced contrast and readability
-;; - Seamless integration of source blocks with consistent styling
+;; Noctalia Emacs theme generated via user template.
+;; Fixes the built-in template's misuse of MD3 container colors as foreground
+;; text. All heading and text faces use surface-readable colors only.
 
 ;;; Code:
 
-(deftheme noctalia "Theme using Template variables with quality of life improvements.")
+(deftheme noctalia "Noctalia theme with proper color contrast.")
 
-;; Define all the color variables (replaced by template processor)
-(let* ((bg "#f6f2ee")
-      (err "#a5222f")
-      (err-container "#db9ea4")
-      (on-background "#3d2b5a")
-      (on-err "#f6f2ee")
-      (on-err-container "#3f0d12")
-      (on-primary "#f6f2ee")
-      (on-primary-container "#0f1a3e")
-      (on-secondary "#f6f2ee")
-      (on-secondary-container "#1b3122")
-      (on-surface "#3d2b5a")
-      (on-surface-variant "#534c45")
-      (on-tertiary "#f6f2ee")
-      (on-tertiary-container "#210f3e")
-      (outline-color "#824d5b")
-      (outline-variant "#ab7180")
-      (primary "#2848a9")
-      (primary-container "#a8b5db")
-      (secondary "#396847")
-      (secondary-container "#90c39f")
-      (shadow "#d3c7bb")
-      (surface "#f6f2ee")
-      (surface-container "#d3c7bb")
-      (surface-container-high "#cbbdaf")
-      (surface-container-highest "#c3b3a2")
-      (surface-container-low "#e4dcd4")
-      (surface-container-lowest "#efe9e3")
-      (surface-variant "#d3c7bb")
-      (tertiary "#6e33ce")
-      (tertiary-container "#d5c9e9")
-      ;; Map success colors to tertiary (as used in other templates)
-      (success "#6e33ce")
-      (on-success "#f6f2ee")
-      (success-container "#d5c9e9")
-      (on-success-container "#210f3e")
-      ;; Map fixed colors to regular colors
-      (primary-fixed "#2848a9")
-      (primary-fixed-dim "#a8b5db")
-      (secondary-fixed "#396847")
-      (secondary-fixed-dim "#90c39f")
-      (tertiary-fixed "#6e33ce")
-      (tertiary-fixed-dim "#d5c9e9")
-      (on-primary-fixed "#f6f2ee")
-      (on-primary-fixed-variant "#0f1a3e")
-      (on-secondary-fixed "#f6f2ee")
-      (on-secondary-fixed-variant "#1b3122")
-      (on-tertiary-fixed "#f6f2ee")
-      (on-tertiary-fixed-variant "#210f3e")
-      ;; Map inverse colors to surface variants
-      (inverse-on-surface "#3d2b5a")
-      (inverse-primary "#2848a9")
-      (inverse-surface "#f6f2ee")
-      ;; Map terminal colors (term0-term15) to available colors
-      (term0 "#f6f2ee")
-      (term1 "#a5222f")
-      (term2 "#6e33ce")
-      (term3 "#396847")
-      (term4 "#2848a9")
-      (term5 "#d5c9e9")
-      (term6 "#90c39f")
-      (term7 "#3d2b5a")
-      (term8 "#824d5b")
-      (term9 "#a5222f")
-      (term10 "#6e33ce")
-      (term11 "#396847")
-      (term12 "#2848a9")
-      (term13 "#d5c9e9")
-      (term14 "#90c39f")
-      (term15 "#3d2b5a"))
+(let* (;; Core surface colors
+       (bg "#232136")
+       (fg "#e0def4")
+       (surface "#232136")
+       (on-surface "#e0def4")
+       (on-surface-variant "#cdcbe0")
+       (surface-variant "#373354")
+       (surface-container "#373354")
+       (surface-container-low "#2d2a45")
+       (surface-container-lowest "#27243c")
+       (surface-container-high "#3f3b61")
+       (surface-container-highest "#48426d")
+
+       ;; Accent colors (always readable on surface)
+       (primary "#569fba")
+       (secondary "#a3be8c")
+       (tertiary "#c4a7e7")
+       (err "#eb6f92")
+
+       ;; Container colors (for BACKGROUNDS only, never as foreground text)
+       (primary-container "#143b49")
+       (secondary-container "#496c2b")
+       (tertiary-container "#661fbd")
+       (err-container "#a00833")
+
+       ;; On-color text (for text ON accent backgrounds)
+       (on-primary "#232136")
+       (on-secondary "#232136")
+       (on-tertiary "#232136")
+       (on-err "#232136")
+
+       ;; On-container text (for text on container backgrounds)
+       (on-primary-container "#dbeaf0")
+       (on-secondary-container "#e5edde")
+       (on-tertiary-container "#e4d7f4")
+       (on-err-container "#f9d2dd")
+
+       ;; Outline colors
+       (outline-color "#6b63af")
+       (outline-variant "#4a4383")
+
+       ;; Shadow
+       (shadow "#000000")
+
+       ;; Auto-lightness variants: lighten in dark mode, darken in light mode
+       ;; Used for heading levels 5-7, rainbow delimiters 5-7, terminal variants
+       (primary-variant "#39758b")
+       (secondary-variant "#7ca25c")
+       (tertiary-variant "#9c6bd7")
+       (err-variant "#e22c5f"))
 
   (custom-theme-set-faces
    'noctalia
-   ;; Basic faces
-   `(default ((t (:background ,bg :foreground ,on-background))))
+
+   ;; === Basic faces ===
+   `(default ((t (:background ,bg :foreground ,fg))))
    `(cursor ((t (:background ,primary))))
    `(highlight ((t (:background ,surface-container-high))))
    `(region ((t (:background ,primary-container :foreground ,on-primary-container :extend t))))
@@ -107,12 +85,12 @@
    `(shadow ((t (:foreground ,outline-variant))))
    `(link ((t (:foreground ,primary :underline t))))
    `(link-visited ((t (:foreground ,tertiary :underline t))))
-   `(success ((t (:foreground ,success))))
+   `(success ((t (:foreground ,tertiary))))
    `(warning ((t (:foreground ,secondary))))
    `(error ((t (:foreground ,err))))
    `(match ((t (:background ,secondary-container :foreground ,on-secondary-container))))
-   
-   ;; Font-lock
+
+   ;; === Font-lock ===
    `(font-lock-builtin-face ((t (:foreground ,primary))))
    `(font-lock-comment-face ((t (:foreground ,outline-color :slant italic))))
    `(font-lock-comment-delimiter-face ((t (:foreground ,outline-variant))))
@@ -121,69 +99,69 @@
    `(font-lock-function-name-face ((t (:foreground ,primary :weight bold))))
    `(font-lock-keyword-face ((t (:foreground ,secondary :weight bold))))
    `(font-lock-string-face ((t (:foreground ,tertiary))))
-   `(font-lock-type-face ((t (:foreground ,primary-fixed))))
+   `(font-lock-type-face ((t (:foreground ,primary))))
    `(font-lock-variable-name-face ((t (:foreground ,on-surface))))
    `(font-lock-warning-face ((t (:foreground ,err :weight bold))))
-   `(font-lock-preprocessor-face ((t (:foreground ,secondary-fixed-dim))))
-   `(font-lock-negation-char-face ((t (:foreground ,tertiary-fixed))))
+   `(font-lock-preprocessor-face ((t (:foreground ,on-surface-variant))))   ;; FIX: was secondary_fixed_dim (invisible)
+   `(font-lock-negation-char-face ((t (:foreground ,tertiary))))
 
-   ;; Show paren
+   ;; === Show paren ===
    `(show-paren-match ((t (:background ,primary-container :foreground ,on-primary-container :weight bold))))
    `(show-paren-mismatch ((t (:background ,err-container :foreground ,on-err-container :weight bold))))
-   
-   ;; Mode line - improved status bar styling
+
+   ;; === Mode line ===
    `(mode-line ((t (:background ,surface-container-high :foreground ,on-surface :box nil))))
    `(mode-line-inactive ((t (:background ,surface :foreground ,on-surface-variant :box nil))))
    `(mode-line-buffer-id ((t (:foreground ,primary :weight bold))))
    `(mode-line-emphasis ((t (:foreground ,primary :weight bold))))
    `(mode-line-highlight ((t (:foreground ,primary :box nil))))
-   
-   ;; Improved Source blocks - make them integrated with the theme
+
+   ;; === Org source blocks ===
    `(org-block ((t (:background ,surface-container-low :extend t :inherit fixed-pitch))))
-   `(org-block-begin-line ((t (:background ,surface-container-low :foreground ,primary-fixed-dim :extend t :slant italic :inherit fixed-pitch))))
-   `(org-block-end-line ((t (:background ,surface-container-low :foreground ,primary-fixed-dim :extend t :slant italic :inherit fixed-pitch))))
-   `(org-code ((t (:background ,surface-container-low :foreground ,tertiary-fixed :inherit fixed-pitch))))
-   `(org-verbatim ((t (:background ,surface-container-low :foreground ,primary-fixed :inherit fixed-pitch))))
+   `(org-block-begin-line ((t (:background ,surface-container-low :foreground ,outline-color :extend t :slant italic :inherit fixed-pitch))))  ;; FIX: was primary_fixed_dim
+   `(org-block-end-line ((t (:background ,surface-container-low :foreground ,outline-color :extend t :slant italic :inherit fixed-pitch))))    ;; FIX: was primary_fixed_dim
+   `(org-code ((t (:background ,surface-container-low :foreground ,tertiary :inherit fixed-pitch))))
+   `(org-verbatim ((t (:background ,surface-container-low :foreground ,primary :inherit fixed-pitch))))
    `(org-meta-line ((t (:foreground ,outline-color :slant italic))))
-   
-   ;; Org mode with hidden asterisks
+
+   ;; === Org headings - FIXED: 4 distinct hues + variants, all surface-readable ===
    `(org-level-1 ((t (:foreground ,primary :weight bold :height 1.2))))
-   `(org-level-2 ((t (:foreground ,primary-container :weight bold :height 1.1))))
-   `(org-level-3 ((t (:foreground ,secondary :weight bold))))
-   `(org-level-4 ((t (:foreground ,secondary-container :weight bold))))
-   `(org-level-5 ((t (:foreground ,tertiary :weight bold))))
-   `(org-level-6 ((t (:foreground ,tertiary-container :weight bold))))
-   `(org-level-7 ((t (:foreground ,primary-fixed :weight bold))))
-   `(org-level-8 ((t (:foreground ,primary-fixed-dim :weight bold))))
+   `(org-level-2 ((t (:foreground ,secondary :weight bold :height 1.1))))          ;; FIX: was primary_container
+   `(org-level-3 ((t (:foreground ,tertiary :weight bold))))                        ;; FIX: was secondary
+   `(org-level-4 ((t (:foreground ,err :weight bold))))                             ;; FIX: was secondary_container
+   `(org-level-5 ((t (:foreground ,primary-variant :weight bold))))                 ;; FIX: was tertiary
+   `(org-level-6 ((t (:foreground ,secondary-variant :weight bold))))               ;; FIX: was tertiary_container
+   `(org-level-7 ((t (:foreground ,tertiary-variant :weight bold))))                ;; FIX: was primary_fixed (= primary duplicate)
+   `(org-level-8 ((t (:foreground ,on-surface-variant :weight bold))))              ;; FIX: was primary_fixed_dim
    `(org-document-title ((t (:foreground ,primary :weight bold :height 1.3))))
-   `(org-document-info ((t (:foreground ,primary-container))))
+   `(org-document-info ((t (:foreground ,on-surface-variant))))                     ;; FIX: was primary_container
    `(org-todo ((t (:foreground ,err :weight bold))))
-   `(org-done ((t (:foreground ,success :weight bold))))
+   `(org-done ((t (:foreground ,tertiary :weight bold))))
    `(org-headline-done ((t (:foreground ,on-surface-variant))))
-   `(org-hide ((t (:foreground ,bg)))) ;; Hide leading asterisks
-   `(org-ellipsis ((t (:foreground ,tertiary :underline nil)))) ;; Style for folded content indicator
-   `(org-table ((t (:foreground ,secondary-fixed :inherit fixed-pitch))))
+   `(org-hide ((t (:foreground ,bg))))
+   `(org-ellipsis ((t (:foreground ,tertiary :underline nil))))
+   `(org-table ((t (:foreground ,secondary :inherit fixed-pitch))))
    `(org-formula ((t (:foreground ,tertiary :inherit fixed-pitch))))
    `(org-checkbox ((t (:foreground ,primary :weight bold :inherit fixed-pitch))))
-   `(org-date ((t (:foreground ,secondary-fixed :underline t))))
+   `(org-date ((t (:foreground ,secondary :underline t))))
    `(org-special-keyword ((t (:foreground ,on-surface-variant :slant italic))))
    `(org-tag ((t (:foreground ,outline-color :weight normal))))
-   
-   ;; Magit
+
+   ;; === Magit ===
    `(magit-section-highlight ((t (:background ,surface-container-low))))
    `(magit-diff-hunk-heading ((t (:background ,surface-container :foreground ,on-surface-variant))))
    `(magit-diff-hunk-heading-highlight ((t (:background ,surface-container-high :foreground ,on-surface))))
    `(magit-diff-context ((t (:foreground ,on-surface-variant))))
    `(magit-diff-context-highlight ((t (:background ,surface-container-low :foreground ,on-surface))))
-   `(magit-diff-added ((t (:background ,success-container :foreground ,on-success-container))))
-   `(magit-diff-added-highlight ((t (:background ,success-container :foreground ,on-success-container :weight bold))))
+   `(magit-diff-added ((t (:background ,tertiary-container :foreground ,on-tertiary-container))))
+   `(magit-diff-added-highlight ((t (:background ,tertiary-container :foreground ,on-tertiary-container :weight bold))))
    `(magit-diff-removed ((t (:background ,err-container :foreground ,on-err-container))))
    `(magit-diff-removed-highlight ((t (:background ,err-container :foreground ,on-err-container :weight bold))))
    `(magit-hash ((t (:foreground ,outline-color))))
    `(magit-branch-local ((t (:foreground ,tertiary :weight bold))))
    `(magit-branch-remote ((t (:foreground ,primary :weight bold))))
-   
-   ;; Company
+
+   ;; === Company ===
    `(company-tooltip ((t (:background ,surface-container :foreground ,on-surface))))
    `(company-tooltip-selection ((t (:background ,primary-container :foreground ,on-primary-container))))
    `(company-tooltip-common ((t (:foreground ,primary))))
@@ -193,15 +171,15 @@
    `(company-scrollbar-bg ((t (:background ,surface-variant))))
    `(company-preview ((t (:foreground ,on-surface-variant :slant italic))))
    `(company-preview-common ((t (:foreground ,primary :slant italic))))
-   
-   ;; Ido
+
+   ;; === Ido ===
    `(ido-first-match ((t (:foreground ,primary :weight bold))))
    `(ido-only-match ((t (:foreground ,tertiary :weight bold))))
    `(ido-subdir ((t (:foreground ,secondary))))
    `(ido-indicator ((t (:foreground ,err))))
    `(ido-virtual ((t (:foreground ,outline-color))))
-   
-   ;; Helm
+
+   ;; === Helm ===
    `(helm-selection ((t (:background ,primary-container :foreground ,on-primary-container))))
    `(helm-match ((t (:foreground ,primary :weight bold))))
    `(helm-source-header ((t (:background ,surface-container-high :foreground ,primary :weight bold :height 1.1))))
@@ -210,57 +188,57 @@
    `(helm-ff-file ((t (:foreground ,on-surface))))
    `(helm-ff-executable ((t (:foreground ,tertiary))))
 
-   ;; corfu
+   ;; === Corfu ===
    `(corfu-default ((t (:background ,surface-container :foreground ,on-surface))))
    `(corfu-current ((t (:background ,primary-container :foreground ,on-primary-container))))
-   
-   ;; Which-key
+
+   ;; === Which-key ===
    `(which-key-key-face ((t (:foreground ,primary :weight bold))))
    `(which-key-separator-face ((t (:foreground ,outline-variant))))
    `(which-key-command-description-face ((t (:foreground ,on-surface))))
    `(which-key-group-description-face ((t (:foreground ,secondary))))
    `(which-key-special-key-face ((t (:foreground ,tertiary :weight bold))))
-   
-   ;; Line numbers
+
+   ;; === Line numbers ===
    `(line-number ((t (:foreground ,outline-variant :inherit fixed-pitch))))
    `(line-number-current-line ((t (:foreground ,primary :weight bold :inherit fixed-pitch))))
-   
-   ;; Parenthesis matching
+
+   ;; === Parenthesis matching ===
    `(sp-show-pair-match-face ((t (:background ,primary-container :foreground ,on-primary-container))))
    `(sp-show-pair-mismatch-face ((t (:background ,err-container :foreground ,on-err-container))))
-   
-   ;; Rainbow delimiters
+
+   ;; === Rainbow delimiters - FIXED: all levels use readable colors ===
    `(rainbow-delimiters-depth-1-face ((t (:foreground ,primary))))
    `(rainbow-delimiters-depth-2-face ((t (:foreground ,secondary))))
    `(rainbow-delimiters-depth-3-face ((t (:foreground ,tertiary))))
-   `(rainbow-delimiters-depth-4-face ((t (:foreground ,primary-fixed))))
-   `(rainbow-delimiters-depth-5-face ((t (:foreground ,secondary-fixed))))
-   `(rainbow-delimiters-depth-6-face ((t (:foreground ,tertiary-fixed))))
-   `(rainbow-delimiters-depth-7-face ((t (:foreground ,primary-fixed-dim))))
-   `(rainbow-delimiters-depth-8-face ((t (:foreground ,secondary-fixed-dim))))
-   `(rainbow-delimiters-depth-9-face ((t (:foreground ,tertiary-fixed-dim))))
+   `(rainbow-delimiters-depth-4-face ((t (:foreground ,err))))
+   `(rainbow-delimiters-depth-5-face ((t (:foreground ,primary-variant))))
+   `(rainbow-delimiters-depth-6-face ((t (:foreground ,secondary-variant))))
+   `(rainbow-delimiters-depth-7-face ((t (:foreground ,tertiary-variant))))          ;; FIX: was primary_fixed_dim
+   `(rainbow-delimiters-depth-8-face ((t (:foreground ,on-surface-variant))))        ;; FIX: was secondary_fixed_dim
+   `(rainbow-delimiters-depth-9-face ((t (:foreground ,outline-color))))             ;; FIX: was tertiary_fixed_dim
    `(rainbow-delimiters-mismatched-face ((t (:foreground ,err :weight bold))))
    `(rainbow-delimiters-unmatched-face ((t (:foreground ,err :weight bold))))
-   
-   ;; Dired
+
+   ;; === Dired ===
    `(dired-directory ((t (:foreground ,primary :weight bold))))
    `(dired-ignored ((t (:foreground ,outline-variant))))
    `(dired-flagged ((t (:foreground ,err))))
    `(dired-marked ((t (:foreground ,tertiary :weight bold))))
    `(dired-symlink ((t (:foreground ,secondary :slant italic))))
    `(dired-header ((t (:foreground ,primary :weight bold :height 1.1))))
-   
-   ;; Terminal colors
-   `(term-color-black ((t (:foreground ,term0 :background ,term0))))
-   `(term-color-red ((t (:foreground ,term1 :background ,term1))))
-   `(term-color-green ((t (:foreground ,term2 :background ,term2))))
-   `(term-color-yellow ((t (:foreground ,term3 :background ,term3))))
-   `(term-color-blue ((t (:foreground ,term4 :background ,term4))))
-   `(term-color-magenta ((t (:foreground ,term5 :background ,term5))))
-   `(term-color-cyan ((t (:foreground ,term6 :background ,term6))))
-   `(term-color-white ((t (:foreground ,term7 :background ,term7))))
-   
-   ;; EShell
+
+   ;; === Terminal colors - FIXED: no container colors as foreground ===
+   `(term-color-black ((t (:foreground ,surface-container-lowest :background ,surface-container-lowest))))
+   `(term-color-red ((t (:foreground ,err :background ,err))))
+   `(term-color-green ((t (:foreground ,tertiary :background ,tertiary))))
+   `(term-color-yellow ((t (:foreground ,secondary :background ,secondary))))
+   `(term-color-blue ((t (:foreground ,primary :background ,primary))))
+   `(term-color-magenta ((t (:foreground ,err-variant :background ,err-variant))))   ;; FIX: was tertiary_container
+   `(term-color-cyan ((t (:foreground ,primary-variant :background ,primary-variant)))) ;; FIX: was secondary_container
+   `(term-color-white ((t (:foreground ,on-surface :background ,on-surface))))
+
+   ;; === EShell ===
    `(eshell-prompt ((t (:foreground ,primary :weight bold))))
    `(eshell-ls-directory ((t (:foreground ,primary :weight bold))))
    `(eshell-ls-symlink ((t (:foreground ,secondary :slant italic))))
@@ -271,21 +249,21 @@
    `(eshell-ls-missing ((t (:foreground ,err))))
    `(eshell-ls-product ((t (:foreground ,on-surface-variant))))
    `(eshell-ls-readonly ((t (:foreground ,on-surface-variant))))
-   `(eshell-ls-special ((t (:foreground ,secondary-fixed))))
+   `(eshell-ls-special ((t (:foreground ,secondary))))
    `(eshell-ls-unreadable ((t (:foreground ,outline-variant))))
-   
-   ;; Improved markdown mode
+
+   ;; === Markdown - FIXED: same heading fix as org ===
    `(markdown-header-face ((t (:foreground ,primary :weight bold))))
    `(markdown-header-face-1 ((t (:foreground ,primary :weight bold :height 1.2))))
-   `(markdown-header-face-2 ((t (:foreground ,primary-container :weight bold :height 1.1))))
-   `(markdown-header-face-3 ((t (:foreground ,secondary :weight bold))))
-   `(markdown-header-face-4 ((t (:foreground ,secondary-container :weight bold))))
-   `(markdown-inline-code-face ((t (:foreground ,tertiary-fixed :background ,surface-container-low :inherit fixed-pitch))))
+   `(markdown-header-face-2 ((t (:foreground ,secondary :weight bold :height 1.1))))  ;; FIX: was primary_container
+   `(markdown-header-face-3 ((t (:foreground ,tertiary :weight bold))))                ;; FIX: was secondary
+   `(markdown-header-face-4 ((t (:foreground ,err :weight bold))))                     ;; FIX: was secondary_container
+   `(markdown-inline-code-face ((t (:foreground ,tertiary :background ,surface-container-low :inherit fixed-pitch))))
    `(markdown-code-face ((t (:background ,surface-container-low :extend t :inherit fixed-pitch))))
    `(markdown-pre-face ((t (:background ,surface-container-low :inherit fixed-pitch))))
-   `(markdown-table-face ((t (:foreground ,secondary-fixed :inherit fixed-pitch))))
-   
-   ;; Web mode
+   `(markdown-table-face ((t (:foreground ,secondary :inherit fixed-pitch))))
+
+   ;; === Web mode ===
    `(web-mode-html-tag-face ((t (:foreground ,primary))))
    `(web-mode-html-tag-bracket-face ((t (:foreground ,on-surface-variant))))
    `(web-mode-html-attr-name-face ((t (:foreground ,secondary))))
@@ -293,60 +271,56 @@
    `(web-mode-css-selector-face ((t (:foreground ,primary))))
    `(web-mode-css-property-name-face ((t (:foreground ,secondary))))
    `(web-mode-css-string-face ((t (:foreground ,tertiary))))
-   
-   ;; Flycheck
+
+   ;; === Flycheck ===
    `(flycheck-error ((t (:underline (:style wave :color ,err)))))
    `(flycheck-warning ((t (:underline (:style wave :color ,secondary)))))
    `(flycheck-info ((t (:underline (:style wave :color ,tertiary)))))
    `(flycheck-fringe-error ((t (:foreground ,err))))
    `(flycheck-fringe-warning ((t (:foreground ,secondary))))
    `(flycheck-fringe-info ((t (:foreground ,tertiary))))
-   
-   ;; Mini-buffer customization
+
+   ;; === Minibuffer ===
    `(minibuffer-prompt ((t (:foreground ,primary :weight bold))))
-   
-   ;; Improved search highlighting
+
+   ;; === LSP ===
    `(lsp-face-highlight-textual ((t (:background ,primary-container :foreground ,on-primary-container :weight bold))))
    `(lsp-face-highlight-read ((t (:background ,secondary-container :foreground ,on-secondary-container :weight bold))))
    `(lsp-face-highlight-write ((t (:background ,tertiary-container :foreground ,on-tertiary-container :weight bold))))
-   
-   ;; Info and help modes
+
+   ;; === Info titles - FIXED: same heading fix ===
    `(info-title-1 ((t (:foreground ,primary :weight bold :height 1.3))))
-   `(info-title-2 ((t (:foreground ,primary-container :weight bold :height 1.2))))
-   `(info-title-3 ((t (:foreground ,secondary :weight bold :height 1.1))))
-   `(info-title-4 ((t (:foreground ,secondary-container :weight bold))))
+   `(info-title-2 ((t (:foreground ,secondary :weight bold :height 1.2))))   ;; FIX: was primary_container
+   `(info-title-3 ((t (:foreground ,tertiary :weight bold :height 1.1))))    ;; FIX: was secondary
+   `(info-title-4 ((t (:foreground ,err :weight bold))))                     ;; FIX: was secondary_container
    `(Info-quoted ((t (:foreground ,tertiary))))
    `(info-menu-header ((t (:foreground ,primary :weight bold))))
    `(info-menu-star ((t (:foreground ,primary))))
    `(info-node ((t (:foreground ,tertiary :weight bold))))
 
-   ;; Tabs
+   ;; === Tabs ===
    `(tab-bar ((t (:background ,surface-container-high :foreground ,on-surface :box nil))))
    `(tab-bar-tab ((t (:background ,surface-container-high :foreground ,on-surface :weight bold :box nil))))
    `(tab-bar-tab-inactive ((t (:background ,surface :foreground ,on-surface-variant :box nil))))
-
    `(tab-line ((t (:background ,surface-container-high :foreground ,on-surface :box nil))))
    `(tab-line-tab ((t (:background ,surface :foreground ,on-surface-variant :box nil))))
    `(tab-line-tab-current ((t (:background ,surface-container-high :foreground ,on-surface :weight bold :box nil))))
    `(tab-line-tab-inactive ((t (:background ,surface :foreground ,on-surface-variant :box nil))))
    `(tab-line-highlight ((t (:background ,surface-container-highest :foreground ,on-surface))))
-
    `(centaur-tabs-default ((t (:background ,surface-container-high :foreground ,on-surface))))
    `(centaur-tabs-selected ((t (:background ,surface-container-high :foreground ,on-surface :weight bold))))
    `(centaur-tabs-unselected ((t (:background ,surface :foreground ,on-surface-variant))))
    `(centaur-tabs-selected-modified ((t (:background ,surface-container-high :foreground ,tertiary :weight bold))))
    `(centaur-tabs-unselected-modified ((t (:background ,surface :foreground ,tertiary))))
    `(centaur-tabs-active-bar-face ((t (:background ,primary))))
-   
-   ;; Fixed-pitch faces
+
+   ;; === Fixed/variable pitch ===
    `(fixed-pitch ((t (:family "monospace"))))
    `(fixed-pitch-serif ((t (:family "monospace serif"))))
-   
-   ;; Variable-pitch face
    `(variable-pitch ((t (:family "sans serif"))))
    ))
 
-;; Add org-mode hooks for hiding leading stars
+;; Org-mode settings
 (with-eval-after-load 'org
   (setq org-hide-leading-stars t)
   (setq org-startup-indented t))
@@ -358,4 +332,3 @@
 
 (provide-theme 'noctalia)
 ;;; noctalia-theme.el ends here
-
