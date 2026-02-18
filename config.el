@@ -60,10 +60,8 @@
 (use-package emacs
   :straight nil
   :ensure nil
-  :custom ;; Set custom variables to configure Emacs behavior.
-  (setq modify-coding-system-alist 'file "" 'utf-8)
-  
-  (column-number-mode t) ;; Display the column number in the mode line.
+  :custom
+  (column-number-mode t)
   (auto-save-default nil) ;; Disable automatic saving of buffers.
   (create-lockfiles nil) ;; Prevent the creation of lock files when editing.
   (delete-by-moving-to-trash t) ;; Move deleted files to the trash instead of permanently deleting them.
@@ -137,7 +135,7 @@
   ;; (add-to-list 'default-frame-alist '(alpha-background . 80))
   (global-hl-line-mode -1) ;; Disable highlight of the current line
   (global-auto-revert-mode 1) ;; Enable global auto-revert mode to keep buffers up to date with their corresponding files.
-  (indent-tabs-mode -1) ;; Disable the use of tabs for indentation (use spaces instead).
+  (setq-default indent-tabs-mode nil)
   (recentf-mode 1) ;; Enable tracking of recently opened files.
   (savehist-mode 1) ;; Enable saving of command history.
   (save-place-mode 1) ;; Enable saving the place in files for easier return.
@@ -220,13 +218,13 @@
   (dired-listing-switches "-lah --group-directories-first")
   (dired-dwim-target t)
   (dired-guess-shell-alist-user
-   '(;; ("\\\\.\\\\(png\\\\|jpe?g\\\\|tiff\\\\)" "feh" "xdg-open" "open")
-     ("\\\\.\\\\(mp[34]\\\\|m4a\\\\|ogg\\\\|flac\\\\|webm\\\\|mkv\\\\)" "mpv" "xdg-open" "open")
+   '(("\\.\\(mp[34]\\|m4a\\|ogg\\|flac\\|webm\\|mkv\\)" "mpv" "xdg-open" "open")
      (".*" "open" "xdg-open")))
   (dired-kill-when-opening-new-dired-buffer t)
   (dired-create-destination-dirs 'always)
   :config
-  (setq dired-async-mode t)
+  (with-eval-after-load 'async
+    (dired-async-mode 1))
   
   (require 'mailcap)
   
@@ -271,7 +269,7 @@
            :port 6697
            :nick "cashmere"
            :user "cashmere/libera.chat"
-           :password (password-store-get 'soju)
+           :password (password-store-get "soju")
 		   :id 'libera))
 
 ;; (use-package lambda-themes
@@ -546,6 +544,8 @@
 
 (use-package gptel
   :ensure t
+  :defer t
+  :commands (gptel gptel-send gptel-menu)
   :config
   (defun my/openrouter-key ()
     (string-trim
@@ -573,7 +573,7 @@
   :straight nil
   :ensure t
   :config
-  (setq eldoc-idle-delay 0)
+  (setq eldoc-idle-delay 0.25)
   (setq eldoc-echo-area-use-multiline-p nil)
   (setq eldoc-echo-area-display-truncation-message nil)
   :init
@@ -660,7 +660,7 @@
    '(outline-8          ((t (:height 1.2))))
    '(outline-9          ((t (:height 1.2)))))
 
-  (setq org-startup-folded 'nil)
+  (setq org-startup-folded 'overview)
   (setq org-adapt-indentation t
 		;; org-time-stamp-rounding-minutes '(5 5)	
 		org-return-follows-link t
@@ -715,18 +715,9 @@
   :ensure t
   :config
   (setq org-modern-hide-stars t)
-  (setq org-modern-star 'fold)
-  (setq org-modern-fold-stars '(("◉" . "○")))
   (setq org-modern-star 'replace)
-  (setq org-modern-replace-stars "◉○◉○◉")
-  
-  (setq org-modern-todo-faces
-    '(("TODO" :background "#3a3a3a" :foreground "#e0e0e0" :weight normal)
-      ("NEXT" :background "#ff9800" :foreground "#1a1a1a" :weight normal)
-      ("ACTIVE" :background "#e91e63" :foreground "#ffffff" :weight bold)
-      ("WAIT" :background "#2196f3" :foreground "#ffffff" :weight bold)
-      ("DONE" :background "#4caf50" :foreground "#ffffff" :weight bold)
-      ("CANCELLED" :background "#757575" :foreground "#e0e0e0" :weight normal))))
+  (setq org-modern-fold-stars '(("◉" . "○")))
+  (setq org-modern-replace-stars "◉○◉○◉"))
 
 (with-eval-after-load 'org (global-org-modern-mode))
 
@@ -1282,7 +1273,7 @@ Skips capture tasks and projects."
                    :foreground ,(face-attribute 'default :background)))))
 
 (add-hook 'after-load-theme-hook #'my/update-org-modern-faces)
-(my/update-org-modern-faces)
+(add-hook 'after-init-hook #'my/update-org-modern-faces)
 
 ;;; --- Tag cleanup in agenda buffer ---
 
@@ -1766,7 +1757,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :ensure nil
   :config
   (setq eglot-autoshutdown t)
-  (setq eglot-sync-connect 1)
   (setq eglot-send-changes-idle-time 0.1)
   (setq eglot-sync-connect nil)
   (setq eglot-connect-timeout nil)
@@ -1795,7 +1785,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :config
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
-                 typst-ts-mode . ,(eglot-alternatives '("tinymist" "lsp")))))
+                 `(typst-ts-mode . ,(eglot-alternatives '("tinymist" "lsp"))))))
 
 (use-package yasnippet
   :ensure t
@@ -1817,8 +1807,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 (use-package envrc
   :ensure t
-  :config
-  (envrc-global-mode))
+  :hook (after-init . envrc-global-mode))
 
 (use-package python-mode
   :ensure t
@@ -1829,24 +1818,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
     (add-to-list 'eglot-server-programs
                  '(python-mode . ("rass" "python")))))
 
-(use-package python-black
-  :ensure t
-  :demand t
-  :after python)
-
-;; (use-package python-mode
-;;   :ensure t
-;;   :mode "\\.py\\'"
-;;   :hook (python-mode . eglot-ensure)
-;;   :config
-;;   (with-eval-after-load 'eglot
-;;     (setq eglot-server-programs
-;;           (assoc-delete-all 'python-mode eglot-server-programs))
-;;     (setq eglot-server-programs
-;;           (assoc-delete-all 'python-ts-mode eglot-server-programs))
-;;     (add-to-list 'eglot-server-programs
-;;                  '(python-mode . ("ty" "lsp")))))
-
 (use-package pyvenv
   :ensure t
   :config
@@ -1855,10 +1826,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (add-hook 'python-mode-hook 
             (lambda ()
               (pyvenv-mode 1))))
-
-(use-package ruff-format
-  :ensure t
-  :hook (python-mode . ruff-format-on-save-mode))
 
 ;; (use-package elm-mode
 ;;   :ensure t
@@ -1980,7 +1947,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :mode ("\\.proto\\'" . protobuf-mode))
 
 (use-package janet-mode
-  :mode ("\\.js\\'" . js-mode)
+  :mode "\\.janet\\'"
   :ensure t
   :config
   (with-eval-after-load 'eglot
@@ -2004,9 +1971,29 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :config
   (setq ee-terminal-command "kitty"))
 
-(setq eaf-pyqterminal-font-size 20
-	  eaf-pyqterminal-refresh-ms 3
-	  eaf-pyqterminal-font-family "Maple Mono NF")
+(require 'eaf)
+(require 'eaf-browser)
+(require 'eaf-pyqterminal)
+
+(setq browse-url-browser-function 'eaf-open-browser)
+
+(setq       eaf-pyqterminal-font-size 24
+      eaf-pyqterminal-refresh-ms 17
+      eaf-pyqterminal-font-family "Maple Mono NF"
+      eaf-pyqterminal-cursor-type "bar"
+      eaf-pyqterminal-cursor-size 1)
+
+(with-eval-after-load 'evil
+  (require 'eaf-evil)
+  (setq eaf-evil-leader-key "C-SPC")
+
+  (add-hook 'after-init-hook
+            (lambda ()
+              (let ((leader-km (lookup-key
+                                (evil-get-auxiliary-keymap general-override-mode-map 'normal)
+                                (kbd "SPC"))))
+                (when (keymapp leader-km)
+                  (setq eaf-evil-leader-keymap leader-km))))))
 
 (use-package olivetti
   :custom
@@ -2327,9 +2314,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :straight t
   :ensure t
   :config)
-
-(use-package envrc
-  :hook (after-init . envrc-global-mode))
 
 (add-hook 'org-agenda-mode-hook
           (lambda ()
@@ -3084,7 +3068,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (use-package pass
   :ensure t
   :defer t
-  :mode ("\\.gpg\\'" . pass-mode)
+  :commands (pass)
   :config
   (add-to-list 'display-buffer-alist
                '("\\*Pass.*\\*"
@@ -3128,9 +3112,9 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
    ((eq major-mode 'rust-mode) (eglot-format-buffer))
    ((eq major-mode 'nix-mode) (eglot-format-buffer))  
    ((or (eq major-mode 'python-mode) 
-        (eq major-mode 'python-ts-mode)) (ruff-format-buffer))
+        (eq major-mode 'python-ts-mode)) (eglot-format-buffer))
    ((eq major-mode 'c-mode) (eglot-format-buffer))
-   ((bound-and-func-p eglot--managed-mode) (eglot-format-buffer))
+   ((bound-and-true-p eglot--managed-mode) (eglot-format-buffer))
    (t (message "No formatter for %s" major-mode))))
 
 (my-leader
@@ -3384,6 +3368,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "d" '(dashboard-open :wk "dashboard")
   "f" '(dirvish :wk "file manager")
   "t" '(multi-vterm :wk "terminal")
+  "T" '(eaf-open-pyqterminal :wk "eaf terminal")
   "z" '(golden-ratio-mode :wk "zoom/golden ratio")
   "m" '(mu4e :wk "mail")
   "p" '(pass :wk "pass")
@@ -3512,6 +3497,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (use-package mu4e
   :straight nil
   :ensure nil
+  :defer t
+  :commands (mu4e mu4e-compose-new)
   :config
   
   (setq mu4e-mu-binary (executable-find "mu"))

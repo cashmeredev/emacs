@@ -253,7 +253,8 @@
   (dired-kill-when-opening-new-dired-buffer t)
   (dired-create-destination-dirs 'always)
   :config
-  (dired-async-mode 1)
+  (with-eval-after-load 'async
+    (dired-async-mode 1))
   
   (require 'mailcap)
   
@@ -2461,12 +2462,35 @@ ily <3.
   (setq ee-terminal-command "kitty"))
 #+end_src
 
-* pyqt
+* eaf
+
+Emacs Application Framework -- browser and terminal via Qt widgets.
+Evil integration uses =C-SPC= to access the leader keymap inside EAF buffers.
 
 #+begin_src emacs-lisp
-(setq eaf-pyqterminal-font-size 20
-	  eaf-pyqterminal-refresh-ms 3
-	  eaf-pyqterminal-font-family "Maple Mono NF")
+(require 'eaf)
+(require 'eaf-browser)
+(require 'eaf-pyqterminal)
+
+(setq browse-url-browser-function 'eaf-open-browser)
+
+(setq       eaf-pyqterminal-font-size 24
+      eaf-pyqterminal-refresh-ms 17
+      eaf-pyqterminal-font-family "Maple Mono NF"
+      eaf-pyqterminal-cursor-type "bar"
+      eaf-pyqterminal-cursor-size 1)
+
+(with-eval-after-load 'evil
+  (require 'eaf-evil)
+  (setq eaf-evil-leader-key "C-SPC")
+
+  (add-hook 'after-init-hook
+            (lambda ()
+              (let ((leader-km (lookup-key
+                                (evil-get-auxiliary-keymap general-override-mode-map 'normal)
+                                (kbd "SPC"))))
+                (when (keymapp leader-km)
+                  (setq eaf-evil-leader-keymap leader-km))))))
 #+end_src
 
 * olivetti
@@ -4405,6 +4429,7 @@ ily <3.
   "d" '(dashboard-open :wk "dashboard")
   "f" '(dirvish :wk "file manager")
   "t" '(multi-vterm :wk "terminal")
+  "T" '(eaf-open-pyqterminal :wk "eaf terminal")
   "z" '(golden-ratio-mode :wk "zoom/golden ratio")
   "m" '(mu4e :wk "mail")
   "p" '(pass :wk "pass")
