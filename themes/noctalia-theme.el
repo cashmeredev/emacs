@@ -18,55 +18,55 @@
 (deftheme noctalia "Noctalia theme with proper color contrast.")
 
 (let* (;; Core surface colors
-       (bg "#232136")
-       (fg "#e0def4")
-       (surface "#232136")
-       (on-surface "#e0def4")
-       (on-surface-variant "#cdcbe0")
-       (surface-variant "#373354")
-       (surface-container "#373354")
-       (surface-container-low "#2d2a45")
-       (surface-container-lowest "#27243c")
-       (surface-container-high "#3f3b61")
-       (surface-container-highest "#48426d")
+       (bg "#161616")
+       (fg "#f2f4f8")
+       (surface "#161616")
+       (on-surface "#f2f4f8")
+       (on-surface-variant "#b6b8bb")
+       (surface-variant "#353535")
+       (surface-container "#353535")
+       (surface-container-low "#252525")
+       (surface-container-lowest "#1c1c1c")
+       (surface-container-high "#3f3f3f")
+       (surface-container-highest "#494949")
 
        ;; Accent colors (always readable on surface)
-       (primary "#569fba")
-       (secondary "#a3be8c")
-       (tertiary "#c4a7e7")
-       (err "#eb6f92")
+       (primary "#78a9ff")
+       (secondary "#25be6a")
+       (tertiary "#be95ff")
+       (err "#ee5396")
 
        ;; Container colors (for BACKGROUNDS only, never as foreground text)
-       (primary-container "#143b49")
-       (secondary-container "#496c2b")
-       (tertiary-container "#661fbd")
-       (err-container "#a00833")
+       (primary-container "#0047c5")
+       (secondary-container "#074623")
+       (tertiary-container "#5700e2")
+       (err-container "#8c023e")
 
        ;; On-color text (for text ON accent backgrounds)
-       (on-primary "#232136")
-       (on-secondary "#232136")
-       (on-tertiary "#232136")
-       (on-err "#232136")
+       (on-primary "#161616")
+       (on-secondary "#161616")
+       (on-tertiary "#161616")
+       (on-err "#161616")
 
        ;; On-container text (for text on container backgrounds)
-       (on-primary-container "#dbeaf0")
-       (on-secondary-container "#e5edde")
-       (on-tertiary-container "#e4d7f4")
-       (on-err-container "#f9d2dd")
+       (on-primary-container "#ccdfff")
+       (on-secondary-container "#d4f7e4")
+       (on-tertiary-container "#e0ccff")
+       (on-err-container "#fad1e3")
 
        ;; Outline colors
-       (outline-color "#6b63af")
-       (outline-variant "#4a4383")
+       (outline-color "#636363")
+       (outline-variant "#3d3d3d")
 
        ;; Shadow
        (shadow "#000000")
 
        ;; Auto-lightness variants: lighten in dark mode, darken in light mode
        ;; Used for heading levels 5-7, rainbow delimiters 5-7, terminal variants
-       (primary-variant "#39758b")
-       (secondary-variant "#7ca25c")
-       (tertiary-variant "#9c6bd7")
-       (err-variant "#e22c5f"))
+       (primary-variant "#2c78ff")
+       (secondary-variant "#52dd91")
+       (tertiary-variant "#8f48ff")
+       (err-variant "#df166d"))
 
   (custom-theme-set-faces
    'noctalia
