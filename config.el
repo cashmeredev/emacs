@@ -256,21 +256,193 @@
 
 (use-package erc
   :straight nil
-  :defer t ;; Load ERC when needed rather than at startup. (Load it with `M-x erc RET')
+  :defer t
   :custom
-  (erc-join-buffer 'window)                                        ;; Open a new window for joining channels.
-  (erc-hide-list '("JOIN" "PART" "QUIT"))                          ;; Hide messages for joins, parts, and quits to reduce clutter.
-  (erc-timestamp-format "[%H:%M]")                                 ;; Format for timestamps in messages.
-  ;; (erc-autojoin-channels-alist '((".*\\.libera\\.chat" "#emacs")))
-  );; Automatically join the #emacs channel on Libera.Chat.
-(defun run-erc ()
+  (erc-nick "cashmere1337")
+  (erc-user-full-name "cashmere")
+
+  (erc-join-buffer 'buffer)
+  (erc-kill-buffer-on-part t)
+  (erc-kill-queries-on-quit t)
+  (erc-kill-server-buffer-on-quit t)
+
+  (erc-fill-function 'erc-fill-wrap)
+  (erc-timestamp-format "[%H:%M]")
+  (erc-timestamp-format-left "[%H:%M]")
+  (erc-timestamp-format-right "[%H:%M]")
+  (erc-hide-list '("JOIN" "PART" "QUIT" "NICK" "MODE"))
+  (erc-track-exclude-types '("JOIN" "PART" "QUIT" "NICK" "MODE" "324" "329" "332" "333" "353" "477"))
+  (erc-track-shorten-start 4)
+  (erc-track-visibility 'visible)
+
+  (erc-prompt (lambda () (concat (buffer-name) ">")))
+
+  (erc-modules '(autojoin
+                 button
+                 completion
+                 fill
+                 irccontrols
+                 list
+                 match
+                 move-to-prompt
+                 netsplit
+                 networks
+                 nicks
+                 noncommands
+                 notifications
+                 readonly
+                 ring
+                 scrolltobottom
+                 stamp
+                 track))
+  :config
+  (setq erc-current-nick-highlight-type 'all)
+  (setq erc-keywords '("cashmere"))
+  (setq erc-pals '("cashmere"))
+
+  (setq erc-nicks-contrast-range '(40 . 90))
+
+  (setq erc-scrolltobottom-all t)
+  (erc-scrolltobottom-mode 1)
+
+  (setq erc-fill-wrap-align-prompt nil)
+  (setq erc-fill-static-center 14)
+
+  (setq erc-track-position-in-mode-line t)
+
+  (setq erc-max-buffer-size 100000)
+
+  (erc-update-modules))
+
+(defun my/soju-password ()
+  "Read the Soju bouncer password from the sops-nix secret."
+  (string-trim
+   (with-temp-buffer
+     (insert-file-contents
+      "/home/cashmere/.config/sops-nix/secrets/senpai_password")
+     (buffer-string))))
+
+(defun run-irc ()
+  "Connect to all IRC networks via Soju bouncer."
   (interactive)
-  (erc-tls :server "irc.cashmere.rs"
-           :port 6697
-           :nick "cashmere"
-           :user "cashmere/libera.chat"
-           :password (password-store-get "soju")
-		   :id 'libera))
+  (let ((pw (my/soju-password)))
+    (erc-tls :server "bouncer.cashmere.rs"
+             :port 6699
+             :nick "cashmere1337"
+             :user "cashmere/irc.libera.chat@emacs"
+             :password pw)
+    (erc-tls :server "bouncer.cashmere.rs"
+             :port 6699
+             :nick "cashmere1337"
+             :user "cashmere/ergo@emacs"
+             :password pw)))
+
+(defvar my/consult-source-erc
+  (list :name "IRC"
+        :narrow ?i
+        :category 'buffer
+        :face 'erc-default-face
+        :state #'consult--buffer-state
+        :items (lambda ()
+                 (mapcar #'buffer-name
+                         (cl-remove-if-not
+                          (lambda (buf)
+                            (with-current-buffer buf
+                              (derived-mode-p 'erc-mode)))
+                          (buffer-list))))))
+
+(defun my/erc-switch-channel ()
+  "Switch to an ERC channel buffer via consult."
+  (interactive)
+  (consult-buffer (list my/consult-source-erc)))
+
+(defun my/erc-fetch-history (&optional count)
+  "Fetch COUNT previous messages from Soju via CHATHISTORY.
+Defaults to 1000 (soju max). With prefix arg, prompts for count.
+Temporarily disables notifications during the fetch."
+  (interactive "P")
+  (let ((target (erc-default-target)))
+    (if (not target)
+        (message "Not in a channel buffer.")
+      (let ((n (min (if count
+                       (read-number "Messages to fetch: " 1000)
+                     1000)
+                    1000)))
+        (erc-notifications-disable)
+        (erc-server-send (format "CHATHISTORY LATEST %s * %d" target n))
+        (run-at-time 5 nil #'erc-notifications-enable)))))
+
+(defun my/erc-quit-all ()
+  "Disconnect from IRC and kill all ERC buffers."
+  (interactive)
+  (erc-cmd-QUIT "bye")
+  (run-at-time 1 nil
+               (lambda ()
+                 (dolist (buf (buffer-list))
+                   (when (with-current-buffer buf (derived-mode-p 'erc-mode))
+                     (kill-buffer buf))))))
+
+(defun my/erc-reconnect ()
+  "Reconnect to the current ERC server."
+  (interactive)
+  (erc-cmd-RECONNECT))
+
+(defun my/erc-list-channels ()
+  "Request channel list from the current ERC server."
+  (interactive)
+  (erc-cmd-LIST))
+
+(defun persp-irc ()
+  "Switch to the irc perspective and connect or show ERC buffers."
+  (interactive)
+  (let ((erc-bufs (cl-remove-if-not
+                   (lambda (buf)
+                     (with-current-buffer buf
+                       (derived-mode-p 'erc-mode)))
+                   (buffer-list))))
+    (persp-switch "irc")
+    (if erc-bufs
+        (progn
+          (dolist (buf erc-bufs)
+            (persp-add-buffer buf))
+          (switch-to-buffer (car erc-bufs)))
+      (letrec ((hook-fn (lambda ()
+                          (when (bound-and-true-p persp-mode)
+                            (let ((buf (current-buffer)))
+                              (persp-add-buffer buf)
+                              (switch-to-buffer buf)))
+                          (remove-hook 'erc-join-hook hook-fn))))
+        (add-hook 'erc-join-hook hook-fn))
+      (run-irc))))
+
+(with-eval-after-load 'erc
+  (add-hook 'erc-mode-hook
+            (lambda ()
+              (setq-local scroll-margin 0)
+              (setq-local maximum-scroll-margin 0.0)
+              (setq-local corfu-auto nil)))
+
+  (add-hook 'erc-join-hook
+            (lambda ()
+              (when (bound-and-true-p persp-mode)
+                (persp-add-buffer (current-buffer)))))
+
+  (general-def 'normal erc-mode-map
+    "q"   'quit-window
+    "Q"   'my/erc-quit-all
+    "gb"  'my/erc-switch-channel
+    "gn"  'erc-track-switch-buffer
+    "gH"  'my/erc-fetch-history
+    "go"  'erc-channel-names
+    "gj"  'erc-join-channel
+    "gl"  'my/erc-list-channels
+    "gr"  'my/erc-reconnect
+    "RET" 'erc-send-current-line)
+
+  (general-def '(normal insert) erc-mode-map
+    "M-n" 'erc-track-switch-buffer
+    "C-k" 'erc-previous-command
+    "C-j" 'erc-next-command))
 
 ;; (use-package lambda-themes
 ;;   :ensure t
@@ -2115,7 +2287,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (evil-set-initial-state 'help-mode 'emacs)
   (evil-set-initial-state 'messages-buffer-mode 'normal)
   (evil-set-initial-state 'dired-mode 'normal)
-  (evil-set-initial-state 'ibuffer-mode 'normal))
+  (evil-set-initial-state 'ibuffer-mode 'normal)
+  (evil-set-initial-state 'erc-mode 'normal))
 
 (modify-syntax-entry ?_ "w")
 
@@ -3370,6 +3543,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "t" '(multi-vterm :wk "terminal")
   "T" '(eaf-open-pyqterminal :wk "eaf terminal")
   "z" '(golden-ratio-mode :wk "zoom/golden ratio")
+  "i" '(persp-irc :wk "irc")
   "m" '(mu4e :wk "mail")
   "p" '(pass :wk "pass")
   "o" '(my/global-olivetti-mode :wk "center buffer")
