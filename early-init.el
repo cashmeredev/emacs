@@ -1,6 +1,10 @@
 ;; -*- lexical-binding: t; -*-
 (setq package-enable-at-startup nil)
+(push '(left-fringe . 0) default-frame-alist)
+(push '(right-fringe . 0) default-frame-alist)
 (menu-bar-mode -1)
 (tool-bar-mode -1)
 (scroll-bar-mode -1)
+(fringe-mode 0)
+(setq-default overflow-newline-into-fringe nil)
 (provide 'early-init)
