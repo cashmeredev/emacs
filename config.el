@@ -258,14 +258,17 @@
   :straight nil
   :defer t
   :custom
+  ;; connection
   (erc-nick "cashmere1337")
   (erc-user-full-name "cashmere")
 
+  ;; behaviour
   (erc-join-buffer 'buffer)
   (erc-kill-buffer-on-part t)
   (erc-kill-queries-on-quit t)
   (erc-kill-server-buffer-on-quit t)
 
+  ;; visuals
   (erc-fill-function 'erc-fill-wrap)
   (erc-timestamp-format "[%H:%M]")
   (erc-timestamp-format-left "[%H:%M]")
@@ -275,8 +278,10 @@
   (erc-track-shorten-start 4)
   (erc-track-visibility 'visible)
 
+  ;; prompt
   (erc-prompt (lambda () (concat (buffer-name) ">")))
 
+  ;; modules
   (erc-modules '(autojoin
                  button
                  completion
@@ -296,20 +301,26 @@
                  stamp
                  track))
   :config
+  ;; highlight own nick
   (setq erc-current-nick-highlight-type 'all)
   (setq erc-keywords '("cashmere"))
   (setq erc-pals '("cashmere"))
 
+  ;; nicks module (built-in nick coloring in Emacs 30)
   (setq erc-nicks-contrast-range '(40 . 90))
 
+  ;; scrolltobottom -- keep input always at bottom
   (setq erc-scrolltobottom-all t)
   (erc-scrolltobottom-mode 1)
 
+  ;; fill-wrap -- modern chat-like wrapping
   (setq erc-fill-wrap-align-prompt nil)
   (setq erc-fill-static-center 14)
 
+  ;; track -- activity in modeline
   (setq erc-track-position-in-mode-line t)
 
+  ;; keep large buffer for soju history replay
   (setq erc-max-buffer-size 100000)
 
   (erc-update-modules))
@@ -893,6 +904,18 @@ Temporarily disables notifications during the fetch."
 
 (with-eval-after-load 'org (global-org-modern-mode))
 
+(use-package kitty-graphics
+  :straight (:local-repo "~/projects/kitty-graphics")
+  :if (and (not (display-graphic-p)) (getenv "KITTY_PID"))
+  :custom
+  (kitty-gfx-max-width 80)
+  (kitty-gfx-max-height 24)
+  :config
+  (kitty-graphics-mode 1)
+  ;; Preview images in dired/dirvish with 'P'
+  (with-eval-after-load 'dired
+    (define-key dired-mode-map (kbd "P") #'kitty-gfx-dired-preview)))
+
 (use-package org-fancy-priorities
   :ensure t
   :hook
@@ -934,6 +957,34 @@ Temporarily disables notifications during the fetch."
      (dot . t)
 	 (C . t)
 	 (makefile . t))))
+
+(defun my/snip-upload (&optional file)
+  "Upload FILE, region, or current buffer to snips.sh.
+Copies the resulting URL to the kill ring and clipboard."
+  (interactive)
+  (let* ((input (cond
+                 (file file)
+                 ((use-region-p)
+                  (buffer-substring-no-properties (region-beginning) (region-end)))
+                 (t (buffer-substring-no-properties (point-min) (point-max)))))
+         (cmd "ssh pb@pb.cashmere.rs 2>/dev/null | sed 's/\\x1b\\[[0-9;]*m//g' | grep -oP 'https://\\S+/f/\\S+'")
+         (url (string-trim
+               (if (and file (file-exists-p file))
+                   (shell-command-to-string (format "cat %s | %s" (shell-quote-argument file) cmd))
+                 (with-temp-buffer
+                   (insert input)
+                   (shell-command-on-region (point-min) (point-max) cmd nil t)
+                   (buffer-string))))))
+    (if (string-prefix-p "https://" url)
+        (progn
+          (kill-new url)
+          (message "Uploaded: %s" url))
+      (message "Upload failed"))))
+
+(defun my/snip-upload-file ()
+  "Prompt for a file and upload it to snips.sh."
+  (interactive)
+  (my/snip-upload (read-file-name "Upload to snips.sh: ")))
 
 (defun my/paste-md-to-org ()
   "Yank Markdown text as Org.
@@ -1551,14 +1602,14 @@ Only inserts when the buffer has just the front-matter (fresh file)."
              (<= (count-lines (point-min) (point-max)) 6))
     (goto-char (point-max))
     (insert
-     "\n* 󱎫 \n"
+     "\n* Clockreport \n"
      "\n#+BEGIN: clocktable :scope file :maxlevel 3 :emphasize nil :link t\n"
      "#+END:\n"
-     "\n*  \n"
-     "\n** Plan the day\n"
+     "\n* Agenda \n"
+     "\n** NEXT Plan the day\n"
      ":LOGBOOK:\n"
      ":END:\n"
-     "\n* 󰧑 \n"
+     "\n* Braindump \n"
      ":PROPERTIES:\n"
      ":VISIBILITY: folded\n"
      ":END:\n")))
@@ -1720,6 +1771,21 @@ Works on the base filename (without extension), e.g. matches \"-agenda\", \":age
         tmr-notification-urgency 'normal
         tmr-description-list 'tmr-description-history)
   (define-key global-map (kbd "C-c t") #'tmr-prefix-map))
+
+(use-package denote-merge
+  :ensure t ; not in any package archive
+  :straight (:host github :repo "protesilaos/denote-merge")
+  ;; You can bind these to keys.  They are here so you can learn about them.
+  :commands
+  (denote-merge-file
+    denote-merge-region
+    denote-merge-region-plain
+    denote-merge-region-plain-indented
+    denote-merge-region-org-src
+    denote-merge-region-org-quote
+    denote-merge-region-org-example
+    denote-merge-region-markdown-quote
+    denote-merge-region-markdown-fenced-block))
 
 (use-package which-key
   :ensure t
@@ -2143,29 +2209,69 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :config
   (setq ee-terminal-command "kitty"))
 
-(require 'eaf)
-(require 'eaf-browser)
-(require 'eaf-pyqterminal)
-
-(setq browse-url-browser-function 'eaf-open-browser)
-
-(setq       eaf-pyqterminal-font-size 24
+;; Settings can be declared before EAF loads -- they are just variables.
+(setq eaf-pyqterminal-font-size 24
       eaf-pyqterminal-refresh-ms 17
-      eaf-pyqterminal-font-family "Maple Mono NF"
-      eaf-pyqterminal-cursor-type "bar"
-      eaf-pyqterminal-cursor-size 1)
+      eaf-pyqterminal-font-family "GeistMono Nerd Font"
+      ;; eaf-pyqterminal-cursor-type "bar"
+      ;; eaf-pyqterminal-cursor-size 1
+      )
 
-(with-eval-after-load 'evil
-  (require 'eaf-evil)
-  (setq eaf-evil-leader-key "C-SPC")
+(defvar my/eaf-loaded nil
+  "Non-nil after EAF has been successfully loaded.")
 
-  (add-hook 'after-init-hook
-            (lambda ()
-              (let ((leader-km (lookup-key
+(defun my/eaf-init ()
+  "Load EAF and its apps, but only when a graphical display is available.
+Errors are caught so a broken EAF never kills the Emacs session."
+  (when (and (display-graphic-p) (not my/eaf-loaded))
+    (condition-case err
+        (progn
+          (require 'eaf)
+          (require 'eaf-browser)
+          (require 'eaf-pyqterminal)
+          (require 'eaf-auralis)
+
+          ;; Evil leader integration
+          (when (featurep 'evil)
+            (require 'eaf-evil)
+            (setq eaf-evil-leader-key "C-SPC")
+            (let ((leader-km (when (boundp 'general-override-mode-map)
+                               (lookup-key
                                 (evil-get-auxiliary-keymap general-override-mode-map 'normal)
-                                (kbd "SPC"))))
-                (when (keymapp leader-km)
-                  (setq eaf-evil-leader-keymap leader-km))))))
+                                (kbd "SPC")))))
+              (when (keymapp leader-km)
+                (setq eaf-evil-leader-keymap leader-km))))
+
+          ;; Process sentinel: clean up buffers when the EAF python
+          ;; process dies unexpectedly instead of leaving zombies.
+          (advice-add 'eaf--start-process :after
+                      (lambda (&rest _)
+                        (when-let* ((proc (get-process "eaf")))
+                          (set-process-sentinel
+                           proc
+                           (lambda (process event)
+                             (when (memq (process-status process) '(exit signal))
+                               (message "EAF process terminated: %s" (string-trim event))
+                               (dolist (buf (buffer-list))
+                                 (when (and (buffer-live-p buf)
+                                            (with-current-buffer buf
+                                              (derived-mode-p 'eaf-mode)))
+                                   (with-current-buffer buf
+                                     (let ((inhibit-read-only t))
+                                       (erase-buffer)
+                                       (insert (format "EAF process crashed: %s\nRe-open this buffer to restart."
+                                                       (string-trim event)))))))))))))
+
+          (setq my/eaf-loaded t)
+          (message "EAF loaded successfully."))
+      (error
+       (message "EAF failed to load: %s" (error-message-string err))))))
+
+;; Daemon: wait for the first graphical frame, then load EAF once.
+;; Normal start: load immediately.
+(if (daemonp)
+    (add-hook 'server-after-make-frame-hook #'my/eaf-init)
+  (add-hook 'after-init-hook #'my/eaf-init))
 
 (use-package olivetti
   :custom
@@ -2516,6 +2622,160 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (require 'evil-org-agenda)
   (evil-org-agenda-set-keys))
 
+(use-package perspective
+  :ensure t
+  :demand t
+  :custom
+  (persp-sort 'created)
+  (persp-suppress-no-prefix-key-warning t)
+  :init
+  (setq persp-mode-prefix-key (kbd "C-c M-p"))
+  :config
+  (persp-mode)
+
+  ;; ---- consult integration --------------------------------------
+  ;; Make SPC , show only buffers from the current perspective.
+  ;; SPC TAB B gives the unfiltered global list.
+
+  (with-eval-after-load 'consult
+    (consult-customize consult--source-buffer :hidden t :default nil)
+    (add-to-list 'consult-buffer-sources persp-consult-source))
+
+  ;; ---- EAF workspace helpers ------------------------------------
+
+  (defun persp-eaf-open (persp-name eaf-open-fn)
+    "Switch to PERSP-NAME and call EAF-OPEN-FN unless a live EAF buffer exists."
+    (unless my/eaf-loaded
+      (user-error "EAF is not loaded -- open a graphical frame first"))
+    (persp-switch persp-name)
+    (unless (cl-some (lambda (buf)
+                       (and (buffer-live-p buf)
+                            (with-current-buffer buf
+                              (derived-mode-p 'eaf-mode))))
+                     (persp-buffers (persp-curr)))
+      (condition-case err
+          (funcall eaf-open-fn)
+        (error
+         (message "EAF open failed in perspective '%s': %s"
+                  persp-name (error-message-string err))))))
+
+  (defun persp-eaf-terminal ()
+    "Open pyqterminal in the terminal perspective."
+    (interactive)
+    (persp-eaf-open "terminal" #'eaf-open-pyqterminal))
+
+  (defun persp-eaf-auralis ()
+    "Open the auralis dashboard in the auralis perspective."
+    (interactive)
+    (persp-eaf-open "auralis" #'eaf-open-auralis))
+
+  ;; Reposition Qt widgets in ALL windows after a perspective switch,
+  ;; not just the current buffer.  Without this, EAF overlays in
+  ;; non-selected windows become misaligned.
+  (add-hook 'persp-activated-hook
+            (lambda ()
+              (when (fboundp 'eaf-monitor-configuration-change)
+                (walk-windows
+                 (lambda (win)
+                   (with-current-buffer (window-buffer win)
+                     (when (derived-mode-p 'eaf-mode)
+                       (eaf-monitor-configuration-change))))
+                 nil (selected-frame)))))
+
+  ;; ---- keybindings via general ----------------------------------
+
+  (my-leader
+    "TAB" '(:ignore t :wk "perspective")
+    "TAB TAB" '(persp-switch :wk "switch")
+    "TAB n" '(persp-next :wk "next")
+    "TAB p" '(persp-prev :wk "prev")
+    "TAB d" '(persp-kill :wk "delete")
+    "TAB r" '(persp-rename :wk "rename")
+    "TAB b" '(persp-switch-to-buffer :wk "buffer")
+    "TAB B" '(consult-buffer :wk "global buffer")
+    "TAB a" '(persp-add-buffer :wk "add buffer")
+    "TAB k" '(persp-remove-buffer :wk "remove buffer")
+    "TAB 1" '(persp-eaf-terminal :wk "terminal")
+    "TAB 2" '(persp-eaf-auralis :wk "auralis")))
+
+(defvar eaf-named-frames nil
+  "Alist of (NAME . frame) for dedicated EAF frames.")
+
+(defun eaf-frame-open (name open-fn &optional width height)
+  "Open or focus a dedicated frame NAME running EAF app via OPEN-FN.
+If OPEN-FN signals an error the newly created frame is deleted
+so no empty zombie frames are left behind."
+  (interactive)
+  (unless my/eaf-loaded
+    (user-error "EAF is not loaded -- open a graphical frame first"))
+  (let ((existing (alist-get name eaf-named-frames nil nil #'string=)))
+    (if (and existing (frame-live-p existing))
+        (select-frame-set-input-focus existing)
+      ;; Remove stale entry
+      (setq eaf-named-frames
+            (assoc-delete-all name eaf-named-frames #'string=))
+      (let ((frame (make-frame `((name . ,(format "EAF: %s" name))
+                                 (width . ,(or width 120))
+                                 (height . ,(or height 40))))))
+        (select-frame-set-input-focus frame)
+        (condition-case err
+            (progn
+              (push (cons name frame) eaf-named-frames)
+              (funcall open-fn))
+          (error
+           (setq eaf-named-frames
+                 (assoc-delete-all name eaf-named-frames #'string=))
+           (delete-frame frame)
+           (message "EAF frame '%s' failed: %s" name
+                    (error-message-string err))))))))
+
+(defun eaf-frame-pyqterminal ()
+  "Open pyqterminal in a dedicated frame."
+  (interactive)
+  (eaf-frame-open "terminal" #'eaf-open-pyqterminal))
+
+(defun eaf-frame-auralis ()
+  "Open auralis dashboard in a dedicated frame."
+  (interactive)
+  (eaf-frame-open "auralis" #'eaf-open-auralis))
+
+(defun eaf-frame-browser (url)
+  "Open EAF browser in a dedicated frame."
+  (interactive "sURL: ")
+  (eaf-frame-open "browser" (lambda () (eaf-open-browser url))))
+
+(my-leader
+  "o" '(:ignore t :wk "open frame")
+  "ot" '(eaf-frame-pyqterminal :wk "terminal")
+  "oa" '(eaf-frame-auralis :wk "auralis")
+  "ob" '(eaf-frame-browser :wk "browser"))
+
+;; Load auralis unconditionally — it only makes HTTP calls and has no
+;; EAF dependency.  Auto-enable the modeline polling timer on load.
+(condition-case err
+    (progn
+      (require 'auralis)
+      (auralis-modeline-enable))
+  (error (message "auralis failed to load: %s" (error-message-string err))))
+
+(my-leader
+  "m" '(:ignore t :wk "music")
+  "m SPC" '(auralis-play-pause :wk "play/pause")
+  "mn" '(auralis-next :wk "next track")
+  "mp" '(auralis-prev :wk "prev track")
+  "ms" '(auralis-search :wk "search library")
+  "mr" '(auralis-play-random :wk "shuffle all")
+  "mi" '(auralis-now-playing :wk "now playing")
+  "m+" '(auralis-volume-up :wk "volume up")
+  "m-" '(auralis-volume-down :wk "volume down")
+  "mS" '(auralis-toggle-shuffle :wk "toggle shuffle")
+  "mR" '(auralis-toggle-repeat :wk "toggle repeat")
+  "mA" '(auralis-toggle-radio :wk "toggle auto-radio")
+  "mq" '(auralis-stop :wk "stop")
+  "mL" '(auralis-scan-library :wk "scan library")
+  "mm" '(auralis-modeline-enable :wk "modeline on")
+  "mM" '(auralis-modeline-disable :wk "modeline off"))
+
 (use-package nerd-icons
   :if ek-use-nerd-fonts                   ;; Load the package only if the user has configured to use nerd fonts.
   :ensure t)                               ;; Ensure the package is installed.
@@ -2694,6 +2954,16 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
            (desc (tmr-mode-line--format-description timer)))
       (concat remaining desc)))
 
+  (maple-modeline-define-segment auralis-now-playing
+    :if (and (boundp 'auralis--modeline-string)
+             (not (string-empty-p auralis--modeline-string)))
+    :format
+    (concat
+     (maple-modeline--concat-or
+      (maple-modeline--icon 'mdicon "nf-md-music" face)
+      "♪")
+     auralis--modeline-string))
+
   (maple-modeline-define my-custom-style
     :left ((evil :left (bar :left ""))
            macro
@@ -2705,6 +2975,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
     :right (narrow
             org-clock-task
             tmr-timer
+            auralis-now-playing
             python
             my-modeline-time
             process
@@ -3307,7 +3578,11 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "d" '(:ignore t :wk "denote")
   "dj" '(denote-journal-new-or-existing-entry :wk "journal")
   "dd" '(denote-menu-list-notes t :wk "List all notes")
+  "dm" '(:ignore t :wk "Merge Notes")
+  "dmr" '(denote-merge-region :wk "Merge Region")
+  "dmf" '(denote-merge-file :wk "Merge File")
   "dg" '(consult-denote-grep t :wk "Search")
+  "dl" '(denote-link-or-create t :wk "Link Note")
   "dn" '(denote t :wk "Create a new note")
   "dr" '(denote-rename-file t :wk "Rename Note")
   "dtl" '(tmr-list-timers :wk "list timer")
@@ -3359,6 +3634,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "gb" '(vc-annotate :wk "blame")
 
   "o" '(:ignore t :wk "open")
+  "os" '(my/snip-upload :wk "snip buffer/region")
+  "oS" '(my/snip-upload-file :wk "snip file")
 
   "h" '(:ignore t :wk "help")
   "hm" '(describe-mode :wk "mode")
@@ -3463,6 +3740,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "m," '(org-priority :wk "priority")
   "mI" '(org-clock-in :wk "clock in")
   "mO" '(org-clock-out :wk "clock out")
+
   "l" '(:ignore :wk "link")
   "lc" '(org-cliplink :wk "cliplink")
   "li" '(org-download-clipboard :wk "image")
@@ -3636,7 +3914,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
              ((string< a-feed b-feed) t)
              ((string> a-feed b-feed) nil)
              (t (string< a-title b-title)))))))
-
 (use-package elfeed-org
   :ensure t
   :after elfeed
@@ -3762,5 +4039,17 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;; (org-agenda nil "c")
 ;; (profiler-report)
 ;; (profiler-stop)
+
+(use-package ewm
+  :straight nil
+  :commands (ewm-start-module ewm-launch-app ewm-toggle-fullscreen)
+  :custom
+  (ewm-mouse-follows-focus t)
+  ;; (ewm-output-config '(("DP-1" :width 2560 :height 1440)))
+  :config
+  (when (and (boundp 'ewm-mode-map) (keymapp ewm-mode-map))
+    ;; Override defaults with your preferred commands if needed
+    ;; (define-key ewm-mode-map (kbd "s-d") #'consult-buffer)
+    ))
 
 (provide 'init)
