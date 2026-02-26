@@ -984,7 +984,7 @@ and convert it to Org using the pandoc utility."
   :config
   ;; Setup hooks for clock persistence
   (org-clock-persistence-insinuate)
-  (setq org-clock-clocked-in-display nil
+  (setq org-clock-clocked-in-display 'mode-line
         org-clock-history-length 23
         org-clock-in-switch-to-state 'my/clock-in-to-started
         org-clock-out-when-done t
