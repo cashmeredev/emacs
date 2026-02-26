@@ -986,6 +986,25 @@ Copies the resulting URL to the kill ring and clipboard."
   (interactive)
   (my/snip-upload (read-file-name "Upload to snips.sh: ")))
 
+(defun my/setup-git-remote (dev-name srht-name)
+  "Set up origin (dual-push) and backup remotes for the current git repo.
+DEV-NAME is the repo name on dev.cashmere.rs, SRHT-NAME on sr.ht."
+  (interactive
+   (let* ((dev (read-string "Repo name (dev.cashmere.rs): "))
+          (srht (read-string (format "Repo name (sr.ht) [%s]: " dev) nil nil dev)))
+     (list dev srht)))
+  (let* ((root (or (locate-dominating-file default-directory ".git")
+                   (error "Not in a git repository")))
+         (default-directory root)
+         (dev-url (format "ssh://git@dev.cashmere.rs/cashmere/%s" dev-name))
+         (srht-url (format "git@git.sr.ht:~cashmere/%s" srht-name)))
+    (shell-command (format "git remote remove origin 2>/dev/null; git remote add origin %s" dev-url))
+    (shell-command (format "git remote set-url --add --push origin %s" dev-url))
+    (shell-command (format "git remote set-url --add --push origin %s" srht-url))
+    (shell-command (format "git remote remove backup 2>/dev/null; git remote add backup %s" srht-url))
+    (message "Remotes configured:\n  origin -> %s (push to both)\n  backup -> %s"
+             dev-url srht-url)))
+
 (defun my/paste-md-to-org ()
   "Yank Markdown text as Org.
 
