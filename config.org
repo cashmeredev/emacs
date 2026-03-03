@@ -5228,17 +5228,49 @@ this package provides the ability to display rgb and hex colors.
 * ewm
 
 #+begin_src emacs-lisp
-(use-package ewm
-  :straight nil
-  :commands (ewm-start-module ewm-launch-app ewm-toggle-fullscreen)
-  :custom
-  (ewm-mouse-follows-focus t)
-  ;; (ewm-output-config '(("DP-1" :width 2560 :height 1440)))
-  :config
-  (when (and (boundp 'ewm-mode-map) (keymapp ewm-mode-map))
-    ;; Override defaults with your preferred commands if needed
-    ;; (define-key ewm-mode-map (kbd "s-d") #'consult-buffer)
-    ))
+(when (string= (system-name) "sportmacher")
+  (use-package ewm
+    :straight nil
+    :commands (ewm-start-module ewm-launch-app ewm-toggle-fullscreen
+               ewm-screenshot ewm-show-state ewm-debug-mode
+               ewm-lock-session ewm-next-surface-buffer ewm-prev-surface-buffer
+               ewm-transient ewm-stop-module)
+    :custom
+    (ewm-mouse-follows-focus t)
+    (ewm-output-config '(("DSI-1" :width 1200 :height 1920 :transform 1 :scale 1.0)))
+    (ewm-input-config '((touchpad :natural-scroll t :tap t :dwt t :accel-speed 0.0)
+                         (keyboard :repeat-delay 200 :repeat-rate 25)))
+    (ewm-idle 300)
+    :config
+    (require 'ewm-transient)
+
+    ;; vim-style window nav on super key (works inside surface buffers)
+    (when (and (boundp 'ewm-mode-map) (keymapp ewm-mode-map))
+      (define-key ewm-mode-map (kbd "s-h") #'windmove-left)
+      (define-key ewm-mode-map (kbd "s-j") #'windmove-down)
+      (define-key ewm-mode-map (kbd "s-k") #'windmove-up)
+      (define-key ewm-mode-map (kbd "s-l") #'windmove-right)
+      (define-key ewm-mode-map (kbd "s-q") #'kill-current-buffer)
+      (define-key ewm-mode-map (kbd "s-S-q") #'ewm-stop-module)))
+
+  ;; ewm leader bindings under SPC e
+  (my-leader
+    "e"   '(:ignore t :wk "ewm")
+    "e a" '(ewm-launch-app :wk "launch app")
+    "e n" '(ewm-next-surface-buffer :wk "next surface")
+    "e p" '(ewm-prev-surface-buffer :wk "prev surface")
+    "e f" '(ewm-toggle-fullscreen :wk "fullscreen")
+    "e t" '(ewm-transient :wk "control panel")
+    "e s" '(ewm-screenshot :wk "screenshot")
+    "e i" '(ewm-show-state :wk "inspect state")
+    "e d" '(ewm-debug-mode :wk "debug")
+    "e l" '(ewm-lock-session :wk "lock")
+    "e T" '(:ignore t :wk "tab")
+    "e T n" '(tab-new :wk "new tab")
+    "e T c" '(tab-close :wk "close tab")
+    "e T l" '(tab-next :wk "next tab")
+    "e T h" '(tab-previous :wk "prev tab")
+    "e T r" '(tab-recent :wk "recent tab")))
 #+end_src
 
 * provide init
