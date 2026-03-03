@@ -150,7 +150,7 @@
   (add-to-list 'default-frame-alist '(horizontal-scroll-bars . nil))
   ;; (set-frame-parameter (selected-frame) 'alpha-background 80)
   ;; (add-to-list 'default-frame-alist '(alpha-background . 80))
-  (global-hl-line-mode -1) ;; Disable highlight of the current line
+  ;; (global-hl-line-mode -1) ;; Disable highlight of the current line
   (global-auto-revert-mode 1) ;; Enable global auto-revert mode to keep buffers up to date with their corresponding files.
   (setq-default indent-tabs-mode nil)
   (recentf-mode 1) ;; Enable tracking of recently opened files.
@@ -380,7 +380,7 @@
              :password pw)
     (erc-tls :server "bouncer.cashmere.rs"
              :port 6699
-             :nick "cashmere1337"
+             :nick "cashmere"
              :user "cashmere/ergo@emacs"
              :password pw)))
 
@@ -848,6 +848,61 @@ Not necessary but an eyecandy to look at!
   (setq gptel-backends (list my/openrouter-backend)))
 #+end_src
 
+** agent-shell
+
+#+begin_src emacs-lisp
+(use-package shell-maker
+  :ensure t
+  :straight (:host github :repo "xenodium/shell-maker"))
+
+(use-package acp
+  :ensure t
+  :straight (:host github :repo "xenodium/acp.el"))
+
+(use-package agent-shell
+  :ensure t
+  :straight (:host github :repo "xenodium/agent-shell")
+  :commands (agent-shell agent-shell-toggle agent-shell-prompt-compose)
+  :config
+  (setq agent-shell-anthropic-claude-acp-command '("claude-code-acp"))
+  (setq agent-shell-new-shell-config
+        (agent-shell-anthropic-make-claude-code-config))
+
+  (general-def 'normal agent-shell-mode-map
+    "q"   'quit-window
+    "Q"   'agent-shell-interrupt
+    "gr"  'shell-maker-restore-session-from-transcript
+    "gn"  'agent-shell-new-shell
+    "go"  'agent-shell-other-buffer
+    "gp"  'agent-shell-jump-to-latest-permission-button-row
+    "]]"  'agent-shell-next-item
+    "[["  'agent-shell-previous-item
+    "]p"  'agent-shell-next-permission-button
+    "[p"  'agent-shell-previous-permission-button
+    "C-l" 'shell-maker-clear-buffer
+    "/"   'shell-maker-search-history
+    "i"   'evil-insert
+    "I"   'agent-shell-insert-shell-command-output
+    "o"   'agent-shell-prompt-compose
+    "gv"  'agent-shell-set-session-model
+    "gm"  'agent-shell-set-session-mode
+    "gt"  'agent-shell-cycle-session-mode
+    "gT"  'agent-shell-open-transcript
+    "gl"  'agent-shell-view-traffic
+    "gL"  'agent-shell-view-acp-logs
+    "gc"  'agent-shell-toggle-logging
+    "ys"  'agent-shell-send-screenshot
+    "yf"  'agent-shell-send-file
+    "yc"  'agent-shell-send-clipboard-image)
+
+  (add-hook 'agent-shell-mode-hook
+            (lambda ()
+              (setq-local corfu-auto nil)))
+
+  (general-def 'insert agent-shell-mode-map
+    "S-<return>" 'newline
+    "C-c C-c" 'agent-shell-interrupt))
+#+end_src
 
 * eldoc
 
@@ -931,9 +986,9 @@ Not necessary but an eyecandy to look at!
 ** flyover
 
 #+begin_src emacs-lisp
-;; (use-package flyover
-;;   :ensure t
-;;   :hook (flycheck-mode-hook . flyover-mode))
+(use-package flyover
+  :ensure t
+  :hook (flycheck-mode-hook . flyover-mode))
 #+end_src
 
 ** flycheck eglot
@@ -1069,16 +1124,19 @@ Only activates when running in a Kitty terminal (not in GUI Emacs).
 
 #+begin_src emacs-lisp
 (use-package kitty-graphics
-  :straight (:local-repo "~/projects/kitty-graphics")
+  :ensure t
+  :straight (:host github :repo "cashmeredev/kitty-graphics.el")
   :if (and (not (display-graphic-p)) (getenv "KITTY_PID"))
-  :custom
-  (kitty-gfx-max-width 80)
-  (kitty-gfx-max-height 24)
   :config
   (kitty-graphics-mode 1)
-  ;; Preview images in dired/dirvish with 'P'
   (with-eval-after-load 'dired
     (define-key dired-mode-map (kbd "P") #'kitty-gfx-dired-preview)))
+
+;; (when (and (not (display-graphic-p)) (getenv "KITTY_PID"))
+;;   (load "~/projects/kitty-graphics/kitty-graphics.el")
+;;   (kitty-graphics-mode 1)
+;;   (with-eval-after-load 'dired
+;;     (define-key dired-mode-map (kbd "P") #'kitty-gfx-dired-preview)))
 #+end_src
 
 ** org-fancy-properties
@@ -1144,6 +1202,7 @@ Upload buffer, region, or file to snips.sh and copy URL.
 #+begin_src emacs-lisp
 (defun my/snip-upload (&optional file)
   "Upload FILE, region, or current buffer to snips.sh.
+Passes -ext flag to hint the file type for syntax highlighting.
 Copies the resulting URL to the kill ring and clipboard."
   (interactive)
   (let* ((input (cond
@@ -1151,7 +1210,13 @@ Copies the resulting URL to the kill ring and clipboard."
                  ((use-region-p)
                   (buffer-substring-no-properties (region-beginning) (region-end)))
                  (t (buffer-substring-no-properties (point-min) (point-max)))))
-         (cmd "ssh pb@pb.cashmere.rs 2>/dev/null | sed 's/\\x1b\\[[0-9;]*m//g' | grep -oP 'https://\\S+/f/\\S+'")
+         (ext (cond
+               ((and file (file-name-extension file))
+                (file-name-extension file))
+               ((and (not file) (buffer-file-name) (file-name-extension (buffer-file-name)))
+                (file-name-extension (buffer-file-name)))))
+         (ext-flag (if ext (format " -- -ext %s" ext) ""))
+         (cmd (format "ssh pb@pb.cashmere.rs%s 2>/dev/null | sed 's/\\x1b\\[[0-9;]*m//g' | grep -oP 'https://\\S+/f/\\S+'" ext-flag))
          (url (string-trim
                (if (and file (file-exists-p file))
                    (shell-command-to-string (format "cat %s | %s" (shell-quote-argument file) cmd))
@@ -1160,9 +1225,12 @@ Copies the resulting URL to the kill ring and clipboard."
                    (shell-command-on-region (point-min) (point-max) cmd nil t)
                    (buffer-string))))))
     (if (string-prefix-p "https://" url)
-        (progn
-          (kill-new url)
-          (message "Uploaded: %s" url))
+        (let ((final-url (if (and ext (member (downcase ext)
+                                              '("png" "jpg" "jpeg" "gif" "webp" "svg" "bmp" "ico" "tiff")))
+                              (concat url "?r=1")
+                            url)))
+          (kill-new final-url)
+          (message "Uploaded: %s" final-url))
       (message "Upload failed"))))
 
 (defun my/snip-upload-file ()
@@ -1623,6 +1691,8 @@ Skips capture tasks and projects."
       org-agenda-skip-scheduled-if-done t
       org-agenda-skip-deadline-if-done t)
 
+(setq org-agenda-scheduled-leaders '("" "-%2d"))
+
 (setq org-agenda-time-grid
   '((daily today require-timed)
     (800 1000 1200 1400 1600 1800 2000)
@@ -1642,6 +1712,7 @@ Skips capture tasks and projects."
 ;; d - Today: daily driver, what to focus on now
 ;; w - Week:  calendar + upcoming + backlog
 ;; p - Projects: all project tasks by state
+;; o - Overview: schedule + topics (project/dev/blog/self) + backlog
 
 (setq org-agenda-custom-commands
   '(
@@ -1754,7 +1825,87 @@ Skips capture tasks and projects."
             (:name "NEXT"   :todo "NEXT"   :order 2)
             (:name "TODO"   :todo "TODO"   :order 3)
             (:name "WAIT"   :todo "WAIT"   :order 4)
-            (:discard (:anything t))))))))))
+            (:discard (:anything t))))))))
+
+    ;; ── Overview ───────────────────────────────────────────
+    ;; Full dashboard: schedule + topic sections + backlog
+    ("o" "Overview"
+     (
+       ;; Block 1: today's agenda — schedule, deadlines, overdue
+       (agenda ""
+         ((org-agenda-span 1)
+          (org-agenda-start-day ".")
+          (org-deadline-warning-days 3)
+          (org-agenda-show-future-repeats nil)
+          (org-agenda-overriding-header "")
+          (org-super-agenda-groups
+           '((:name "Overdue"
+              :scheduled past
+              :deadline past
+              :order 0)
+             (:name "Schedule"
+              :time-grid t
+              :order 1)
+             (:name "Deadlines"
+              :deadline today
+              :order 2)
+             (:discard (:anything t))))))
+
+       ;; Block 2: project
+       (org-ql-block '(and (tags "project")
+                           (not (done)))
+         ((org-ql-block-header "Project")
+          (org-super-agenda-groups
+           '((:name "ACTIVE" :todo "ACTIVE" :order 1)
+             (:name "NEXT"   :todo "NEXT"   :order 2)
+             (:name "TODO"   :todo "TODO"   :order 3)
+             (:name "WAIT"   :todo "WAIT"   :order 4)
+             (:discard (:anything t))))))
+
+       ;; Block 3: development
+       (org-ql-block '(and (tags "development")
+                           (not (done)))
+         ((org-ql-block-header "Development")
+          (org-super-agenda-groups
+           '((:name "ACTIVE" :todo "ACTIVE" :order 1)
+             (:name "NEXT"   :todo "NEXT"   :order 2)
+             (:name "TODO"   :todo "TODO"   :order 3)
+             (:name "WAIT"   :todo "WAIT"   :order 4)
+             (:discard (:anything t))))))
+
+       ;; Block 4: blog
+       (org-ql-block '(and (tags "blog")
+                           (not (done)))
+         ((org-ql-block-header "Blog")
+          (org-super-agenda-groups
+           '((:name "ACTIVE" :todo "ACTIVE" :order 1)
+             (:name "NEXT"   :todo "NEXT"   :order 2)
+             (:name "TODO"   :todo "TODO"   :order 3)
+             (:name "WAIT"   :todo "WAIT"   :order 4)
+             (:discard (:anything t))))))
+
+       ;; Block 5: self
+       (org-ql-block '(and (tags "self")
+                           (not (done)))
+         ((org-ql-block-header "Self")
+          (org-super-agenda-groups
+           '((:name "ACTIVE" :todo "ACTIVE" :order 1)
+             (:name "NEXT"   :todo "NEXT"   :order 2)
+             (:name "TODO"   :todo "TODO"   :order 3)
+             (:name "WAIT"   :todo "WAIT"   :order 4)
+             (:discard (:anything t))))))
+
+       ;; Block 6: backlog — everything not covered above
+       (org-ql-block '(and (todo)
+                           (not (done))
+                           (not (tags "project" "development" "blog" "self")))
+         ((org-ql-block-header "Backlog")
+          (org-super-agenda-groups
+           '((:name "ACTIVE" :todo "ACTIVE" :order 1)
+             (:name "NEXT"   :todo "NEXT"   :order 2)
+             (:name "TODO"   :todo "TODO"   :order 3)
+             (:name "WAIT"   :todo "WAIT"   :order 4)
+             (:discard (:anything t))))))))))
 
 ;;; --- Theme-adaptive TODO keyword faces ---
 
@@ -1789,8 +1940,69 @@ Skips capture tasks and projects."
       (replace-match ""))))
 
 (add-hook 'org-agenda-finalize-hook #'my/org-agenda-remove-tags)
+
+;;; --- Late-indicator symbols for overdue items ---
+;;
+;; Replaces the numeric "days late" extra field with visual indicators:
+;;   1-2 days: •   3-6 days: !   7-13 days: ‼   14+ days: ✖
+
+(defun my/org-agenda-late-extra (orig-fn extra txt &rest args)
+  "Advice around `org-agenda-format-item' to show overdue indicators."
+  (let* ((agenda-extra
+          (let ((d (when (stringp extra)
+                     (abs (string-to-number extra)))))
+            (cond
+             ((not d) "")
+             ((= d 0) "")
+             ((< d 3) " •")
+             ((< d 7) " !")
+             ((< d 14) " ‼")
+             (t " ✖")))))
+    (apply orig-fn agenda-extra txt args)))
+
+(advice-add 'org-agenda-format-item :around
+            #'my/org-agenda-late-extra)
+
+;;; --- Clean up excessive blank lines between agenda blocks ---
+
+(defun my/org-agenda-fix-block-spacing ()
+  "Collapse triple+ newlines to double in the agenda buffer."
+  (goto-char (point-min))
+  (while (re-search-forward "\n\n\n+" nil t)
+    (replace-match "\n\n")))
+
+(add-hook 'org-agenda-finalize-hook
+          #'my/org-agenda-fix-block-spacing)
 #+end_src
 
+** agenda-app
+
+Standalone agenda kiosk. Launch with:
+
+=emacs --eval '(my/agenda-app)' --no-splash=
+
+#+begin_src emacs-lisp
+(defun my/agenda-app ()
+  "Launch Emacs as a dedicated agenda kiosk.
+Opens the 'd' (Today) agenda view in a clean, distraction-free frame.
+Usage: emacs --eval '(my/agenda-app)' --no-splash"
+  (interactive)
+  (set-frame-name "Agenda")
+  (delete-other-windows)
+  (org-agenda nil "d")
+  (delete-other-windows)
+  (setq mode-line-format nil)
+  (menu-bar-mode -1)
+  (tool-bar-mode -1)
+  (scroll-bar-mode -1)
+  (when (bound-and-true-p tab-bar-mode)
+    (tab-bar-mode -1))
+  (when (find-font (font-spec :family "Lato"))
+    (buffer-face-set '(:family "Lato")))
+  (text-scale-increase 2)
+  (hide-mode-line-mode 1)
+  (winner-mode 1))
+#+end_src
 
 ** ox-contrib
 
@@ -2823,8 +3035,9 @@ Errors are caught so a broken EAF never kills the Emacs session."
 
 #+begin_src emacs-lisp
 (use-package olivetti
+  :hook (org-mode . olivetti-mode)
   :custom
-  (olivetti-style 'fancy)  ; Keep margins visible
+  (olivetti-style nil)  ; Use window margins (fringes disabled in early-init)
   (olivetti-margin-width 10)  ; No side margins
   ;; (olivetti-shrink t)
   (olivetti-safe t)
@@ -2856,8 +3069,11 @@ Errors are caught so a broken EAF never kills the Emacs session."
          (text-mode . visual-fill-column-mode)) ;; Das Zentrieren aktivieren
   :custom
   (visual-fill-column-width 110)      ;; Maximale Breite des Textes (statt 0.67 relativ)
-  (visual-fill-column-center-text t) ;; Text zentrieren!
-  (visual-fill-column-enable-sensible-window-split t))
+  (visual-fill-column-center-text nil)
+  (visual-fill-column-enable-sensible-window-split t)
+  :config
+  (when (display-graphic-p)
+    (setq-default visual-fill-column-center-text t)))
 #+end_src
 
 * diff-hl
@@ -4947,7 +5163,7 @@ Includes modeline now-playing indicator.
 
 #+begin_src emacs-lisp
 (my-local-leader
-  "a" '(org-agenda :wk "org agenda")
+  "A" '(org-agenda :wk "org agenda")
   "c" '(my/centered-cursor :wk "center cursor")
   "d" '(dashboard-open :wk "dashboard")
   "f" '(dirvish :wk "file manager")
@@ -4966,7 +5182,14 @@ Includes modeline now-playing indicator.
   "gf" '(gptel-add-file :wk "add file to gptel")
   "gA" '(gptel-abort :wk "abort response")
   "gr" '(gptel-rewrite :wk "rewrite section")
-  "gm" '(gptel-menu :wk "open gptel menu"))
+  "gm" '(gptel-menu :wk "open gptel menu")
+
+  "a" '(:wk "agent-shell" :ignore)
+  "aa" '(agent-shell :wk "open agent shell")
+  "at" '(agent-shell-toggle :wk "toggle agent shell")
+  "ac" '(agent-shell-prompt-compose :wk "compose prompt")
+  "av" '(agent-shell-set-session-model :wk "set model")
+  "aT" '(agent-shell-open-transcript :wk "transcript"))
 #+end_src
 
 ** emms-keybinds
@@ -5237,9 +5460,8 @@ this package provides the ability to display rgb and hex colors.
                ewm-transient ewm-stop-module)
     :custom
     (ewm-mouse-follows-focus t)
-    (ewm-output-config '(("DSI-1" :width 1200 :height 1920 :transform 1 :scale 1.0)))
-    (ewm-input-config '((touchpad :natural-scroll t :tap t :dwt t :accel-speed 0.0)
-                         (keyboard :repeat-delay 200 :repeat-rate 25)))
+    (ewm-output-config '(("DSI-1" :width 800 :height 1280 :transform 0 :scale 1.0)))
+    (ewm-input-config '((keyboard :repeat-delay 200 :repeat-rate 25)))
     (ewm-idle 300)
     :config
     (require 'ewm-transient)
