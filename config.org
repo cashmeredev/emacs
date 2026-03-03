@@ -5458,13 +5458,12 @@ this package provides the ability to display rgb and hex colors.
                ewm-screenshot ewm-show-state ewm-debug-mode
                ewm-lock-session ewm-next-surface-buffer ewm-prev-surface-buffer
                ewm-transient ewm-stop-module)
-    :custom
-    (ewm-mouse-follows-focus t)
-    (ewm-output-config '(("DSI-1" :width 800 :height 1280 :transform 0 :scale 1.0)))
-    (ewm-input-config '((keyboard :repeat-delay 200 :repeat-rate 25)))
-    (ewm-idle 300)
     :config
     (require 'ewm-transient)
+    (setq ewm-mouse-follows-focus t)
+    (setq ewm-output-config '(("DSI-1" :width 800 :height 1280 :transform 3 :scale 1.0)))
+    (setq ewm-input-config '((keyboard :repeat-delay 200 :repeat-rate 25)))
+    (setq ewm-idle 300)
 
     ;; vim-style window nav on super key (works inside surface buffers)
     (when (and (boundp 'ewm-mode-map) (keymapp ewm-mode-map))
