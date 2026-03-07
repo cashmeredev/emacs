@@ -62,3 +62,4 @@ dirvish/thumbnails
 .env
 /elfeed/data/
 /eaf/
+*.md

@@ -9,14 +9,14 @@
 #+begin_src emacs-lisp 
 ;;; config.el --- Emacs-Kick --- A feature rich Emacs config for (neo)vi(m)mers -*- lexical-binding: t; -*-
 ;; (setenv "LSP_USE_PLISTS" "true")
-;; (setq debug-on-error '(wrong-type-argument))
+;; (setq debug-on-error t)
 ;; (setq gc-cons-threshold #x40000000)
 ;; (setq gc-cons-threshold 50000000)
 ;; (setenv "LSP_USE_PLISTS" "true")
 ;; (setq lsp-use-plists t)
 (setq pgtk-wait-for-event-timeout 0.001)
 (setq package-enable-at-startup nil)
-(setq-default mode-line-format t)
+;; (setq-default mode-line-format t) ;; disabled: boolean t is not valid for mode-line-format
 (setq default-frame-alist '((undecorated . t)))
 (setq gc-cons-threshold 100000000)
 
@@ -960,6 +960,7 @@ Not necessary but an eyecandy to look at!
 (use-package flycheck
   :ensure t
   :config
+  (setq flycheck-global-modes '(not org-mode))
   (add-hook 'after-init-hook #'global-flycheck-mode))
 #+end_src
 
@@ -1185,14 +1186,46 @@ Old config
 
 #+begin_src emacs-lisp
 (with-eval-after-load 'org
+  (setq org-confirm-babel-evaluate nil)
   (org-babel-do-load-languages
    'org-babel-load-languages
    '((emacs-lisp . t)
      (shell . t)
-	 (python . t)
+     (python . t)
+     (ruby . t)
+     (perl . t)
+     (C . t)
+     (js . t)
+     (css . t)
+     (sass . t)
+     (sql . t)
+     (sqlite . t)
+     (lua . t)
+     (lisp . t)
+     (scheme . t)
+     (clojure . t)
+     (haskell . t)
+     (ocaml . t)
+     (java . t)
      (dot . t)
-	 (C . t)
-	 (makefile . t))))
+     (gnuplot . t)
+     (plantuml . t)
+     (ditaa . t)
+     (calc . t)
+     (latex . t)
+     (org . t)
+     (makefile . t)
+     (awk . t)
+     (sed . t)
+     (screen . t)
+     (eshell . t))))
+#+end_src
+
+** ob-async
+
+#+begin_src emacs-lisp
+(use-package ob-async
+  :after org)
 #+end_src
 
 ** my/snip-upload
@@ -2638,9 +2671,10 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (setq eglot-autoshutdown t)
   (setq eglot-send-changes-idle-time 0.1)
   (setq eglot-sync-connect nil)
-  (setq eglot-connect-timeout nil)
+  (setq eglot-connect-timeout 30)
   (setq eglot-events-buffer-size 0)
   (setq eglot-report-progress nil)
+  (setq jsonrpc-default-request-timeout 10)
   
   (add-hook 'eglot-managed-mode-hook 
             (lambda () 
@@ -2787,15 +2821,65 @@ ily <3.
 #+end_src
 
 
-** js-mode
+** JavaScript / TypeScript / Vue
+
+JavaScript and TypeScript support via tree-sitter modes and [[https://github.com/joaotavora/rassumfrassum][rassumfrassum]]. The =rass tslint= preset multiplexes =typescript-language-server= + =eslint=. 
+Vue files use =web-mode= with the =rass vuetail= preset (=vue-language-server= + =tailwindcss-language-server=).
+
+*** js-mode
 
 #+begin_src emacs-lisp
 (use-package js
   :ensure t
   :mode ("\\.js\\'" . js-mode)
+  :hook (js-mode . eglot-ensure)
   :config
-  (setq js-indent-level 2))
+  (setq js-indent-level 2)
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 '(js-mode . ("rass" "tslint")))))
+#+end_src
 
+*** typescript-ts-mode
+
+Uses built-in tree-sitter modes for =.ts= and =.tsx= files.
+Requires tree-sitter grammars: =M-x treesit-install-language-grammar RET typescript= (and =tsx=).
+
+#+begin_src emacs-lisp
+(use-package typescript-ts-mode
+  :straight nil
+  :ensure nil
+  :mode (("\\.ts\\'" . typescript-ts-mode)
+         ("\\.tsx\\'" . tsx-ts-mode))
+  :hook ((typescript-ts-mode . eglot-ensure)
+         (tsx-ts-mode . eglot-ensure))
+  :config
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 '((typescript-ts-mode tsx-ts-mode) . ("rass" "tslint")))))
+#+end_src
+
+*** web-mode (Vue)
+
+#+begin_src emacs-lisp
+(use-package web-mode
+  :ensure t
+  :mode "\\.vue\\'"
+  :hook (web-mode . eglot-ensure)
+  :config
+  (setq web-mode-markup-indent-offset 2)
+  (setq web-mode-css-indent-offset 2)
+  (setq web-mode-code-indent-offset 2)
+  (setq web-mode-style-padding 2)
+  (setq web-mode-script-padding 2)
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 '(web-mode . ("rass" "vuetail")))))
+#+end_src
+
+*** mint-mode
+
+#+begin_src emacs-lisp
 (use-package mint-mode
   :straight (mint-mode
              :type git
@@ -2943,92 +3027,6 @@ ily <3.
 (use-package multi-vterm
   :ensure t
   :defer t)
-#+end_src
-
-** eee.el
-
-#+begin_src emacs-lisp
-(use-package eee
-  :ensure t
-  :straight (:type git :host github :repo "eval-exec/eee.el"
-                 :files (:defaults "*.el" "*.sh"))
-  :config
-  (setq ee-terminal-command "kitty"))
-#+end_src
-
-* eaf
-
-Emacs Application Framework -- browser and terminal via Qt widgets.
-Evil integration uses =C-SPC= to access the leader keymap inside EAF buffers.
-
-EAF loading is deferred until a graphical frame exists so the daemon
-can start headless without crashing.  All requires are wrapped in
-=condition-case= so a broken EAF never takes down the rest of init.
-
-#+begin_src emacs-lisp
-;; Settings can be declared before EAF loads -- they are just variables.
-(setq eaf-pyqterminal-font-size 24
-      eaf-pyqterminal-refresh-ms 17
-      eaf-pyqterminal-font-family "GeistMono Nerd Font"
-      ;; eaf-pyqterminal-cursor-type "bar"
-      ;; eaf-pyqterminal-cursor-size 1
-      )
-
-(defvar my/eaf-loaded nil
-  "Non-nil after EAF has been successfully loaded.")
-
-(defun my/eaf-init ()
-  "Load EAF and its apps, but only when a graphical display is available.
-Errors are caught so a broken EAF never kills the Emacs session."
-  (when (and (display-graphic-p) (not my/eaf-loaded))
-    (condition-case err
-        (progn
-          (require 'eaf)
-          (require 'eaf-browser)
-          (require 'eaf-pyqterminal)
-          (require 'eaf-auralis)
-
-          ;; Evil leader integration
-          (when (featurep 'evil)
-            (require 'eaf-evil)
-            (setq eaf-evil-leader-key "C-SPC")
-            (let ((leader-km (when (boundp 'general-override-mode-map)
-                               (lookup-key
-                                (evil-get-auxiliary-keymap general-override-mode-map 'normal)
-                                (kbd "SPC")))))
-              (when (keymapp leader-km)
-                (setq eaf-evil-leader-keymap leader-km))))
-
-          ;; Process sentinel: clean up buffers when the EAF python
-          ;; process dies unexpectedly instead of leaving zombies.
-          (advice-add 'eaf--start-process :after
-                      (lambda (&rest _)
-                        (when-let* ((proc (get-process "eaf")))
-                          (set-process-sentinel
-                           proc
-                           (lambda (process event)
-                             (when (memq (process-status process) '(exit signal))
-                               (message "EAF process terminated: %s" (string-trim event))
-                               (dolist (buf (buffer-list))
-                                 (when (and (buffer-live-p buf)
-                                            (with-current-buffer buf
-                                              (derived-mode-p 'eaf-mode)))
-                                   (with-current-buffer buf
-                                     (let ((inhibit-read-only t))
-                                       (erase-buffer)
-                                       (insert (format "EAF process crashed: %s\nRe-open this buffer to restart."
-                                                       (string-trim event)))))))))))))
-
-          (setq my/eaf-loaded t)
-          (message "EAF loaded successfully."))
-      (error
-       (message "EAF failed to load: %s" (error-message-string err))))))
-
-;; Daemon: wait for the first graphical frame, then load EAF once.
-;; Normal start: load immediately.
-(if (daemonp)
-    (add-hook 'server-after-make-frame-hook #'my/eaf-init)
-  (add-hook 'after-init-hook #'my/eaf-init))
 #+end_src
 
 * olivetti
@@ -3503,47 +3501,6 @@ every =emacsclient -c= frame gets its own set of perspectives.
     (consult-customize consult--source-buffer :hidden t :default nil)
     (add-to-list 'consult-buffer-sources persp-consult-source))
 
-  ;; ---- EAF workspace helpers ------------------------------------
-
-  (defun persp-eaf-open (persp-name eaf-open-fn)
-    "Switch to PERSP-NAME and call EAF-OPEN-FN unless a live EAF buffer exists."
-    (unless my/eaf-loaded
-      (user-error "EAF is not loaded -- open a graphical frame first"))
-    (persp-switch persp-name)
-    (unless (cl-some (lambda (buf)
-                       (and (buffer-live-p buf)
-                            (with-current-buffer buf
-                              (derived-mode-p 'eaf-mode))))
-                     (persp-buffers (persp-curr)))
-      (condition-case err
-          (funcall eaf-open-fn)
-        (error
-         (message "EAF open failed in perspective '%s': %s"
-                  persp-name (error-message-string err))))))
-
-  (defun persp-eaf-terminal ()
-    "Open pyqterminal in the terminal perspective."
-    (interactive)
-    (persp-eaf-open "terminal" #'eaf-open-pyqterminal))
-
-  (defun persp-eaf-auralis ()
-    "Open the auralis dashboard in the auralis perspective."
-    (interactive)
-    (persp-eaf-open "auralis" #'eaf-open-auralis))
-
-  ;; Reposition Qt widgets in ALL windows after a perspective switch,
-  ;; not just the current buffer.  Without this, EAF overlays in
-  ;; non-selected windows become misaligned.
-  (add-hook 'persp-activated-hook
-            (lambda ()
-              (when (fboundp 'eaf-monitor-configuration-change)
-                (walk-windows
-                 (lambda (win)
-                   (with-current-buffer (window-buffer win)
-                     (when (derived-mode-p 'eaf-mode)
-                       (eaf-monitor-configuration-change))))
-                 nil (selected-frame)))))
-
   ;; ---- keybindings via general ----------------------------------
 
   (my-leader
@@ -3556,104 +3513,10 @@ every =emacsclient -c= frame gets its own set of perspectives.
     "TAB b" '(persp-switch-to-buffer :wk "buffer")
     "TAB B" '(consult-buffer :wk "global buffer")
     "TAB a" '(persp-add-buffer :wk "add buffer")
-    "TAB k" '(persp-remove-buffer :wk "remove buffer")
-    "TAB 1" '(persp-eaf-terminal :wk "terminal")
-    "TAB 2" '(persp-eaf-auralis :wk "auralis")))
+    "TAB k" '(persp-remove-buffer :wk "remove buffer")))
 #+end_src
 
-* eaf-frames
 
-Open EAF apps in dedicated frames (independent WM windows).  Each frame
-is named so it can be found and focused instead of spawning duplicates.
-Useful for tiling EAF apps on separate monitors via mango keybinds.
-
-#+begin_src emacs-lisp
-(defvar eaf-named-frames nil
-  "Alist of (NAME . frame) for dedicated EAF frames.")
-
-(defun eaf-frame-open (name open-fn &optional width height)
-  "Open or focus a dedicated frame NAME running EAF app via OPEN-FN.
-If OPEN-FN signals an error the newly created frame is deleted
-so no empty zombie frames are left behind."
-  (interactive)
-  (unless my/eaf-loaded
-    (user-error "EAF is not loaded -- open a graphical frame first"))
-  (let ((existing (alist-get name eaf-named-frames nil nil #'string=)))
-    (if (and existing (frame-live-p existing))
-        (select-frame-set-input-focus existing)
-      ;; Remove stale entry
-      (setq eaf-named-frames
-            (assoc-delete-all name eaf-named-frames #'string=))
-      (let ((frame (make-frame `((name . ,(format "EAF: %s" name))
-                                 (width . ,(or width 120))
-                                 (height . ,(or height 40))))))
-        (select-frame-set-input-focus frame)
-        (condition-case err
-            (progn
-              (push (cons name frame) eaf-named-frames)
-              (funcall open-fn))
-          (error
-           (setq eaf-named-frames
-                 (assoc-delete-all name eaf-named-frames #'string=))
-           (delete-frame frame)
-           (message "EAF frame '%s' failed: %s" name
-                    (error-message-string err))))))))
-
-(defun eaf-frame-pyqterminal ()
-  "Open pyqterminal in a dedicated frame."
-  (interactive)
-  (eaf-frame-open "terminal" #'eaf-open-pyqterminal))
-
-(defun eaf-frame-auralis ()
-  "Open auralis dashboard in a dedicated frame."
-  (interactive)
-  (eaf-frame-open "auralis" #'eaf-open-auralis))
-
-(defun eaf-frame-browser (url)
-  "Open EAF browser in a dedicated frame."
-  (interactive "sURL: ")
-  (eaf-frame-open "browser" (lambda () (eaf-open-browser url))))
-
-(my-leader
-  "o" '(:ignore t :wk "open frame")
-  "ot" '(eaf-frame-pyqterminal :wk "terminal")
-  "oa" '(eaf-frame-auralis :wk "auralis")
-  "ob" '(eaf-frame-browser :wk "browser"))
-#+end_src
-
-* auralis music controls
-
-Native Emacs keybindings for auralis music player control.  These work
-globally (no EAF buffer required) by calling the auralis API directly.
-Includes modeline now-playing indicator.
-
-#+begin_src emacs-lisp
-;; Load auralis unconditionally — it only makes HTTP calls and has no
-;; EAF dependency.  Auto-enable the modeline polling timer on load.
-(condition-case err
-    (progn
-      (require 'auralis)
-      (auralis-modeline-enable))
-  (error (message "auralis failed to load: %s" (error-message-string err))))
-
-(my-leader
-  "m" '(:ignore t :wk "music")
-  "m SPC" '(auralis-play-pause :wk "play/pause")
-  "mn" '(auralis-next :wk "next track")
-  "mp" '(auralis-prev :wk "prev track")
-  "ms" '(auralis-search :wk "search library")
-  "mr" '(auralis-play-random :wk "shuffle all")
-  "mi" '(auralis-now-playing :wk "now playing")
-  "m+" '(auralis-volume-up :wk "volume up")
-  "m-" '(auralis-volume-down :wk "volume down")
-  "mS" '(auralis-toggle-shuffle :wk "toggle shuffle")
-  "mR" '(auralis-toggle-repeat :wk "toggle repeat")
-  "mA" '(auralis-toggle-radio :wk "toggle auto-radio")
-  "mq" '(auralis-stop :wk "stop")
-  "mL" '(auralis-scan-library :wk "scan library")
-  "mm" '(auralis-modeline-enable :wk "modeline on")
-  "mM" '(auralis-modeline-disable :wk "modeline off"))
-#+end_src
 
 * nerd icons
 
@@ -4152,16 +4015,6 @@ Includes modeline now-playing indicator.
            (desc (tmr-mode-line--format-description timer)))
       (concat remaining desc)))
 
-  (maple-modeline-define-segment auralis-now-playing
-    :if (and (boundp 'auralis--modeline-string)
-             (not (string-empty-p auralis--modeline-string)))
-    :format
-    (concat
-     (maple-modeline--concat-or
-      (maple-modeline--icon 'mdicon "nf-md-music" face)
-      "♪")
-     auralis--modeline-string))
-
   (maple-modeline-define my-custom-style
     :left ((evil :left (bar :left ""))
            macro
@@ -4173,7 +4026,6 @@ Includes modeline now-playing indicator.
     :right (narrow
             org-clock-task
             tmr-timer
-            auralis-now-playing
             python
             my-modeline-time
             process
@@ -5168,7 +5020,6 @@ Includes modeline now-playing indicator.
   "d" '(dashboard-open :wk "dashboard")
   "f" '(dirvish :wk "file manager")
   "t" '(multi-vterm :wk "terminal")
-  "T" '(eaf-open-pyqterminal :wk "eaf terminal")
   "z" '(golden-ratio-mode :wk "zoom/golden ratio")
   "i" '(persp-irc :wk "irc")
   "m" '(mu4e :wk "mail")
@@ -5451,31 +5302,126 @@ this package provides the ability to display rgb and hex colors.
 * ewm
 
 #+begin_src emacs-lisp
-(when (string= (system-name) "sportmacher")
-  (use-package ewm
-    :straight nil
-    :commands (ewm-start-module ewm-launch-app ewm-toggle-fullscreen
-               ewm-screenshot ewm-show-state ewm-debug-mode
-               ewm-lock-session ewm-next-surface-buffer ewm-prev-surface-buffer
-               ewm-transient ewm-stop-module)
-    :custom
-    (ewm-mouse-follows-focus t)
-    (ewm-output-config '(("DSI-1" :width 800 :height 1280 :transform 3 :scale 1.0)))
-    (ewm-input-config '((keyboard :repeat-delay 200 :repeat-rate 25)))
-    (ewm-idle 300)
-    :config
-    (require 'ewm-transient)
+(with-eval-after-load 'ewm
+  (require 'ewm-transient)
 
-    ;; vim-style window nav on super key (works inside surface buffers)
-    (when (and (boundp 'ewm-mode-map) (keymapp ewm-mode-map))
-      (define-key ewm-mode-map (kbd "s-h") #'windmove-left)
-      (define-key ewm-mode-map (kbd "s-j") #'windmove-down)
-      (define-key ewm-mode-map (kbd "s-k") #'windmove-up)
-      (define-key ewm-mode-map (kbd "s-l") #'windmove-right)
-      (define-key ewm-mode-map (kbd "s-q") #'kill-current-buffer)
-      (define-key ewm-mode-map (kbd "s-S-q") #'ewm-stop-module)))
+  ;; ── Bugfix: guard against nil output in pointer functions ──
+  ;; ewm-input--pointer-in-window-p crashes with "stringp, nil" when
+  ;; called on a frame without ewm-output (e.g. the initial daemon frame
+  ;; during startup when dashboard does switch-to-buffer).
+  (defun ewm-input--pointer-in-window-p (window)
+    "Return non-nil if pointer is inside WINDOW. Safe for non-EWM frames."
+    (let* ((frame (window-frame window))
+           (output (frame-parameter frame 'ewm-output)))
+      (when output
+        (let* ((output-offset (ewm--get-output-offset output))
+               (edges (window-inside-pixel-edges window))
+               (left (+ (car output-offset) (nth 0 edges)))
+               (top (+ (cdr output-offset) (nth 1 edges)))
+               (right (+ (car output-offset) (nth 2 edges)))
+               (bottom (+ (cdr output-offset) (nth 3 edges)))
+               (pointer (ewm-get-pointer-location))
+               (px (car pointer))
+               (py (cdr pointer)))
+          (and (<= left px right)
+               (<= top py bottom))))))
 
-  ;; ewm leader bindings under SPC e
+  (defun ewm-input--warp-pointer-to-window (window)
+    "Warp pointer to center of WINDOW. Safe for non-EWM frames."
+    (unless (minibufferp (window-buffer window))
+      (let* ((frame (window-frame window))
+             (output (frame-parameter frame 'ewm-output)))
+        (when (and output (not (ewm-input--pointer-in-window-p window)))
+          (let* ((output-offset (ewm--get-output-offset output))
+                 (edges (window-inside-pixel-edges window))
+                 (x (+ (car output-offset) (/ (+ (nth 0 edges) (nth 2 edges)) 2)))
+                 (y (+ (cdr output-offset) (/ (+ (nth 1 edges) (nth 3 edges)) 2))))
+            (ewm-warp-pointer (float x) (float y)))))))
+
+  ;; ── Settings ─────────────────────────────────────────────
+  (setq ewm-mouse-follows-focus t)
+  (setq ewm-input-config '((keyboard :repeat-delay 200 :repeat-rate 25)))
+  (setq ewm-idle '(300 . "swaylock -f -c 333333"))
+
+  ;; Per-host output config
+  (pcase (system-name)
+    ("md"
+     (setq ewm-output-config
+           '(("DP-1" :x 0 :y 0 :refresh 144))))
+    ("sportmacher"
+     (setq ewm-output-config
+           '(("DSI-1" :width 800 :height 1280 :transform 3 :scale 1.0)))))
+
+  ;; ── Programm-Launcher ──────────────────────────────────────
+  (define-key ewm-mode-map (kbd "s-<return>")
+    (lambda () (interactive) (start-process "kitty" nil "kitty")))
+  (define-key ewm-mode-map (kbd "M-s-7")
+    (lambda (command)
+      (interactive (list (read-shell-command "$ ")))
+      (start-process-shell-command command nil command)))
+  (define-key ewm-mode-map (kbd "s-SPC")
+    (lambda () (interactive) (start-process "vicinae" nil "vicinae" "toggle")))
+  (define-key ewm-mode-map (kbd "s-b")
+    (lambda () (interactive) (start-process "helium" nil "helium-browser")))
+  (define-key ewm-mode-map (kbd "s-p")
+    (lambda () (interactive) (start-process "vicinae" nil "vicinae" "vicinae://extensions/tinkerbells/pass/pass")))
+  (define-key ewm-mode-map (kbd "s-v")
+    (lambda () (interactive) (start-process "vicinae" nil "vicinae" "vicinae://extensions/vicinae/clipboard/history")))
+  (define-key ewm-mode-map (kbd "s-s")
+    (lambda () (interactive) (start-process "vicinae" nil "vicinae" "vicinae://extensions/vicinae/power")))
+  (define-key ewm-mode-map (kbd "s-d")
+    (lambda () (interactive) (start-process "vicinae" nil "vicinae" "vicinae://extensions/cashmere/deepl-improve/deepl-improve")))
+  (define-key ewm-mode-map (kbd "M-s")
+    (lambda () (interactive) (start-process "snipe" nil "snipe")))
+  (define-key ewm-mode-map (kbd "s-<print>")
+    (lambda () (interactive)
+      (start-process-shell-command "screenshot" nil "grim -g \"$(slurp)\" - | wl-copy")))
+  (define-key ewm-mode-map (kbd "<print>")
+    (lambda () (interactive)
+      (start-process-shell-command "screenshot-pb" nil
+        "grim -g \"$(slurp)\" - | ssh pb@pb.cashmere.rs -- -ext png 2>/dev/null | sed 's/\\x1b\\[[0-9;]*m//g' | grep -oP 'https://\\S+/f/\\S+' | sed 's/$/?r=1/' | wl-copy")))
+
+  ;; ── Window Management ────────────────────────────────────
+  (define-key ewm-mode-map (kbd "s-h") #'windmove-left)
+  (define-key ewm-mode-map (kbd "s-j") #'windmove-down)
+  (define-key ewm-mode-map (kbd "s-k") #'windmove-up)
+  (define-key ewm-mode-map (kbd "s-l") #'windmove-right)
+  (define-key ewm-mode-map (kbd "s-q") #'kill-current-buffer)
+  (define-key ewm-mode-map (kbd "s-f") #'ewm-toggle-fullscreen)
+  (define-key ewm-mode-map (kbd "s-S-q") #'ewm-stop-module)
+
+  ;; tab switching s-0..s-9 (s-0 = tab 10)
+  (dotimes (i 10)
+    (define-key ewm-mode-map
+      (kbd (format "s-%d" i))
+      (let ((n i))
+        (lambda () (interactive) (tab-bar-select-tab (if (= n 0) 10 n))))))
+
+  ;; ── Media Keys ───────────────────────────────────────────
+  (define-key ewm-mode-map (kbd "<XF86AudioLowerVolume>")
+    (lambda () (interactive) (start-process "vol-" nil "pamixer" "-d" "5")))
+  (define-key ewm-mode-map (kbd "<XF86AudioRaiseVolume>")
+    (lambda () (interactive) (start-process "vol+" nil "pamixer" "-i" "5")))
+  (define-key ewm-mode-map (kbd "<XF86AudioMute>")
+    (lambda () (interactive) (start-process "mute" nil "pamixer" "--toggle-mute")))
+  (define-key ewm-mode-map (kbd "<XF86AudioMicMute>")
+    (lambda () (interactive)
+      (start-process-shell-command "micmute" nil
+        "pactl list sources short | grep input | awk '{print $1}' | xargs -I{} pactl set-source-mute {} toggle")))
+  (define-key ewm-mode-map (kbd "<XF86AudioPlay>")
+    (lambda () (interactive) (start-process "play" nil "playerctl" "play-pause")))
+  (define-key ewm-mode-map (kbd "<XF86AudioMedia>")
+    (lambda () (interactive) (start-process "play" nil "playerctl" "play-pause")))
+  (define-key ewm-mode-map (kbd "<XF86AudioNext>")
+    (lambda () (interactive) (start-process "next" nil "playerctl" "next")))
+  (define-key ewm-mode-map (kbd "<XF86AudioPrev>")
+    (lambda () (interactive) (start-process "prev" nil "playerctl" "previous")))
+  (define-key ewm-mode-map (kbd "<XF86MonBrightnessUp>")
+    (lambda () (interactive) (start-process "bri+" nil "brightnessctl" "set" "+5%")))
+  (define-key ewm-mode-map (kbd "<XF86MonBrightnessDown>")
+    (lambda () (interactive) (start-process "bri-" nil "brightnessctl" "set" "5%-")))
+
+  ;; ── Leader bindings under SPC e ──────────────────────────
   (my-leader
     "e"   '(:ignore t :wk "ewm")
     "e a" '(ewm-launch-app :wk "launch app")
