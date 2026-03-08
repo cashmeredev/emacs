@@ -5416,8 +5416,15 @@ this package provides the ability to display rgb and hex colors.
                  (y (+ (cdr output-offset) (/ (+ (nth 1 edges) (nth 3 edges)) 2))))
             (ewm-warp-pointer (float x) (float y)))))))
 
-  ;; ── Settings ─────────────────────────────────────────────
-  (setq ewm-mouse-follows-focus t)
+   ;; ── Modeline: move back to bottom, use minimal style ────
+   (when (bound-and-true-p maple-modeline-mode)
+     (setq maple-modeline-style 'ewm-style)
+     (setq-default mode-line-format tab-line-format)
+     (setq-default tab-line-format nil)
+     (force-mode-line-update t))
+
+   ;; ── Settings ─────────────────────────────────────────────
+   (setq ewm-mouse-follows-focus t)
   (setq ewm-input-config '((keyboard :repeat-delay 200 :repeat-rate 25)))
   (setq ewm-idle '(300 . "swaylock -f -c 333333"))
 
