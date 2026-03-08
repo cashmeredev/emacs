@@ -848,62 +848,6 @@ Not necessary but an eyecandy to look at!
   (setq gptel-backends (list my/openrouter-backend)))
 #+end_src
 
-** agent-shell
-
-#+begin_src emacs-lisp
-(use-package shell-maker
-  :ensure t
-  :straight (:host github :repo "xenodium/shell-maker"))
-
-(use-package acp
-  :ensure t
-  :straight (:host github :repo "xenodium/acp.el"))
-
-(use-package agent-shell
-  :ensure t
-  :straight (:host github :repo "xenodium/agent-shell")
-  :commands (agent-shell agent-shell-toggle agent-shell-prompt-compose)
-  :config
-  (setq agent-shell-anthropic-claude-acp-command '("claude-code-acp"))
-  (setq agent-shell-new-shell-config
-        (agent-shell-anthropic-make-claude-code-config))
-
-  (general-def 'normal agent-shell-mode-map
-    "q"   'quit-window
-    "Q"   'agent-shell-interrupt
-    "gr"  'shell-maker-restore-session-from-transcript
-    "gn"  'agent-shell-new-shell
-    "go"  'agent-shell-other-buffer
-    "gp"  'agent-shell-jump-to-latest-permission-button-row
-    "]]"  'agent-shell-next-item
-    "[["  'agent-shell-previous-item
-    "]p"  'agent-shell-next-permission-button
-    "[p"  'agent-shell-previous-permission-button
-    "C-l" 'shell-maker-clear-buffer
-    "/"   'shell-maker-search-history
-    "i"   'evil-insert
-    "I"   'agent-shell-insert-shell-command-output
-    "o"   'agent-shell-prompt-compose
-    "gv"  'agent-shell-set-session-model
-    "gm"  'agent-shell-set-session-mode
-    "gt"  'agent-shell-cycle-session-mode
-    "gT"  'agent-shell-open-transcript
-    "gl"  'agent-shell-view-traffic
-    "gL"  'agent-shell-view-acp-logs
-    "gc"  'agent-shell-toggle-logging
-    "ys"  'agent-shell-send-screenshot
-    "yf"  'agent-shell-send-file
-    "yc"  'agent-shell-send-clipboard-image)
-
-  (add-hook 'agent-shell-mode-hook
-            (lambda ()
-              (setq-local corfu-auto nil)))
-
-  (general-def 'insert agent-shell-mode-map
-    "S-<return>" 'newline
-    "C-c C-c" 'agent-shell-interrupt))
-#+end_src
-
 * eldoc
 
 #+begin_src emacs-lisp
@@ -5094,7 +5038,7 @@ every =emacsclient -c= frame gets its own set of perspectives.
 
 #+begin_src emacs-lisp
 (my-local-leader
-  "A" '(org-agenda :wk "org agenda")
+  "a" '(org-agenda :wk "org agenda")
   "c" '(my/centered-cursor :wk "center cursor")
    "f" '(dirvish :wk "file manager")
   "t" '(multi-vterm :wk "terminal")
@@ -5111,14 +5055,7 @@ every =emacsclient -c= frame gets its own set of perspectives.
   "gf" '(gptel-add-file :wk "add file to gptel")
   "gA" '(gptel-abort :wk "abort response")
   "gr" '(gptel-rewrite :wk "rewrite section")
-  "gm" '(gptel-menu :wk "open gptel menu")
-
-  "a" '(:wk "agent-shell" :ignore)
-  "aa" '(agent-shell :wk "open agent shell")
-  "at" '(agent-shell-toggle :wk "toggle agent shell")
-  "ac" '(agent-shell-prompt-compose :wk "compose prompt")
-  "av" '(agent-shell-set-session-model :wk "set model")
-  "aT" '(agent-shell-open-transcript :wk "transcript"))
+  "gm" '(gptel-menu :wk "open gptel menu"))
 #+end_src
 
 ** emms-keybinds
