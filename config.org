@@ -508,7 +508,7 @@ Temporarily disables notifications during the fetch."
 ;;   (load-theme 'lambda-light))
 #+end_src
 
-* dashboard
+* COMMENT dashboard
 
 #+begin_src emacs-lisp
 (use-package dashboard
@@ -1778,20 +1778,14 @@ Skips capture tasks and projects."
                            (not (done)))
          ((org-ql-block-header "In Progress")
           (org-super-agenda-groups
-           '((:name "ACTIVE"
-              :todo "ACTIVE"
-              :order 1)
-             (:name "NEXT"
-              :todo "NEXT"
-              :order 2)
-             (:discard (:anything t))))))
+           '((:auto-tags t)))))
 
        ;; Block 3: waiting items
        (org-ql-block '(and (todo "WAIT")
                            (not (done)))
          ((org-ql-block-header "Waiting On")
           (org-super-agenda-groups
-           '((:anything t)))))))
+           '((:auto-tags t)))))))
 
     ;; ── Week ───────────────────────────────────────────────
     ("w" "Week"
@@ -2129,6 +2123,21 @@ Org Backend exporter for typst templates written and configured in org mode.
   :after org)
 #+end_src
 
+** ox-slidev
+
+Org Backend exporter for Slidev presentations.
+
+#+begin_src emacs-lisp
+(use-package ox-slidev
+  :ensure t
+  :straight (:type git :host nil
+             :repo "https://dev.cashmere.rs/cashmere/ox-slidev"
+             :files (:defaults "templates"))
+  :after org
+  :config
+  (require 'org-slidev))
+#+end_src
+
 * denote
 
 Denote is objectively the best note taking extension, which you could install. It has a very easy to parse file naming scheme and suports not only org files. It has also transclusion inclusive! if you are interested, then check it out yourself.
@@ -2383,7 +2392,69 @@ Some goodies for better integration with org files.
   (setq tmr-sound-file "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga"
         tmr-notification-urgency 'normal
         tmr-description-list 'tmr-description-history)
-  (define-key global-map (kbd "C-c t") #'tmr-prefix-map))
+  (define-key global-map (kbd "C-c t") #'tmr-prefix-map)
+
+  ;; ── Timer persistence across Emacs restarts ──────────────
+  (defvar my/tmr-save-file
+    (expand-file-name "tmr-timers.eld" user-emacs-directory)
+    "File to persist active tmr timers across Emacs restarts.")
+
+  (defun my/tmr-save-timers ()
+    "Save active (non-finished) tmr timers to `my/tmr-save-file'."
+    (let ((active
+           (cl-loop for timer in tmr--timers
+                    unless (tmr--timer-finishedp timer)
+                    collect (list :end-date (tmr--timer-end-date timer)
+                                 :creation-date (tmr--timer-creation-date timer)
+                                 :input (tmr--timer-input timer)
+                                 :description (tmr--timer-description timer)
+                                 :acknowledgep (tmr--timer-acknowledgep timer)
+                                 :paused-remaining (tmr--timer-paused-remaining timer)))))
+      (with-temp-file my/tmr-save-file
+        (prin1 active (current-buffer)))))
+
+  (defun my/tmr-restore-timers ()
+    "Restore tmr timers from `my/tmr-save-file'.
+Timers that expired while Emacs was closed fire immediately."
+    (require 'tmr)
+    (when (file-exists-p my/tmr-save-file)
+      (let ((saved (with-temp-buffer
+                     (insert-file-contents my/tmr-save-file)
+                     (read (current-buffer)))))
+        (dolist (entry saved)
+          (let* ((end-date (plist-get entry :end-date))
+                 (creation-date (plist-get entry :creation-date))
+                 (input (plist-get entry :input))
+                 (description (plist-get entry :description))
+                 (acknowledgep (plist-get entry :acknowledgep))
+                 (paused-remaining (plist-get entry :paused-remaining))
+                 (remaining (if paused-remaining
+                                paused-remaining
+                              (round (- (float-time end-date) (float-time)))))
+                 (adjusted-end (if (and (not paused-remaining) (<= remaining 0))
+                                   (time-add (current-time) 1)
+                                 end-date))
+                 (timer (tmr--timer-create
+                         :creation-date creation-date
+                         :end-date adjusted-end
+                         :input input
+                         :description description
+                         :acknowledgep acknowledgep
+                         :paused-remaining paused-remaining)))
+            ;; For active timers, schedule the live Emacs timer and store it
+            ;; in the timer-object slot (index 5 in the cl-defstruct vector).
+            ;; We use aset directly to avoid needing setf expanders at
+            ;; macro-expansion time (tmr may not be loaded when config tangles).
+            (unless paused-remaining
+              (let ((live-timer (run-with-timer (max 1 remaining) nil #'tmr--complete timer)))
+                (aset timer 5 live-timer)))
+            (push timer tmr--timers)))
+        (run-hooks 'tmr--update-hook))
+      ;; Clear the save file so we don't double-restore
+      (delete-file my/tmr-save-file)))
+
+  (add-hook 'kill-emacs-hook #'my/tmr-save-timers)
+  (add-hook 'emacs-startup-hook #'my/tmr-restore-timers))
 
 #+end_src
 
@@ -3442,10 +3513,7 @@ Requires tree-sitter grammars: =M-x treesit-install-language-grammar RET typescr
 * org agenda
 
 #+begin_src emacs-lisp
-(add-hook 'org-agenda-mode-hook
-          (lambda ()
-            (add-hook 'auto-save-hook 'org-save-all-org-buffers nil t)
-            (auto-save-mode)))
+(add-hook 'org-agenda-finalize-hook #'org-save-all-org-buffers)
 (use-package org-agenda
   :ensure nil
   :straight nil
@@ -3983,8 +4051,9 @@ every =emacsclient -c= frame gets its own set of perspectives.
   (setq maple-modeline-icon t)
   
   (defun maple-modeline-to-header-line ()
-    (setq-default tab-line-format mode-line-format)
-    (setq-default mode-line-format nil))
+    (unless (featurep 'ewm)
+      (setq-default tab-line-format mode-line-format)
+      (setq-default mode-line-format nil)))
 
   (add-hook 'maple-modeline-mode-hook #'maple-modeline-to-header-line)
 
@@ -4032,7 +4101,17 @@ every =emacsclient -c= frame gets its own set of perspectives.
             count
             position))
 
-  (setq maple-modeline-style 'my-custom-style)
+  (maple-modeline-define ewm-style
+    :left ((evil :left (bar :left ""))
+           buffer-info
+           flycheck
+           version-control)
+    :right (org-clock-task
+            tmr-timer
+            position))
+
+  (setq maple-modeline-style
+        (if (featurep 'ewm) 'ewm-style 'my-custom-style))
 
   :custom-face
   (header-line ((t (:inherit mode-line :box nil))))
@@ -5017,8 +5096,7 @@ every =emacsclient -c= frame gets its own set of perspectives.
 (my-local-leader
   "A" '(org-agenda :wk "org agenda")
   "c" '(my/centered-cursor :wk "center cursor")
-  "d" '(dashboard-open :wk "dashboard")
-  "f" '(dirvish :wk "file manager")
+   "f" '(dirvish :wk "file manager")
   "t" '(multi-vterm :wk "terminal")
   "z" '(golden-ratio-mode :wk "zoom/golden ratio")
   "i" '(persp-irc :wk "irc")
