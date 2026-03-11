@@ -1,5 +1,6 @@
 ;;; noctalia-theme.el --- Noctalia theme for Emacs -*- lexical-binding: t -*-
 
+
 ;; Copyright (C) 2025
 
 ;; Author: Noctalia User Template (Fixed)
@@ -18,55 +19,55 @@
 (deftheme noctalia "Noctalia theme with proper color contrast.")
 
 (let* (;; Core surface colors
-       (bg "#1e1e2e")
-       (fg "#cdd6f4")
-       (surface "#1e1e2e")
-       (on-surface "#cdd6f4")
-       (on-surface-variant "#a3b4eb")
-       (surface-variant "#313244")
-       (surface-container "#313244")
-       (surface-container-low "#272839")
-       (surface-container-lowest "#212232")
-       (surface-container-high "#3a3b50")
-       (surface-container-highest "#42435c")
+       (bg "#0c1017")
+       (fg "#5c8ac4")
+       (surface "#0c1017")
+       (on-surface "#5c8ac4")
+       (on-surface-variant "#9b6bc1")
+       (surface-variant "#11151d")
+       (surface-container "#11151d")
+       (surface-container-low "#0e121a")
+       (surface-container-lowest "#0d1118")
+       (surface-container-high "#191e2a")
+       (surface-container-highest "#202837")
 
        ;; Accent colors (always readable on surface)
-       (primary "#b4befe")
-       (secondary "#f5bde6")
-       (tertiary "#c6a0f6")
-       (err "#f38ba8")
+       (primary "#c4a82e")
+       (secondary "#d14358")
+       (tertiary "#00a66c")
+       (err "#b32d2d")
 
        ;; Container colors (for BACKGROUNDS only, never as foreground text)
-       (primary-container "#0123ff")
-       (secondary-container "#f10fb4")
-       (tertiary-container "#6503e1")
-       (err-container "#c8043a")
+       (primary-container "#443909")
+       (secondary-container "#560c17")
+       (tertiary-container "#004c32")
+       (err-container "#430a0a")
 
        ;; On-color text (for text ON accent backgrounds)
-       (on-primary "#11111b")
-       (on-secondary "#11111b")
-       (on-tertiary "#11111b")
-       (on-err "#11111b")
+       (on-primary "#0e1015")
+       (on-secondary "#0e1015")
+       (on-tertiary "#0e1015")
+       (on-err "#0e1015")
 
        ;; On-container text (for text on container backgrounds)
-       (on-primary-container "#cdd3fe")
-       (on-secondary-container "#340829")
-       (on-tertiary-container "#e3d0fb")
-       (on-err-container "#fbd7e1")
+       (on-primary-container "#f5efd6")
+       (on-secondary-container "#f5d6db")
+       (on-tertiary-container "#ccffed")
+       (on-err-container "#f5d6d6")
 
        ;; Outline colors
-       (outline-color "#646789")
-       (outline-variant "#44465d")
+       (outline-color "#45a0d6")
+       (outline-variant "#2578a9")
 
        ;; Shadow
-       (shadow "#11111b")
+       (shadow "#090d13")
 
        ;; Auto-lightness variants: lighten in dark mode, darken in light mode
        ;; Used for heading levels 5-7, rainbow delimiters 5-7, terminal variants
-       (primary-variant "#697dfd")
-       (secondary-variant "#eb7bcd")
-       (tertiary-variant "#9c5aef")
-       (err-variant "#ec4674"))
+       (primary-variant "#dbc464")
+       (secondary-variant "#a02739")
+       (tertiary-variant "#00f29e")
+       (err-variant "#d55858"))
 
   (custom-theme-set-faces
    'noctalia
