@@ -1,13 +1,13 @@
 ;;; config.el --- Emacs-Kick --- A feature rich Emacs config for (neo)vi(m)mers -*- lexical-binding: t; -*-
 ;; (setenv "LSP_USE_PLISTS" "true")
-;; (setq debug-on-error '(wrong-type-argument))
+;; (setq debug-on-error t)
 ;; (setq gc-cons-threshold #x40000000)
 ;; (setq gc-cons-threshold 50000000)
 ;; (setenv "LSP_USE_PLISTS" "true")
 ;; (setq lsp-use-plists t)
 (setq pgtk-wait-for-event-timeout 0.001)
 (setq package-enable-at-startup nil)
-(setq-default mode-line-format t)
+;; (setq-default mode-line-format t) ;; disabled: boolean t is not valid for mode-line-format
 (setq default-frame-alist '((undecorated . t)))
 (setq gc-cons-threshold 100000000)
 
@@ -27,38 +27,7 @@
 (setq kept-new-versions             5)
 (setq kept-old-versions             5)
 
-(defvar yy/cache-2 nil)
-
-(defun yy/load-cache ()
-  (setq yy/cache-2
-        (condition-case e
-            (car (read-from-string
-                  (with-temp-buffer
-                    (insert-file-contents
-                     (file-name-concat user-emacs-directory "ycache.eld"))
-                    (buffer-substring (point-min) (point-max)))))
-          (error nil))))
-            ;;(make-hash-table :test #'equal))))
-(yy/load-cache)
-
-(defun yy/load-path-filter (path file suffixes)
-  (if-let* ((ls (with-memoization (alist-get file yy/cache-2 nil nil #'equal)
-                  (let ((res (load-path-filter-cache-directory-files path file suffixes)))
-                    (if (eq res path) nil res)))))
-      ls path))
-
-(defun yy/write-cache ()
-  (interactive)
-  (when yy/cache-2
-    (with-temp-file (file-name-concat user-emacs-directory "ycache.eld")
-      (pp yy/cache-2 (current-buffer)))))
-
-(yy/load-cache)
-
-(setq load-path-filter-function #'yy/load-path-filter)
-
 (use-package emacs
-  :straight nil
   :ensure nil
   :custom
   (column-number-mode t)
@@ -133,7 +102,7 @@
   (add-to-list 'default-frame-alist '(horizontal-scroll-bars . nil))
   ;; (set-frame-parameter (selected-frame) 'alpha-background 80)
   ;; (add-to-list 'default-frame-alist '(alpha-background . 80))
-  (global-hl-line-mode -1) ;; Disable highlight of the current line
+  ;; (global-hl-line-mode -1) ;; Disable highlight of the current line
   (global-auto-revert-mode 1) ;; Enable global auto-revert mode to keep buffers up to date with their corresponding files.
   (setq-default indent-tabs-mode nil)
   (recentf-mode 1) ;; Enable tracking of recently opened files.
@@ -160,7 +129,7 @@
 ;; Packages : %s
 "
 						 (emacs-init-time)
-						 (length (hash-table-keys straight--recipe-cache))))))))
+						 (length (elpaca--queued))))))))
 
 
 (defcustom ek-use-nerd-fonts t
@@ -185,7 +154,6 @@
 ;; (setq interprogram-paste-function 'wl-paste)
 
 (use-package window
-  :straight nil
   :ensure nil
   :custom
   (display-buffer-alist
@@ -212,7 +180,6 @@
 	  (slot . 1)))))
 
 (use-package dired
-  :straight nil
   :ensure nil
   :custom
   (dired-listing-switches "-lah --group-directories-first")
@@ -255,7 +222,7 @@
 (use-package async :ensure t)
 
 (use-package erc
-  :straight nil
+  :ensure nil
   :defer t
   :custom
   ;; connection
@@ -344,7 +311,7 @@
              :password pw)
     (erc-tls :server "bouncer.cashmere.rs"
              :port 6699
-             :nick "cashmere1337"
+             :nick "cashmere"
              :user "cashmere/ergo@emacs"
              :password pw)))
 
@@ -456,8 +423,7 @@ Temporarily disables notifications during the fetch."
     "C-j" 'erc-next-command))
 
 ;; (use-package lambda-themes
-;;   :ensure t
-;;   :straight (:type git :host github :repo "lambda-emacs/lambda-themes") 
+;;   :ensure (:host github :repo "lambda-emacs/lambda-themes")
 ;;   :custom
 ;;   (lambda-themes-set-italic-comments t)
 ;;   (lambda-themes-set-italic-keywords t)
@@ -465,35 +431,6 @@ Temporarily disables notifications during the fetch."
 ;;   (lambda-themes-set-theme 'light)
 ;;   :config
 ;;   (load-theme 'lambda-light))
-
-(use-package dashboard
-  :ensure t
-  :config
-  (setq dashboard-banner-logo-title "Jesus said 'i will rebuild this temple in 3 days.' I could make a compiler in 3 days.")
-  (setq dashboard-startup-banner "/home/cashmere/.emacs.d/image.jpg")
-  (setq dashboard-image-banner-max-width 256)
-  (setq dashboard-image-banner-max-height 256)
-  (setq dashboard-bookmarks-show-base t)
-  (setq dashboard-bookmarks-item-format "%s")
-  (setq dashboard-projects-backend 'projectile)
-  (setq dashboard-items '((projects . 5)
-                          (recents . 5)
-                          (bookmarks . 5)))
-  (setq dashboard-projects-switch-function #'projectile-switch-project-by-name)
-  (setq dashboard-center-content t)
-  (setq dashboard-set-file-icons t)
-  (setq dashboard-set-heading-icons t)
-  (setq dashboard-icon-type 'nerd-icons)
-  (setq dashboard-footer-messages '("Emacs. The world greatest operating system"))
-  (dashboard-setup-startup-hook)
-  
-  (setq initial-buffer-choice
-        (lambda ()
-          (get-buffer-create dashboard-buffer-name)))
-  
-  (add-hook 'dashboard-mode-hook
-            (lambda ()
-              (setq mode-line-format nil))))
 
 (defvar my/centered-cursor-enabled nil)
 
@@ -579,7 +516,6 @@ Temporarily disables notifications during the fetch."
   :hook (after-init . global-clipetty-mode))
 
 (use-package isearch
-  :straight nil
   :ensure nil                                  ;; This is built-in, no need to fetch it.
   :config
   (setq isearch-lazy-count t)                  ;; Enable lazy counting to show current match information.
@@ -590,7 +526,6 @@ Temporarily disables notifications during the fetch."
                  ("C-r" . isearch-backward)))          ;; Bind C-r to backward isearch.
 
 (use-package vc
-  :straight nil
   :ensure nil                        ;; This is built-in, no need to fetch it.
   :defer t
   :bind
@@ -618,7 +553,6 @@ Temporarily disables notifications during the fetch."
 
 (use-package ibuffer
   :ensure nil
-  :straight nil
   :config
   (setq ibuffer-expert t)
   (setq ibuffer-display-summary nil)
@@ -711,12 +645,16 @@ Temporarily disables notifications during the fetch."
   (ibuffer-mode . (lambda ()
                     (ibuffer-switch-to-saved-filter-groups "Main"))))
 
+(use-package nerd-icons
+  :if ek-use-nerd-fonts
+  :ensure t)
+
 (use-package nerd-icons-ibuffer
+  :if ek-use-nerd-fonts
   :ensure t
   :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
 
 (use-package smerge-mode
-  :straight nil
   :ensure nil                                  ;; This is built-in, no need to fetch it.
   :defer t
   :bind (:map smerge-mode-map
@@ -753,8 +691,7 @@ Temporarily disables notifications during the fetch."
   (setq gptel-backends (list my/openrouter-backend)))
 
 (use-package eldoc
-  :straight nil
-  :ensure t
+  :ensure nil
   :config
   (setq eldoc-idle-delay 0.25)
   (setq eldoc-echo-area-use-multiline-p nil)
@@ -776,7 +713,6 @@ Temporarily disables notifications during the fetch."
 ;;   (setq eldoc-box-help-at-point-mode t))
 
 (use-package flymake
-  :straight nil
   :ensure nil          ;; This is built-in, no need to fetch it.
   :defer t
   ;; :hook (prog-mode . flymake-mode)
@@ -792,6 +728,7 @@ Temporarily disables notifications during the fetch."
 (use-package flycheck
   :ensure t
   :config
+  (setq flycheck-global-modes '(not org-mode))
   (add-hook 'after-init-hook #'global-flycheck-mode))
 
 (use-package flycheck-rust
@@ -802,13 +739,8 @@ Temporarily disables notifications during the fetch."
   (add-hook 'rust-ts-mode-hook #'flycheck-rust-setup))
 
 (use-package flycheck-python-ruff
-  :straight (:host github :repo "v4n6/flycheck-python-ruff")
-  :ensure t
+  :ensure (:host github :repo "v4n6/flycheck-python-ruff")
   :hook ((python-mode python-ts-mode) . flycheck-python-ruff-setup))
-
-;; (use-package flyover
-;;   :ensure t
-;;   :hook (flycheck-mode-hook . flyover-mode))
 
 (use-package flycheck-eglot
   :ensure t
@@ -817,17 +749,14 @@ Temporarily disables notifications during the fetch."
   (global-flycheck-eglot-mode 1))
 
 (use-package xref
-  :straight nil
   :ensure nil)
 
 (use-package project
-  :straight nil
   :ensure nil)
 
 (setq org-directory "~/org/")
 (use-package org
-  :straight nil
-  :ensure nil     
+  :ensure nil
   :config
   (require 'org-tempo)
 
@@ -884,6 +813,7 @@ Temporarily disables notifications during the fetch."
 (advice-add 'org-read-date :around #'my-org-read-date-always-with-time)
 
 (use-package org-appear
+  :ensure t
   :commands (org-appear-mode)
   :hook     (org-mode . org-appear-mode)
   :config
@@ -896,25 +826,27 @@ Temporarily disables notifications during the fetch."
 
 (use-package org-modern
   :ensure t
+  :hook (org-mode . org-modern-mode)
   :config
   (setq org-modern-hide-stars t)
   (setq org-modern-star 'replace)
   (setq org-modern-fold-stars '(("◉" . "○")))
-  (setq org-modern-replace-stars "◉○◉○◉"))
-
-(with-eval-after-load 'org (global-org-modern-mode))
+  (setq org-modern-replace-stars "◉○◉○◉")
+  (global-org-modern-mode))
 
 (use-package kitty-graphics
-  :straight (:local-repo "~/projects/kitty-graphics")
+  :ensure (:host github :repo "cashmeredev/kitty-graphics.el")
   :if (and (not (display-graphic-p)) (getenv "KITTY_PID"))
-  :custom
-  (kitty-gfx-max-width 80)
-  (kitty-gfx-max-height 24)
   :config
-  (kitty-graphics-mode 1)
-  ;; Preview images in dired/dirvish with 'P'
-  (with-eval-after-load 'dired
-    (define-key dired-mode-map (kbd "P") #'kitty-gfx-dired-preview)))
+  (kitty-graphics-mode 1))
+  ;; (with-eval-after-load 'dired
+  ;;   (define-key dired-mode-map (kbd "P") #'kitty-gfx-dired-preview))
+
+;; (when (and (not (display-graphic-p)) (getenv "KITTY_PID"))
+;;   (load "~/projects/kitty-graphics/kitty-graphics.el")
+;;   (kitty-graphics-mode 1)
+;;   (with-eval-after-load 'dired
+;;     (define-key dired-mode-map (kbd "P") #'kitty-gfx-dired-preview)))
 
 (use-package org-fancy-priorities
   :ensure t
@@ -949,17 +881,47 @@ Temporarily disables notifications during the fetch."
 ;;           (search . " %i ")))
 
 (with-eval-after-load 'org
+  (setq org-confirm-babel-evaluate nil)
   (org-babel-do-load-languages
    'org-babel-load-languages
    '((emacs-lisp . t)
      (shell . t)
-	 (python . t)
+     (python . t)
+     (ruby . t)
+     (perl . t)
+     (C . t)
+     (js . t)
+     (css . t)
+     (sass . t)
+     (sql . t)
+     (sqlite . t)
+     (lua . t)
+     (lisp . t)
+     (scheme . t)
+     (clojure . t)
+     (haskell . t)
+     (ocaml . t)
+     (java . t)
      (dot . t)
-	 (C . t)
-	 (makefile . t))))
+     (gnuplot . t)
+     (plantuml . t)
+     (ditaa . t)
+     (calc . t)
+     (latex . t)
+     (org . t)
+     (makefile . t)
+     (awk . t)
+     (sed . t)
+     (screen . t)
+     (eshell . t))))
+
+(use-package ob-async
+  :ensure t
+  :after org)
 
 (defun my/snip-upload (&optional file)
   "Upload FILE, region, or current buffer to snips.sh.
+Passes -ext flag to hint the file type for syntax highlighting.
 Copies the resulting URL to the kill ring and clipboard."
   (interactive)
   (let* ((input (cond
@@ -967,7 +929,13 @@ Copies the resulting URL to the kill ring and clipboard."
                  ((use-region-p)
                   (buffer-substring-no-properties (region-beginning) (region-end)))
                  (t (buffer-substring-no-properties (point-min) (point-max)))))
-         (cmd "ssh pb@pb.cashmere.rs 2>/dev/null | sed 's/\\x1b\\[[0-9;]*m//g' | grep -oP 'https://\\S+/f/\\S+'")
+         (ext (cond
+               ((and file (file-name-extension file))
+                (file-name-extension file))
+               ((and (not file) (buffer-file-name) (file-name-extension (buffer-file-name)))
+                (file-name-extension (buffer-file-name)))))
+         (ext-flag (if ext (format " -- -ext %s" ext) ""))
+         (cmd (format "ssh pb@pb.cashmere.rs%s 2>/dev/null | sed 's/\\x1b\\[[0-9;]*m//g' | grep -oP 'https://\\S+/f/\\S+'" ext-flag))
          (url (string-trim
                (if (and file (file-exists-p file))
                    (shell-command-to-string (format "cat %s | %s" (shell-quote-argument file) cmd))
@@ -976,9 +944,12 @@ Copies the resulting URL to the kill ring and clipboard."
                    (shell-command-on-region (point-min) (point-max) cmd nil t)
                    (buffer-string))))))
     (if (string-prefix-p "https://" url)
-        (progn
-          (kill-new url)
-          (message "Uploaded: %s" url))
+        (let ((final-url (if (and ext (member (downcase ext)
+                                              '("png" "jpg" "jpeg" "gif" "webp" "svg" "bmp" "ico" "tiff")))
+                              (concat url "?r=1")
+                            url)))
+          (kill-new final-url)
+          (message "Uploaded: %s" final-url))
       (message "Upload failed"))))
 
 (defun my/snip-upload-file ()
@@ -1048,7 +1019,6 @@ and convert it to Org using the pandoc utility."
 
 (use-package org-clock
   :after org
-  :straight nil
   :ensure nil
   :commands (org-clock-in org-clock-out org-clock-goto)
   :config
@@ -1270,6 +1240,7 @@ Skips capture tasks and projects."
   :mode ("\\.epub\\'" . nov-mode))
 
 (use-package yequake
+  :ensure t
   :custom
   (yequake-frames
    '(("org-capture"
@@ -1342,6 +1313,7 @@ Skips capture tasks and projects."
            "" :immediate-finish nil :jump-to-captured t))))
 
 (use-package org-super-agenda
+  :ensure t
   :after org-agenda
   :init
   :config
@@ -1359,6 +1331,8 @@ Skips capture tasks and projects."
       org-agenda-dim-blocked-tasks nil
       org-agenda-skip-scheduled-if-done t
       org-agenda-skip-deadline-if-done t)
+
+(setq org-agenda-scheduled-leaders '("" "-%2d"))
 
 (setq org-agenda-time-grid
   '((daily today require-timed)
@@ -1379,6 +1353,7 @@ Skips capture tasks and projects."
 ;; d - Today: daily driver, what to focus on now
 ;; w - Week:  calendar + upcoming + backlog
 ;; p - Projects: all project tasks by state
+;; o - Overview: schedule + topics (project/dev/blog/self) + backlog
 
 (setq org-agenda-custom-commands
   '(
@@ -1411,20 +1386,14 @@ Skips capture tasks and projects."
                            (not (done)))
          ((org-ql-block-header "In Progress")
           (org-super-agenda-groups
-           '((:name "ACTIVE"
-              :todo "ACTIVE"
-              :order 1)
-             (:name "NEXT"
-              :todo "NEXT"
-              :order 2)
-             (:discard (:anything t))))))
+           '((:auto-tags t)))))
 
        ;; Block 3: waiting items
        (org-ql-block '(and (todo "WAIT")
                            (not (done)))
          ((org-ql-block-header "Waiting On")
           (org-super-agenda-groups
-           '((:anything t)))))))
+           '((:auto-tags t)))))))
 
     ;; ── Week ───────────────────────────────────────────────
     ("w" "Week"
@@ -1491,7 +1460,87 @@ Skips capture tasks and projects."
             (:name "NEXT"   :todo "NEXT"   :order 2)
             (:name "TODO"   :todo "TODO"   :order 3)
             (:name "WAIT"   :todo "WAIT"   :order 4)
-            (:discard (:anything t))))))))))
+            (:discard (:anything t))))))))
+
+    ;; ── Overview ───────────────────────────────────────────
+    ;; Full dashboard: schedule + topic sections + backlog
+    ("o" "Overview"
+     (
+       ;; Block 1: today's agenda — schedule, deadlines, overdue
+       (agenda ""
+         ((org-agenda-span 1)
+          (org-agenda-start-day ".")
+          (org-deadline-warning-days 3)
+          (org-agenda-show-future-repeats nil)
+          (org-agenda-overriding-header "")
+          (org-super-agenda-groups
+           '((:name "Overdue"
+              :scheduled past
+              :deadline past
+              :order 0)
+             (:name "Schedule"
+              :time-grid t
+              :order 1)
+             (:name "Deadlines"
+              :deadline today
+              :order 2)
+             (:discard (:anything t))))))
+
+       ;; Block 2: project
+       (org-ql-block '(and (tags "project")
+                           (not (done)))
+         ((org-ql-block-header "Project")
+          (org-super-agenda-groups
+           '((:name "ACTIVE" :todo "ACTIVE" :order 1)
+             (:name "NEXT"   :todo "NEXT"   :order 2)
+             (:name "TODO"   :todo "TODO"   :order 3)
+             (:name "WAIT"   :todo "WAIT"   :order 4)
+             (:discard (:anything t))))))
+
+       ;; Block 3: development
+       (org-ql-block '(and (tags "development")
+                           (not (done)))
+         ((org-ql-block-header "Development")
+          (org-super-agenda-groups
+           '((:name "ACTIVE" :todo "ACTIVE" :order 1)
+             (:name "NEXT"   :todo "NEXT"   :order 2)
+             (:name "TODO"   :todo "TODO"   :order 3)
+             (:name "WAIT"   :todo "WAIT"   :order 4)
+             (:discard (:anything t))))))
+
+       ;; Block 4: blog
+       (org-ql-block '(and (tags "blog")
+                           (not (done)))
+         ((org-ql-block-header "Blog")
+          (org-super-agenda-groups
+           '((:name "ACTIVE" :todo "ACTIVE" :order 1)
+             (:name "NEXT"   :todo "NEXT"   :order 2)
+             (:name "TODO"   :todo "TODO"   :order 3)
+             (:name "WAIT"   :todo "WAIT"   :order 4)
+             (:discard (:anything t))))))
+
+       ;; Block 5: self
+       (org-ql-block '(and (tags "self")
+                           (not (done)))
+         ((org-ql-block-header "Self")
+          (org-super-agenda-groups
+           '((:name "ACTIVE" :todo "ACTIVE" :order 1)
+             (:name "NEXT"   :todo "NEXT"   :order 2)
+             (:name "TODO"   :todo "TODO"   :order 3)
+             (:name "WAIT"   :todo "WAIT"   :order 4)
+             (:discard (:anything t))))))
+
+       ;; Block 6: backlog — everything not covered above
+       (org-ql-block '(and (todo)
+                           (not (done))
+                           (not (tags "project" "development" "blog" "self")))
+         ((org-ql-block-header "Backlog")
+          (org-super-agenda-groups
+           '((:name "ACTIVE" :todo "ACTIVE" :order 1)
+             (:name "NEXT"   :todo "NEXT"   :order 2)
+             (:name "TODO"   :todo "TODO"   :order 3)
+             (:name "WAIT"   :todo "WAIT"   :order 4)
+             (:discard (:anything t))))))))))
 
 ;;; --- Theme-adaptive TODO keyword faces ---
 
@@ -1527,15 +1576,68 @@ Skips capture tasks and projects."
 
 (add-hook 'org-agenda-finalize-hook #'my/org-agenda-remove-tags)
 
+;;; --- Late-indicator symbols for overdue items ---
+;;
+;; Replaces the numeric "days late" extra field with visual indicators:
+;;   1-2 days: •   3-6 days: !   7-13 days: ‼   14+ days: ✖
+
+(defun my/org-agenda-late-extra (orig-fn extra txt &rest args)
+  "Advice around `org-agenda-format-item' to show overdue indicators."
+  (let* ((agenda-extra
+          (let ((d (when (stringp extra)
+                     (abs (string-to-number extra)))))
+            (cond
+             ((not d) "")
+             ((= d 0) "")
+             ((< d 3) " •")
+             ((< d 7) " !")
+             ((< d 14) " ‼")
+             (t " ✖")))))
+    (apply orig-fn agenda-extra txt args)))
+
+(advice-add 'org-agenda-format-item :around
+            #'my/org-agenda-late-extra)
+
+;;; --- Clean up excessive blank lines between agenda blocks ---
+
+(defun my/org-agenda-fix-block-spacing ()
+  "Collapse triple+ newlines to double in the agenda buffer."
+  (goto-char (point-min))
+  (while (re-search-forward "\n\n\n+" nil t)
+    (replace-match "\n\n")))
+
+(add-hook 'org-agenda-finalize-hook
+          #'my/org-agenda-fix-block-spacing)
+
+(defun my/agenda-app ()
+  "Launch Emacs as a dedicated agenda kiosk.
+Opens the 'd' (Today) agenda view in a clean, distraction-free frame.
+Usage: emacs --eval '(my/agenda-app)' --no-splash"
+  (interactive)
+  (set-frame-name "Agenda")
+  (delete-other-windows)
+  (org-agenda nil "d")
+  (delete-other-windows)
+  (setq mode-line-format nil)
+  (menu-bar-mode -1)
+  (tool-bar-mode -1)
+  (scroll-bar-mode -1)
+  (when (bound-and-true-p tab-bar-mode)
+    (tab-bar-mode -1))
+  (when (find-font (font-spec :family "Lato"))
+    (buffer-face-set '(:family "Lato")))
+  (text-scale-increase 2)
+  (hide-mode-line-mode 1)
+  (winner-mode 1))
+
 (use-package org-contrib
-  :ensure t)
+  :ensure (:wait t))
 
 (require 'ox-extra)
 (ox-extras-activate '(ignore-headlines))
 
 (use-package ox-typst
-  :ensure t
-  :straight (:host github :repo "jmpunkt/ox-typst")
+  :ensure (:host github :repo "jmpunkt/ox-typst")
   :after org)
 
 (use-package org-cliplink
@@ -1591,6 +1693,13 @@ Skips capture tasks and projects."
 (use-package ox-pandoc
   :ensure t
   :after org)
+
+(use-package ox-slidev
+  :ensure (:repo "https://dev.cashmere.rs/cashmere/ox-slidev"
+           :files (:defaults "templates"))
+  :after org
+  :config
+  (require 'org-slidev))
 
 (use-package denote
   :ensure t
@@ -1730,8 +1839,7 @@ Works on the base filename (without extension), e.g. matches \"-agenda\", \":age
     :ensure t)
 
 (use-package consult-denote
-  :straight (:host github :repo "protesilaos/consult-denote")
-  :ensure t
+  :ensure (:host github :repo "protesilaos/consult-denote")
   :defer t)
 
 (defun my/convert-all-denote-links-in-directory (directory)
@@ -1768,9 +1876,11 @@ Works on the base filename (without extension), e.g. matches \"-agenda\", \":age
   :ensure t
   )
 
+(use-package ox-gfm
+  :ensure t)
+
 (use-package denote-publish
-  :ensure t
-  :straight ( denote-publish :type git :host nil :repo "https://github.com/vedang/denote-publish")) 
+  :ensure (:repo "https://github.com/vedang/denote-publish"))
 
 (setq denote-publish-default-base-dir "~/wiki")
 (setq denote-publish-default-output-dir "~/blog/wiki")
@@ -1783,17 +1893,77 @@ Works on the base filename (without extension), e.g. matches \"-agenda\", \":age
               og_image og_description og_video_id))
 
 (use-package tmr
-  :ensure t
-  :straight (:host github :repo "protesilaos/tmr")
+  :ensure (:host github :repo "protesilaos/tmr")
   :config
   (setq tmr-sound-file "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga"
         tmr-notification-urgency 'normal
         tmr-description-list 'tmr-description-history)
-  (define-key global-map (kbd "C-c t") #'tmr-prefix-map))
+  (define-key global-map (kbd "C-c t") #'tmr-prefix-map)
+
+  ;; ── Timer persistence across Emacs restarts ──────────────
+  (defvar my/tmr-save-file
+    (expand-file-name "tmr-timers.eld" user-emacs-directory)
+    "File to persist active tmr timers across Emacs restarts.")
+
+  (defun my/tmr-save-timers ()
+    "Save active (non-finished) tmr timers to `my/tmr-save-file'."
+    (let ((active
+           (cl-loop for timer in tmr--timers
+                    unless (tmr--timer-finishedp timer)
+                    collect (list :end-date (tmr--timer-end-date timer)
+                                 :creation-date (tmr--timer-creation-date timer)
+                                 :input (tmr--timer-input timer)
+                                 :description (tmr--timer-description timer)
+                                 :acknowledgep (tmr--timer-acknowledgep timer)
+                                 :paused-remaining (tmr--timer-paused-remaining timer)))))
+      (with-temp-file my/tmr-save-file
+        (prin1 active (current-buffer)))))
+
+  (defun my/tmr-restore-timers ()
+    "Restore tmr timers from `my/tmr-save-file'.
+Timers that expired while Emacs was closed fire immediately."
+    (require 'tmr)
+    (when (file-exists-p my/tmr-save-file)
+      (let ((saved (with-temp-buffer
+                     (insert-file-contents my/tmr-save-file)
+                     (read (current-buffer)))))
+        (dolist (entry saved)
+          (let* ((end-date (plist-get entry :end-date))
+                 (creation-date (plist-get entry :creation-date))
+                 (input (plist-get entry :input))
+                 (description (plist-get entry :description))
+                 (acknowledgep (plist-get entry :acknowledgep))
+                 (paused-remaining (plist-get entry :paused-remaining))
+                 (remaining (if paused-remaining
+                                paused-remaining
+                              (round (- (float-time end-date) (float-time)))))
+                 (adjusted-end (if (and (not paused-remaining) (<= remaining 0))
+                                   (time-add (current-time) 1)
+                                 end-date))
+                 (timer (tmr--timer-create
+                         :creation-date creation-date
+                         :end-date adjusted-end
+                         :input input
+                         :description description
+                         :acknowledgep acknowledgep
+                         :paused-remaining paused-remaining)))
+            ;; For active timers, schedule the live Emacs timer and store it
+            ;; in the timer-object slot (index 5 in the cl-defstruct vector).
+            ;; We use aset directly to avoid needing setf expanders at
+            ;; macro-expansion time (tmr may not be loaded when config tangles).
+            (unless paused-remaining
+              (let ((live-timer (run-with-timer (max 1 remaining) nil #'tmr--complete timer)))
+                (aset timer 5 live-timer)))
+            (push timer tmr--timers)))
+        (run-hooks 'tmr--update-hook))
+      ;; Clear the save file so we don't double-restore
+      (delete-file my/tmr-save-file)))
+
+  (add-hook 'kill-emacs-hook #'my/tmr-save-timers)
+  (add-hook 'emacs-startup-hook #'my/tmr-restore-timers))
 
 (use-package denote-merge
-  :ensure t ; not in any package archive
-  :straight (:host github :repo "protesilaos/denote-merge")
+  :ensure (:host github :repo "protesilaos/denote-merge") ; not in any package archive
   ;; You can bind these to keys.  They are here so you can learn about them.
   :commands
   (denote-merge-file
@@ -1816,7 +1986,6 @@ Works on the base filename (without extension), e.g. matches \"-agenda\", \":age
 
 (use-package vertico
   :ensure t
-  :straight t
   :hook
   (after-init . vertico-mode)
   :custom
@@ -1837,6 +2006,7 @@ Works on the base filename (without extension), e.g. matches \"-agenda\", \":age
                                  cand))))
 
 (use-package vertico-posframe
+  :ensure t
   :init
   (setq vertico-posframe-parameters   '((left-fringe  . 12)    ;; Fringes
                                         (right-fringe . 12)
@@ -1897,7 +2067,6 @@ Works on the base filename (without extension), e.g. matches \"-agenda\", \":age
 
 (use-package consult
   :ensure t
-  :straight t
   :defer t
   :init
   (advice-add #'register-preview :override #'consult-register-window)
@@ -1918,7 +2087,7 @@ Works on the base filename (without extension), e.g. matches \"-agenda\", \":age
           "\\`\\*Flymake"
           "\\`\\*lsp-help\\*\\'"
           "\\`\\*eldoc"
-          "\\`\\*straight-process\\*\\'"
+          "\\`\\*elpaca-log\\*\\'"
           "\\`\\*Native-compile-Log\\*\\'"
           "\\`\\*Async-native-compile-log\\*\\'")))
 
@@ -1972,7 +2141,6 @@ Works on the base filename (without extension), e.g. matches \"-agenda\", \":age
 
 ;; (use-package treesit-auto
 ;;   :ensure t
-;;   :straight t
 ;;   :defer t
 ;;   :custom
 ;;   (treesit-auto-install 'prompt)
@@ -1984,18 +2152,15 @@ Works on the base filename (without extension), e.g. matches \"-agenda\", \":age
 
 (use-package embark
   :ensure t
-  :straight t
   :defer t)
 
 (use-package embark-consult
   :ensure t
-  :straight t
   :hook
   (embark-collect-mode . consult-preview-at-point-mode)) ;; Enable preview in Embark collect mode.
 
 (use-package orderless
     :ensure t
-    :straight t
     :defer t                                    ;; Load Orderless on demand.
     :after vertico                              ;; Ensure Vertico is loaded before Orderless.
     :init
@@ -2005,20 +2170,19 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 (use-package marginalia
   :ensure t
-  :straight t
   :hook
   (after-init . marginalia-mode))
 
 (use-package eglot
-  :straight nil
   :ensure nil
   :config
   (setq eglot-autoshutdown t)
   (setq eglot-send-changes-idle-time 0.1)
   (setq eglot-sync-connect nil)
-  (setq eglot-connect-timeout nil)
+  (setq eglot-connect-timeout 30)
   (setq eglot-events-buffer-size 0)
   (setq eglot-report-progress nil)
+  (setq jsonrpc-default-request-timeout 10)
   
   (add-hook 'eglot-managed-mode-hook 
             (lambda () 
@@ -2030,8 +2194,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 
 ;; (use-package eglot-booster
-;;   :ensure t
-;;   :straight ( eglot-booster :type git :host nil :repo "https://github.com/jdtsmith/eglot-booster")
+;;   :ensure (:repo "https://github.com/jdtsmith/eglot-booster")
 ;;   :after eglot
 ;;   :config	(eglot-booster-mode))
 
@@ -2066,9 +2229,9 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :ensure t
   :hook (after-init . envrc-global-mode))
 
-(use-package python-mode
-  :ensure t
-  :mode "\\.py\\'"
+(use-package python
+  :ensure nil
+  :mode ("\\.py\\'" . python-mode)
   :hook (python-mode . eglot-ensure)
   :config
   (with-eval-after-load 'eglot
@@ -2112,16 +2275,42 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;   (rustic-cargo-use-last-stored-arguments t))
 
 (use-package js
-  :ensure t
+  :ensure nil
   :mode ("\\.js\\'" . js-mode)
+  :hook (js-mode . eglot-ensure)
   :config
-  (setq js-indent-level 2))
+  (setq js-indent-level 2)
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 '(js-mode . ("rass" "tslint")))))
+
+(use-package typescript-ts-mode
+  :ensure nil
+  :mode (("\\.ts\\'" . typescript-ts-mode)
+         ("\\.tsx\\'" . tsx-ts-mode))
+  :hook ((typescript-ts-mode . eglot-ensure)
+         (tsx-ts-mode . eglot-ensure))
+  :config
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 '((typescript-ts-mode tsx-ts-mode) . ("rass" "tslint")))))
+
+(use-package web-mode
+  :ensure t
+  :mode "\\.vue\\'"
+  :hook (web-mode . eglot-ensure)
+  :config
+  (setq web-mode-markup-indent-offset 2)
+  (setq web-mode-css-indent-offset 2)
+  (setq web-mode-code-indent-offset 2)
+  (setq web-mode-style-padding 2)
+  (setq web-mode-script-padding 2)
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 '(web-mode . ("rass" "vuetail")))))
 
 (use-package mint-mode
-  :straight (mint-mode
-             :type git
-             :host github
-             :repo "creatorrr/emacs-mint-mode")
+  :ensure (:host github :repo "creatorrr/emacs-mint-mode")
   :mode "\\.mint\\'"
   :hook (mint-mode . eglot-ensure)
   :config
@@ -2131,11 +2320,10 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 ;; (use-package nushell-mode
 ;;   :ensure nil
-;;   :straight nil
 ;;   :mode "\\.nu\\'")
 
 ;; (use-package nushell-ts-babel
-;;   :straight (nushell-ts-babel :type git :host github :repo "herbertjones/nushell-ts-babel")
+;;   :ensure (:host github :repo "herbertjones/nushell-ts-babel")
 ;;   :after org
 ;;   :config
 ;;   (org-babel-do-load-languages
@@ -2180,7 +2368,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :hook (yaml-mode . eglot-ensure))
 
 (use-package sh-mode
-  :straight nil
   :ensure nil
   :hook (bash-ts-mode . eglot-ensure)
         (sh-mode . eglot-ensure)
@@ -2221,80 +2408,11 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :ensure t
   :defer t)
 
-(use-package eee
-  :ensure t
-  :straight (:type git :host github :repo "eval-exec/eee.el"
-                 :files (:defaults "*.el" "*.sh"))
-  :config
-  (setq ee-terminal-command "kitty"))
-
-;; Settings can be declared before EAF loads -- they are just variables.
-(setq eaf-pyqterminal-font-size 24
-      eaf-pyqterminal-refresh-ms 17
-      eaf-pyqterminal-font-family "GeistMono Nerd Font"
-      ;; eaf-pyqterminal-cursor-type "bar"
-      ;; eaf-pyqterminal-cursor-size 1
-      )
-
-(defvar my/eaf-loaded nil
-  "Non-nil after EAF has been successfully loaded.")
-
-(defun my/eaf-init ()
-  "Load EAF and its apps, but only when a graphical display is available.
-Errors are caught so a broken EAF never kills the Emacs session."
-  (when (and (display-graphic-p) (not my/eaf-loaded))
-    (condition-case err
-        (progn
-          (require 'eaf)
-          (require 'eaf-browser)
-          (require 'eaf-pyqterminal)
-          (require 'eaf-auralis)
-
-          ;; Evil leader integration
-          (when (featurep 'evil)
-            (require 'eaf-evil)
-            (setq eaf-evil-leader-key "C-SPC")
-            (let ((leader-km (when (boundp 'general-override-mode-map)
-                               (lookup-key
-                                (evil-get-auxiliary-keymap general-override-mode-map 'normal)
-                                (kbd "SPC")))))
-              (when (keymapp leader-km)
-                (setq eaf-evil-leader-keymap leader-km))))
-
-          ;; Process sentinel: clean up buffers when the EAF python
-          ;; process dies unexpectedly instead of leaving zombies.
-          (advice-add 'eaf--start-process :after
-                      (lambda (&rest _)
-                        (when-let* ((proc (get-process "eaf")))
-                          (set-process-sentinel
-                           proc
-                           (lambda (process event)
-                             (when (memq (process-status process) '(exit signal))
-                               (message "EAF process terminated: %s" (string-trim event))
-                               (dolist (buf (buffer-list))
-                                 (when (and (buffer-live-p buf)
-                                            (with-current-buffer buf
-                                              (derived-mode-p 'eaf-mode)))
-                                   (with-current-buffer buf
-                                     (let ((inhibit-read-only t))
-                                       (erase-buffer)
-                                       (insert (format "EAF process crashed: %s\nRe-open this buffer to restart."
-                                                       (string-trim event)))))))))))))
-
-          (setq my/eaf-loaded t)
-          (message "EAF loaded successfully."))
-      (error
-       (message "EAF failed to load: %s" (error-message-string err))))))
-
-;; Daemon: wait for the first graphical frame, then load EAF once.
-;; Normal start: load immediately.
-(if (daemonp)
-    (add-hook 'server-after-make-frame-hook #'my/eaf-init)
-  (add-hook 'after-init-hook #'my/eaf-init))
-
 (use-package olivetti
+  :ensure t
+  :hook (org-mode . olivetti-mode)
   :custom
-  (olivetti-style 'fancy)  ; Keep margins visible
+  (olivetti-style nil)  ; Use window margins (fringes disabled in early-init)
   (olivetti-margin-width 10)  ; No side margins
   ;; (olivetti-shrink t)
   (olivetti-safe t)
@@ -2318,12 +2436,14 @@ Errors are caught so a broken EAF never kills the Emacs session."
          (text-mode . visual-fill-column-mode)) ;; Das Zentrieren aktivieren
   :custom
   (visual-fill-column-width 110)      ;; Maximale Breite des Textes (statt 0.67 relativ)
-  (visual-fill-column-center-text t) ;; Text zentrieren!
-  (visual-fill-column-enable-sensible-window-split t))
+  (visual-fill-column-center-text nil)
+  (visual-fill-column-enable-sensible-window-split t)
+  :config
+  (when (display-graphic-p)
+    (setq-default visual-fill-column-center-text t)))
 
 ;; (use-package diff-hl
 ;;   :defer t
-;;   :straight t
 ;;   :ensure t
 ;;   :hook
 ;;   (find-file . (lambda ()
@@ -2339,8 +2459,7 @@ Errors are caught so a broken EAF never kills the Emacs session."
 ;;                                   (ignored . "i"))))
 
 (use-package hl-todo
-  :ensure t
-  :straight (:host github :repo "tarsius/hl-todo")
+  :ensure (:host github :repo "tarsius/hl-todo")
   :config
   (global-hl-todo-mode) 
   (setq hl-todo-keyword-faces
@@ -2352,7 +2471,6 @@ Errors are caught so a broken EAF never kills the Emacs session."
 
 (use-package magit
   :ensure t
-  :straight t
   :config
   (if ek-use-nerd-fonts
 	  (setopt magit-format-file-function #'magit-format-file-nerd-icons))
@@ -2371,7 +2489,6 @@ Errors are caught so a broken EAF never kills the Emacs session."
 
 (use-package indent-guide
   :defer t
-  :straight t
   :ensure t
   :hook
   (prog-mode . indent-guide-mode)  ;; Activate indent-guide in programming modes.
@@ -2379,8 +2496,7 @@ Errors are caught so a broken EAF never kills the Emacs session."
   (setq indent-guide-char "│"))    ;; Set the character used for the indent guide.
 
 (use-package general
-  :straight t
-  :ensure t
+  :ensure (:wait t)
   :demand t
   :config
   (general-evil-setup)
@@ -2396,7 +2512,7 @@ Errors are caught so a broken EAF never kills the Emacs session."
     :prefix ","))
 
 (use-package evil
-  :ensure t
+  :ensure (:wait t)
   :init
   (setq evil-want-integration t)
   (setq evil-want-keybinding nil)
@@ -2459,20 +2575,18 @@ Errors are caught so a broken EAF never kills the Emacs session."
 
 (use-package evil-collection
   :after evil
-  :ensure t
+  :ensure (:wait t)
   :config
   (evil-collection-init))
 
 (use-package evil-surround
   :ensure t
-  :straight t
   :after evil-collection
   :config
   (global-evil-surround-mode 1))
 
 (use-package evil-matchit
   :ensure t
-  :straight t
   :after evil-collection
   :config
   (global-evil-matchit-mode 1))
@@ -2553,8 +2667,7 @@ Errors are caught so a broken EAF never kills the Emacs session."
   (define-key evil-visual-state-map (kbd "A") 'my/evil-mc-visual-block-append))
 
 (use-package flash
-  :ensure t
-  :straight (:host github :repo "Prgebish/flash")
+  :ensure (:host github :repo "Prgebish/flash")
   :after evil
   :custom
   (flash-multi-window t)
@@ -2587,7 +2700,6 @@ Errors are caught so a broken EAF never kills the Emacs session."
 (use-package undo-tree
   :defer t
   :ensure t
-  :straight t
   :hook (after-init . global-undo-tree-mode)
   :init
   (setq undo-tree-visualizer-timestamps t
@@ -2602,24 +2714,18 @@ Errors are caught so a broken EAF never kills the Emacs session."
 
 (use-package rainbow-delimiters
   :defer t
-  :straight t
   :ensure t
   :hook
   (prog-mode . rainbow-delimiters-mode))
 
 (use-package dotenv-mode
   :defer t
-  :straight t
   :ensure t
   :config)
 
-(add-hook 'org-agenda-mode-hook
-          (lambda ()
-            (add-hook 'auto-save-hook 'org-save-all-org-buffers nil t)
-            (auto-save-mode)))
+(add-hook 'org-agenda-finalize-hook #'org-save-all-org-buffers)
 (use-package org-agenda
   :ensure nil
-  :straight nil
   :config
   (setq org-agenda-window-setup 'current-window
    org-agenda-inhibit-startup t
@@ -2642,7 +2748,7 @@ Errors are caught so a broken EAF never kills the Emacs session."
   (evil-org-agenda-set-keys))
 
 (use-package perspective
-  :ensure t
+  :ensure (:wait t)
   :demand t
   :custom
   (persp-sort 'created)
@@ -2660,47 +2766,6 @@ Errors are caught so a broken EAF never kills the Emacs session."
     (consult-customize consult--source-buffer :hidden t :default nil)
     (add-to-list 'consult-buffer-sources persp-consult-source))
 
-  ;; ---- EAF workspace helpers ------------------------------------
-
-  (defun persp-eaf-open (persp-name eaf-open-fn)
-    "Switch to PERSP-NAME and call EAF-OPEN-FN unless a live EAF buffer exists."
-    (unless my/eaf-loaded
-      (user-error "EAF is not loaded -- open a graphical frame first"))
-    (persp-switch persp-name)
-    (unless (cl-some (lambda (buf)
-                       (and (buffer-live-p buf)
-                            (with-current-buffer buf
-                              (derived-mode-p 'eaf-mode))))
-                     (persp-buffers (persp-curr)))
-      (condition-case err
-          (funcall eaf-open-fn)
-        (error
-         (message "EAF open failed in perspective '%s': %s"
-                  persp-name (error-message-string err))))))
-
-  (defun persp-eaf-terminal ()
-    "Open pyqterminal in the terminal perspective."
-    (interactive)
-    (persp-eaf-open "terminal" #'eaf-open-pyqterminal))
-
-  (defun persp-eaf-auralis ()
-    "Open the auralis dashboard in the auralis perspective."
-    (interactive)
-    (persp-eaf-open "auralis" #'eaf-open-auralis))
-
-  ;; Reposition Qt widgets in ALL windows after a perspective switch,
-  ;; not just the current buffer.  Without this, EAF overlays in
-  ;; non-selected windows become misaligned.
-  (add-hook 'persp-activated-hook
-            (lambda ()
-              (when (fboundp 'eaf-monitor-configuration-change)
-                (walk-windows
-                 (lambda (win)
-                   (with-current-buffer (window-buffer win)
-                     (when (derived-mode-p 'eaf-mode)
-                       (eaf-monitor-configuration-change))))
-                 nil (selected-frame)))))
-
   ;; ---- keybindings via general ----------------------------------
 
   (my-leader
@@ -2713,97 +2778,11 @@ Errors are caught so a broken EAF never kills the Emacs session."
     "TAB b" '(persp-switch-to-buffer :wk "buffer")
     "TAB B" '(consult-buffer :wk "global buffer")
     "TAB a" '(persp-add-buffer :wk "add buffer")
-    "TAB k" '(persp-remove-buffer :wk "remove buffer")
-    "TAB 1" '(persp-eaf-terminal :wk "terminal")
-    "TAB 2" '(persp-eaf-auralis :wk "auralis")))
-
-(defvar eaf-named-frames nil
-  "Alist of (NAME . frame) for dedicated EAF frames.")
-
-(defun eaf-frame-open (name open-fn &optional width height)
-  "Open or focus a dedicated frame NAME running EAF app via OPEN-FN.
-If OPEN-FN signals an error the newly created frame is deleted
-so no empty zombie frames are left behind."
-  (interactive)
-  (unless my/eaf-loaded
-    (user-error "EAF is not loaded -- open a graphical frame first"))
-  (let ((existing (alist-get name eaf-named-frames nil nil #'string=)))
-    (if (and existing (frame-live-p existing))
-        (select-frame-set-input-focus existing)
-      ;; Remove stale entry
-      (setq eaf-named-frames
-            (assoc-delete-all name eaf-named-frames #'string=))
-      (let ((frame (make-frame `((name . ,(format "EAF: %s" name))
-                                 (width . ,(or width 120))
-                                 (height . ,(or height 40))))))
-        (select-frame-set-input-focus frame)
-        (condition-case err
-            (progn
-              (push (cons name frame) eaf-named-frames)
-              (funcall open-fn))
-          (error
-           (setq eaf-named-frames
-                 (assoc-delete-all name eaf-named-frames #'string=))
-           (delete-frame frame)
-           (message "EAF frame '%s' failed: %s" name
-                    (error-message-string err))))))))
-
-(defun eaf-frame-pyqterminal ()
-  "Open pyqterminal in a dedicated frame."
-  (interactive)
-  (eaf-frame-open "terminal" #'eaf-open-pyqterminal))
-
-(defun eaf-frame-auralis ()
-  "Open auralis dashboard in a dedicated frame."
-  (interactive)
-  (eaf-frame-open "auralis" #'eaf-open-auralis))
-
-(defun eaf-frame-browser (url)
-  "Open EAF browser in a dedicated frame."
-  (interactive "sURL: ")
-  (eaf-frame-open "browser" (lambda () (eaf-open-browser url))))
-
-(my-leader
-  "o" '(:ignore t :wk "open frame")
-  "ot" '(eaf-frame-pyqterminal :wk "terminal")
-  "oa" '(eaf-frame-auralis :wk "auralis")
-  "ob" '(eaf-frame-browser :wk "browser"))
-
-;; Load auralis unconditionally — it only makes HTTP calls and has no
-;; EAF dependency.  Auto-enable the modeline polling timer on load.
-(condition-case err
-    (progn
-      (require 'auralis)
-      (auralis-modeline-enable))
-  (error (message "auralis failed to load: %s" (error-message-string err))))
-
-(my-leader
-  "m" '(:ignore t :wk "music")
-  "m SPC" '(auralis-play-pause :wk "play/pause")
-  "mn" '(auralis-next :wk "next track")
-  "mp" '(auralis-prev :wk "prev track")
-  "ms" '(auralis-search :wk "search library")
-  "mr" '(auralis-play-random :wk "shuffle all")
-  "mi" '(auralis-now-playing :wk "now playing")
-  "m+" '(auralis-volume-up :wk "volume up")
-  "m-" '(auralis-volume-down :wk "volume down")
-  "mS" '(auralis-toggle-shuffle :wk "toggle shuffle")
-  "mR" '(auralis-toggle-repeat :wk "toggle repeat")
-  "mA" '(auralis-toggle-radio :wk "toggle auto-radio")
-  "mq" '(auralis-stop :wk "stop")
-  "mL" '(auralis-scan-library :wk "scan library")
-  "mm" '(auralis-modeline-enable :wk "modeline on")
-  "mM" '(auralis-modeline-disable :wk "modeline off"))
-
-(use-package nerd-icons
-  :if ek-use-nerd-fonts                   ;; Load the package only if the user has configured to use nerd fonts.
-  :ensure t)                               ;; Ensure the package is installed.
-;; Load the package only when needed to improve startup time.
+    "TAB k" '(persp-remove-buffer :wk "remove buffer")))
 
 (use-package nerd-icons-dired
   :if ek-use-nerd-fonts                   ;; Load the package only if the user has configured to use nerd fonts.
   :ensure t                               ;; Ensure the package is installed.
-  :straight t
   :defer t                                ;; Load the package only when needed to improve startup time.
   :hook
   (dired-mode . nerd-icons-dired-mode))
@@ -2811,7 +2790,6 @@ so no empty zombie frames are left behind."
 (use-package nerd-icons-completion
   :if ek-use-nerd-fonts                   ;; Load the package only if the user has configured to use nerd fonts.
   :ensure t                               ;; Ensure the package is installed.
-  :straight t
   :after (:all nerd-icons marginalia)     ;; Load after `nerd-icons' and `marginalia' to ensure proper integration.
   :config
   (nerd-icons-completion-mode)            ;; Activate nerd icons for completion interfaces.
@@ -2837,7 +2815,7 @@ so no empty zombie frames are left behind."
   :ensure t)
 
 ;; (use-package awesome-tray
-;;   :straight (:host github :repo "manateelazycat/awesome-tray")
+;;   :ensure (:host github :repo "manateelazycat/awesome-tray")
 ;;   :custom
 ;;   ;; Position at the top
 ;;   ;; (setq awesome-tray-position 'right)
@@ -2884,7 +2862,7 @@ so no empty zombie frames are left behind."
 
 ;; (setq display-time-mode 1)
 ;; (use-package lambda-line
-;;   :straight (:type git :host github :repo "lambda-emacs/lambda-line") 
+;;   :ensure (:host github :repo "lambda-emacs/lambda-line")
 ;;   :custom
 ;;   (lambda-line-lsp-indicator nil)
 ;;   (lambda-line-icon-time t) ;; requires ClockFace font (see below)
@@ -2932,19 +2910,26 @@ so no empty zombie frames are left behind."
                        (copy-sequence mode-line-misc-info)))
 
 (use-package maple-modeline
-  :ensure t
-  :straight (:host github :repo "honmaple/emacs-maple-modeline")
+  :ensure (:host github :repo "honmaple/emacs-maple-modeline")
   :hook (after-init . maple-modeline-mode)
   :config
   (setq maple-modeline-separator 'nil)
   (setq maple-modeline-height 25)
   (setq maple-modeline-icon t)
   
-  (defun maple-modeline-to-header-line ()
-    (setq-default tab-line-format mode-line-format)
-    (setq-default mode-line-format nil))
+  ;; (defun maple-modeline-to-header-line ()
+  ;;   "Move maple-modeline from mode-line to header-line in all buffers."
+  ;;   (unless (featurep 'ewm)
+  ;;     (let ((fmt '(:eval (maple-modeline--init))))
+  ;;       (setq-default header-line-format fmt)
+  ;;       (setq-default mode-line-format nil)
+  ;;       (dolist (buf (buffer-list))
+  ;;         (with-current-buffer buf
+  ;;           (setq header-line-format fmt)
+  ;;           (setq mode-line-format nil)))
+  ;;       (force-mode-line-update t))))
 
-  (add-hook 'maple-modeline-mode-hook #'maple-modeline-to-header-line)
+  ;; (add-hook 'maple-modeline-mode-hook #'maple-modeline-to-header-line)
 
   (maple-modeline-define-segment my-modeline-time
     :format (propertize (downcase (format-time-string " %I:%M %p "))
@@ -2973,16 +2958,6 @@ so no empty zombie frames are left behind."
            (desc (tmr-mode-line--format-description timer)))
       (concat remaining desc)))
 
-  (maple-modeline-define-segment auralis-now-playing
-    :if (and (boundp 'auralis--modeline-string)
-             (not (string-empty-p auralis--modeline-string)))
-    :format
-    (concat
-     (maple-modeline--concat-or
-      (maple-modeline--icon 'mdicon "nf-md-music" face)
-      "♪")
-     auralis--modeline-string))
-
   (maple-modeline-define my-custom-style
     :left ((evil :left (bar :left ""))
            macro
@@ -2994,14 +2969,23 @@ so no empty zombie frames are left behind."
     :right (narrow
             org-clock-task
             tmr-timer
-            auralis-now-playing
             python
             my-modeline-time
             process
             count
             position))
 
-  (setq maple-modeline-style 'my-custom-style)
+  (maple-modeline-define ewm-style
+    :left ((evil :left (bar :left ""))
+           buffer-info
+           flycheck
+           version-control)
+    :right (org-clock-task
+            tmr-timer
+            position))
+
+  (setq maple-modeline-style
+        (if (featurep 'ewm) 'ewm-style 'my-custom-style))
 
   :custom-face
   (header-line ((t (:inherit mode-line :box nil))))
@@ -3009,8 +2993,7 @@ so no empty zombie frames are left behind."
   (mode-line-inactive ((t (:box nil)))))
 
 ;; (use-package punch-line
-;;   :ensure t
-;;   :straight (:host github :repo "konrad1977/punch-line")
+;;   :ensure (:host github :repo "konrad1977/punch-line")
 ;;   :config
 ;;   (setq punch-line-left-separator "  "
 ;;         punch-line-right-separator "  "
@@ -3059,12 +3042,8 @@ so no empty zombie frames are left behind."
   :config 
   (setq grip-command 'auto)) ;; auto, grip, go-grip or mdopen
 
-(use-package ox-gfm
-  :ensure t)
-
 ;; (use-package catppuccin-theme
 ;;   :ensure t
-;;   :straight t
 ;;   :config
 ;;   (setq catppuccin-flavor 'mocha)
 
@@ -3080,10 +3059,8 @@ so no empty zombie frames are left behind."
 ;;    `(diff-hl-insert ((t (:background unspecified :foreground ,(catppuccin-get-color 'green)))))))
 
 ;; (use-package modus-catppuccin
-;;   :ensure t
-;;   :straight (:type git
-;;              :repo "https://gitlab.com/magus/modus-catppuccin"
-;;              :branch "main")
+;;   :ensure (:repo "https://gitlab.com/magus/modus-catppuccin"
+;;            :branch "main")
 ;;   :custom
 ;;   (catppuccin-mocha-palette-overrides
 ;;    '((base "#232136")
@@ -3430,7 +3407,7 @@ so no empty zombie frames are left behind."
 (load-theme 'noctalia t)
 
 (use-package dirvish
-  :straight t
+  :ensure t
   :init
   (dirvish-override-dired-mode)
 
@@ -3457,8 +3434,7 @@ so no empty zombie frames are left behind."
   (setq dired-mouse-drag-files t))
 
 ;; (use-package tramp-hlo
-;;     :ensure t
-;; 	:straight (:host github :repo "jsadusk/tramp-hlo")
+;;     :ensure (:host github :repo "jsadusk/tramp-hlo")
 ;;     :config
 ;;     (tramp-hlo-setup))
 
@@ -3482,7 +3458,7 @@ so no empty zombie frames are left behind."
 ;; (my/global-olivetti-mode)
 
 (use-package org-modern-indent
-  :straight (:host github :repo "jdtsmith/org-modern-indent")
+  :ensure (:host github :repo "jdtsmith/org-modern-indent")
   :hook (org-mode . org-modern-indent-mode))
 
 (setq ibuffer-never-show-predicates
@@ -3503,7 +3479,7 @@ so no empty zombie frames are left behind."
         "^\\*ts-ls::stderr\\*$"))
 
 (use-package projectile
-  :ensure t
+  :ensure (:wait t)
   :demand t
   :config
   (projectile-mode +1)
@@ -3516,7 +3492,6 @@ so no empty zombie frames are left behind."
 
 (use-package consult-projectile
   :ensure t
-  :straight t
   :after (consult projectile)
   :defer t
   :config
@@ -3538,7 +3513,6 @@ so no empty zombie frames are left behind."
                  (display-buffer-full-frame))))
 
 (use-package auth-source
-  :straight nil
   :ensure nil                                  ;; This is built-in, no need to fetch it.
   :defer t
   :config
@@ -3563,7 +3537,7 @@ so no empty zombie frames are left behind."
 )
 
 (use-package pdf-tools
-  :straight (:type built-in)
+  :ensure nil
   :magic ("%PDF" . pdf-view-mode)
   :config
   (pdf-loader-install)
@@ -3835,10 +3809,8 @@ so no empty zombie frames are left behind."
 (my-local-leader
   "a" '(org-agenda :wk "org agenda")
   "c" '(my/centered-cursor :wk "center cursor")
-  "d" '(dashboard-open :wk "dashboard")
-  "f" '(dirvish :wk "file manager")
+   "f" '(dirvish :wk "file manager")
   "t" '(multi-vterm :wk "terminal")
-  "T" '(eaf-open-pyqterminal :wk "eaf terminal")
   "z" '(golden-ratio-mode :wk "zoom/golden ratio")
   "i" '(persp-irc :wk "irc")
   "m" '(mu4e :wk "mail")
@@ -3965,7 +3937,6 @@ so no empty zombie frames are left behind."
       browse-url-generic-program "qutebrowser")
 
 (use-package mu4e
-  :straight nil
   :ensure nil
   :defer t
   :commands (mu4e mu4e-compose-new)
@@ -4039,12 +4010,9 @@ so no empty zombie frames are left behind."
   (setq denote-project-notes-identifier '(project stayem)))
 
 ;; (use-package snippy
-;;   :ensure t
-;;   :straight
-;;   (:host github
-;; 	   :repo "MiniApollo/snippy.git"
-;; 	   :branch "main"
-;; 	   :rev :newest)
+;;   :ensure (:host github
+;; 	       :repo "MiniApollo/snippy.git"
+;; 	       :branch "main")
 ;;   :hook (after-init . global-snippy-minor-mode)
 ;;   :custom
 ;;   (snippy-global-languages '("global")) ;; Recomended
@@ -4059,16 +4027,147 @@ so no empty zombie frames are left behind."
 ;; (profiler-report)
 ;; (profiler-stop)
 
-(use-package ewm
-  :straight nil
-  :commands (ewm-start-module ewm-launch-app ewm-toggle-fullscreen)
-  :custom
-  (ewm-mouse-follows-focus t)
-  ;; (ewm-output-config '(("DP-1" :width 2560 :height 1440)))
-  :config
-  (when (and (boundp 'ewm-mode-map) (keymapp ewm-mode-map))
-    ;; Override defaults with your preferred commands if needed
-    ;; (define-key ewm-mode-map (kbd "s-d") #'consult-buffer)
-    ))
+(with-eval-after-load 'ewm
+  (require 'ewm-transient)
+
+  ;; ── Bugfix: guard against nil output in pointer functions ──
+  ;; ewm-input--pointer-in-window-p crashes with "stringp, nil" when
+  ;; called on a frame without ewm-output (e.g. the initial daemon frame
+  ;; during startup when dashboard does switch-to-buffer).
+  (defun ewm-input--pointer-in-window-p (window)
+    "Return non-nil if pointer is inside WINDOW. Safe for non-EWM frames."
+    (let* ((frame (window-frame window))
+           (output (frame-parameter frame 'ewm-output)))
+      (when output
+        (let* ((output-offset (ewm--get-output-offset output))
+               (edges (window-inside-pixel-edges window))
+               (left (+ (car output-offset) (nth 0 edges)))
+               (top (+ (cdr output-offset) (nth 1 edges)))
+               (right (+ (car output-offset) (nth 2 edges)))
+               (bottom (+ (cdr output-offset) (nth 3 edges)))
+               (pointer (ewm-get-pointer-location))
+               (px (car pointer))
+               (py (cdr pointer)))
+          (and (<= left px right)
+               (<= top py bottom))))))
+
+  (defun ewm-input--warp-pointer-to-window (window)
+    "Warp pointer to center of WINDOW. Safe for non-EWM frames."
+    (unless (minibufferp (window-buffer window))
+      (let* ((frame (window-frame window))
+             (output (frame-parameter frame 'ewm-output)))
+        (when (and output (not (ewm-input--pointer-in-window-p window)))
+          (let* ((output-offset (ewm--get-output-offset output))
+                 (edges (window-inside-pixel-edges window))
+                 (x (+ (car output-offset) (/ (+ (nth 0 edges) (nth 2 edges)) 2)))
+                 (y (+ (cdr output-offset) (/ (+ (nth 1 edges) (nth 3 edges)) 2))))
+            (ewm-warp-pointer (float x) (float y)))))))
+
+   ;; ── Modeline: use minimal style under ewm ────
+   (when (bound-and-true-p maple-modeline-mode)
+     (setq maple-modeline-style 'ewm-style)
+     (force-mode-line-update t))
+
+   ;; ── Settings ─────────────────────────────────────────────
+   (setq ewm-mouse-follows-focus t)
+  (setq ewm-input-config '((keyboard :repeat-delay 200 :repeat-rate 25)))
+  (setq ewm-idle '(300 . "swaylock -f -c 333333"))
+
+  ;; Per-host output config
+  (pcase (system-name)
+    ("md"
+     (setq ewm-output-config
+           '(("DP-1" :x 0 :y 0 :refresh 144))))
+    ("sportmacher"
+     (setq ewm-output-config
+           '(("DSI-1" :width 800 :height 1280 :transform 3 :scale 1.0)))))
+
+  ;; ── Programm-Launcher ──────────────────────────────────────
+  (define-key ewm-mode-map (kbd "s-<return>")
+    (lambda () (interactive) (start-process "kitty" nil "kitty")))
+  (define-key ewm-mode-map (kbd "M-s-7")
+    (lambda (command)
+      (interactive (list (read-shell-command "$ ")))
+      (start-process-shell-command command nil command)))
+  (define-key ewm-mode-map (kbd "s-SPC")
+    (lambda () (interactive) (start-process "vicinae" nil "vicinae" "toggle")))
+  (define-key ewm-mode-map (kbd "s-b")
+    (lambda () (interactive) (start-process "helium" nil "helium-browser")))
+  (define-key ewm-mode-map (kbd "s-p")
+    (lambda () (interactive) (start-process "vicinae" nil "vicinae" "vicinae://extensions/tinkerbells/pass/pass")))
+  (define-key ewm-mode-map (kbd "s-v")
+    (lambda () (interactive) (start-process "vicinae" nil "vicinae" "vicinae://extensions/vicinae/clipboard/history")))
+  (define-key ewm-mode-map (kbd "s-s")
+    (lambda () (interactive) (start-process "vicinae" nil "vicinae" "vicinae://extensions/vicinae/power")))
+  (define-key ewm-mode-map (kbd "s-d")
+    (lambda () (interactive) (start-process "vicinae" nil "vicinae" "vicinae://extensions/cashmere/deepl-improve/deepl-improve")))
+  (define-key ewm-mode-map (kbd "M-s")
+    (lambda () (interactive) (start-process "snipe" nil "snipe")))
+  (define-key ewm-mode-map (kbd "s-<print>")
+    (lambda () (interactive)
+      (start-process-shell-command "screenshot" nil "grim -g \"$(slurp)\" - | wl-copy")))
+  (define-key ewm-mode-map (kbd "<print>")
+    (lambda () (interactive)
+      (start-process-shell-command "screenshot-pb" nil
+        "grim -g \"$(slurp)\" - | ssh pb@pb.cashmere.rs -- -ext png 2>/dev/null | sed 's/\\x1b\\[[0-9;]*m//g' | grep -oP 'https://\\S+/f/\\S+' | sed 's/$/?r=1/' | wl-copy")))
+
+  ;; ── Window Management ────────────────────────────────────
+  (define-key ewm-mode-map (kbd "s-h") #'windmove-left)
+  (define-key ewm-mode-map (kbd "s-j") #'windmove-down)
+  (define-key ewm-mode-map (kbd "s-k") #'windmove-up)
+  (define-key ewm-mode-map (kbd "s-l") #'windmove-right)
+  (define-key ewm-mode-map (kbd "s-q") #'kill-current-buffer)
+  (define-key ewm-mode-map (kbd "s-f") #'ewm-toggle-fullscreen)
+  (define-key ewm-mode-map (kbd "s-S-q") #'ewm-stop-module)
+
+  ;; tab switching s-0..s-9 (s-0 = tab 10)
+  (dotimes (i 10)
+    (define-key ewm-mode-map
+      (kbd (format "s-%d" i))
+      (let ((n i))
+        (lambda () (interactive) (tab-bar-select-tab (if (= n 0) 10 n))))))
+
+  ;; ── Media Keys ───────────────────────────────────────────
+  (define-key ewm-mode-map (kbd "<XF86AudioLowerVolume>")
+    (lambda () (interactive) (start-process "vol-" nil "pamixer" "-d" "5")))
+  (define-key ewm-mode-map (kbd "<XF86AudioRaiseVolume>")
+    (lambda () (interactive) (start-process "vol+" nil "pamixer" "-i" "5")))
+  (define-key ewm-mode-map (kbd "<XF86AudioMute>")
+    (lambda () (interactive) (start-process "mute" nil "pamixer" "--toggle-mute")))
+  (define-key ewm-mode-map (kbd "<XF86AudioMicMute>")
+    (lambda () (interactive)
+      (start-process-shell-command "micmute" nil
+        "pactl list sources short | grep input | awk '{print $1}' | xargs -I{} pactl set-source-mute {} toggle")))
+  (define-key ewm-mode-map (kbd "<XF86AudioPlay>")
+    (lambda () (interactive) (start-process "play" nil "playerctl" "play-pause")))
+  (define-key ewm-mode-map (kbd "<XF86AudioMedia>")
+    (lambda () (interactive) (start-process "play" nil "playerctl" "play-pause")))
+  (define-key ewm-mode-map (kbd "<XF86AudioNext>")
+    (lambda () (interactive) (start-process "next" nil "playerctl" "next")))
+  (define-key ewm-mode-map (kbd "<XF86AudioPrev>")
+    (lambda () (interactive) (start-process "prev" nil "playerctl" "previous")))
+  (define-key ewm-mode-map (kbd "<XF86MonBrightnessUp>")
+    (lambda () (interactive) (start-process "bri+" nil "brightnessctl" "set" "+5%")))
+  (define-key ewm-mode-map (kbd "<XF86MonBrightnessDown>")
+    (lambda () (interactive) (start-process "bri-" nil "brightnessctl" "set" "5%-")))
+
+  ;; ── Leader bindings under SPC e ──────────────────────────
+  (my-leader
+    "e"   '(:ignore t :wk "ewm")
+    "e a" '(ewm-launch-app :wk "launch app")
+    "e n" '(ewm-next-surface-buffer :wk "next surface")
+    "e p" '(ewm-prev-surface-buffer :wk "prev surface")
+    "e f" '(ewm-toggle-fullscreen :wk "fullscreen")
+    "e t" '(ewm-transient :wk "control panel")
+    "e s" '(ewm-screenshot :wk "screenshot")
+    "e i" '(ewm-show-state :wk "inspect state")
+    "e d" '(ewm-debug-mode :wk "debug")
+    "e l" '(ewm-lock-session :wk "lock")
+    "e T" '(:ignore t :wk "tab")
+    "e T n" '(tab-new :wk "new tab")
+    "e T c" '(tab-close :wk "close tab")
+    "e T l" '(tab-next :wk "next tab")
+    "e T h" '(tab-previous :wk "prev tab")
+    "e T r" '(tab-recent :wk "recent tab")))
 
 (provide 'init)

@@ -37,45 +37,10 @@
 (setq kept-old-versions             5)
 #+end_src
 
-* emacs startup speed
-
-#+begin_src emacs-lisp
-(defvar yy/cache-2 nil)
-
-(defun yy/load-cache ()
-  (setq yy/cache-2
-        (condition-case e
-            (car (read-from-string
-                  (with-temp-buffer
-                    (insert-file-contents
-                     (file-name-concat user-emacs-directory "ycache.eld"))
-                    (buffer-substring (point-min) (point-max)))))
-          (error nil))))
-            ;;(make-hash-table :test #'equal))))
-(yy/load-cache)
-
-(defun yy/load-path-filter (path file suffixes)
-  (if-let* ((ls (with-memoization (alist-get file yy/cache-2 nil nil #'equal)
-                  (let ((res (load-path-filter-cache-directory-files path file suffixes)))
-                    (if (eq res path) nil res)))))
-      ls path))
-
-(defun yy/write-cache ()
-  (interactive)
-  (when yy/cache-2
-    (with-temp-file (file-name-concat user-emacs-directory "ycache.eld")
-      (pp yy/cache-2 (current-buffer)))))
-
-(yy/load-cache)
-
-(setq load-path-filter-function #'yy/load-path-filter)
-#+end_src
-
 * emacs
 
 #+begin_src emacs-lisp
 (use-package emacs
-  :straight nil
   :ensure nil
   :custom
   (column-number-mode t)
@@ -177,7 +142,7 @@
 ;; Packages : %s
 "
 						 (emacs-init-time)
-						 (length (hash-table-keys straight--recipe-cache))))))))
+						 (length (elpaca--queued))))))))
 
 
 (defcustom ek-use-nerd-fonts t
@@ -211,7 +176,6 @@
 
 #+begin_src emacs-lisp
 (use-package window
-  :straight nil
   :ensure nil
   :custom
   (display-buffer-alist
@@ -242,7 +206,6 @@
 
 #+begin_src emacs-lisp
 (use-package dired
-  :straight nil
   :ensure nil
   :custom
   (dired-listing-switches "-lah --group-directories-first")
@@ -291,7 +254,7 @@
 
 #+begin_src emacs-lisp
 (use-package erc
-  :straight nil
+  :ensure nil
   :defer t
   :custom
   ;; connection
@@ -497,8 +460,7 @@ Temporarily disables notifications during the fetch."
 
 #+begin_src emacs-lisp
 ;; (use-package lambda-themes
-;;   :ensure t
-;;   :straight (:type git :host github :repo "lambda-emacs/lambda-themes") 
+;;   :ensure (:host github :repo "lambda-emacs/lambda-themes")
 ;;   :custom
 ;;   (lambda-themes-set-italic-comments t)
 ;;   (lambda-themes-set-italic-keywords t)
@@ -640,7 +602,6 @@ Temporarily disables notifications during the fetch."
 
 #+begin_src emacs-lisp
 (use-package isearch
-  :straight nil
   :ensure nil                                  ;; This is built-in, no need to fetch it.
   :config
   (setq isearch-lazy-count t)                  ;; Enable lazy counting to show current match information.
@@ -655,7 +616,6 @@ Temporarily disables notifications during the fetch."
 
 #+begin_src emacs-lisp
 (use-package vc
-  :straight nil
   :ensure nil                        ;; This is built-in, no need to fetch it.
   :defer t
   :bind
@@ -695,7 +655,6 @@ I adjusted the config accordingly to my modes which I use on a frequent.
 #+begin_src emacs-lisp
 (use-package ibuffer
   :ensure nil
-  :straight nil
   :config
   (setq ibuffer-expert t)
   (setq ibuffer-display-summary nil)
@@ -796,7 +755,12 @@ To spice things up, I enabled the same Nerd Icons which are visible in dired to 
 Not necessary but an eyecandy to look at!
 
 #+begin_src emacs-lisp
+(use-package nerd-icons
+  :if ek-use-nerd-fonts
+  :ensure t)
+
 (use-package nerd-icons-ibuffer
+  :if ek-use-nerd-fonts
   :ensure t
   :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
 #+end_src
@@ -805,7 +769,6 @@ Not necessary but an eyecandy to look at!
 
 #+begin_src emacs-lisp
 (use-package smerge-mode
-  :straight nil
   :ensure nil                                  ;; This is built-in, no need to fetch it.
   :defer t
   :bind (:map smerge-mode-map
@@ -852,8 +815,7 @@ Not necessary but an eyecandy to look at!
 
 #+begin_src emacs-lisp
 (use-package eldoc
-  :straight nil
-  :ensure t
+  :ensure nil
   :config
   (setq eldoc-idle-delay 0.25)
   (setq eldoc-echo-area-use-multiline-p nil)
@@ -884,7 +846,6 @@ Not necessary but an eyecandy to look at!
 
 #+begin_src emacs-lisp
 (use-package flymake
-  :straight nil
   :ensure nil          ;; This is built-in, no need to fetch it.
   :defer t
   ;; :hook (prog-mode . flymake-mode)
@@ -923,12 +884,11 @@ Not necessary but an eyecandy to look at!
 
 #+begin_src emacs-lisp
 (use-package flycheck-python-ruff
-  :straight (:host github :repo "v4n6/flycheck-python-ruff")
-  :ensure t
+  :ensure (:host github :repo "v4n6/flycheck-python-ruff")
   :hook ((python-mode python-ts-mode) . flycheck-python-ruff-setup))
 #+end_src
 
-** flyover
+** COMMENT flyover
 
 #+begin_src emacs-lisp
 (use-package flyover
@@ -950,7 +910,6 @@ Not necessary but an eyecandy to look at!
 
 #+begin_src emacs-lisp
 (use-package xref
-  :straight nil
   :ensure nil)
 #+end_src
 
@@ -958,7 +917,6 @@ Not necessary but an eyecandy to look at!
 
 #+begin_src emacs-lisp
 (use-package project
-  :straight nil
   :ensure nil)
 #+end_src
 
@@ -967,8 +925,7 @@ Not necessary but an eyecandy to look at!
 #+begin_src emacs-lisp
 (setq org-directory "~/org/")
 (use-package org
-  :straight nil
-  :ensure nil     
+  :ensure nil
   :config
   (require 'org-tempo)
 
@@ -1033,6 +990,7 @@ Not necessary but an eyecandy to look at!
 
 #+begin_src emacs-lisp
 (use-package org-appear
+  :ensure t
   :commands (org-appear-mode)
   :hook     (org-mode . org-appear-mode)
   :config
@@ -1052,13 +1010,13 @@ Not necessary but an eyecandy to look at!
 #+begin_src emacs-lisp
 (use-package org-modern
   :ensure t
+  :hook (org-mode . org-modern-mode)
   :config
   (setq org-modern-hide-stars t)
   (setq org-modern-star 'replace)
   (setq org-modern-fold-stars '(("◉" . "○")))
-  (setq org-modern-replace-stars "◉○◉○◉"))
-
-(with-eval-after-load 'org (global-org-modern-mode))
+  (setq org-modern-replace-stars "◉○◉○◉")
+  (global-org-modern-mode))
 
 #+end_src
 
@@ -1069,13 +1027,12 @@ Only activates when running in a Kitty terminal (not in GUI Emacs).
 
 #+begin_src emacs-lisp
 (use-package kitty-graphics
-  :ensure t
-  :straight (:host github :repo "cashmeredev/kitty-graphics.el")
+  :ensure (:host github :repo "cashmeredev/kitty-graphics.el")
   :if (and (not (display-graphic-p)) (getenv "KITTY_PID"))
   :config
-  (kitty-graphics-mode 1)
-  (with-eval-after-load 'dired
-    (define-key dired-mode-map (kbd "P") #'kitty-gfx-dired-preview)))
+  (kitty-graphics-mode 1))
+  ;; (with-eval-after-load 'dired
+  ;;   (define-key dired-mode-map (kbd "P") #'kitty-gfx-dired-preview))
 
 ;; (when (and (not (display-graphic-p)) (getenv "KITTY_PID"))
 ;;   (load "~/projects/kitty-graphics/kitty-graphics.el")
@@ -1169,6 +1126,7 @@ Old config
 
 #+begin_src emacs-lisp
 (use-package ob-async
+  :ensure t
   :after org)
 #+end_src
 
@@ -1308,7 +1266,6 @@ Automatic task state management when clocking in/out. Tasks automatically become
 #+begin_src emacs-lisp
 (use-package org-clock
   :after org
-  :straight nil
   :ensure nil
   :commands (org-clock-in org-clock-out org-clock-goto)
   :config
@@ -1560,6 +1517,7 @@ Skips capture tasks and projects."
 
 #+begin_src emacs-lisp
 (use-package yequake
+  :ensure t
   :custom
   (yequake-frames
    '(("org-capture"
@@ -1641,6 +1599,7 @@ Skips capture tasks and projects."
 
 #+begin_src emacs-lisp
 (use-package org-super-agenda
+  :ensure t
   :after org-agenda
   :init
   :config
@@ -1979,7 +1938,7 @@ Usage: emacs --eval '(my/agenda-app)' --no-splash"
 
 #+begin_src emacs-lisp
 (use-package org-contrib
-  :ensure t)
+  :ensure (:wait t))
 
 (require 'ox-extra)
 (ox-extras-activate '(ignore-headlines))
@@ -1991,8 +1950,7 @@ Org Backend exporter for typst templates written and configured in org mode.
 
 #+begin_src emacs-lisp
 (use-package ox-typst
-  :ensure t
-  :straight (:host github :repo "jmpunkt/ox-typst")
+  :ensure (:host github :repo "jmpunkt/ox-typst")
   :after org)
 #+end_src
 
@@ -2073,10 +2031,8 @@ Org Backend exporter for Slidev presentations.
 
 #+begin_src emacs-lisp
 (use-package ox-slidev
-  :ensure t
-  :straight (:type git :host nil
-             :repo "https://dev.cashmere.rs/cashmere/ox-slidev"
-             :files (:defaults "templates"))
+  :ensure (:repo "https://dev.cashmere.rs/cashmere/ox-slidev"
+           :files (:defaults "templates"))
   :after org
   :config
   (require 'org-slidev))
@@ -2253,8 +2209,7 @@ Some goodies for better integration with org files.
 
 #+begin_src emacs-lisp
 (use-package consult-denote
-  :straight (:host github :repo "protesilaos/consult-denote")
-  :ensure t
+  :ensure (:host github :repo "protesilaos/consult-denote")
   :defer t)
 #+end_src
 
@@ -2311,9 +2266,11 @@ Some goodies for better integration with org files.
 ** denote-publish
 
 #+begin_src emacs-lisp
+(use-package ox-gfm
+  :ensure t)
+
 (use-package denote-publish
-  :ensure t
-  :straight ( denote-publish :type git :host nil :repo "https://github.com/vedang/denote-publish")) 
+  :ensure (:repo "https://github.com/vedang/denote-publish"))
 
 (setq denote-publish-default-base-dir "~/wiki")
 (setq denote-publish-default-output-dir "~/blog/wiki")
@@ -2330,8 +2287,7 @@ Some goodies for better integration with org files.
 
 #+begin_src emacs-lisp
 (use-package tmr
-  :ensure t
-  :straight (:host github :repo "protesilaos/tmr")
+  :ensure (:host github :repo "protesilaos/tmr")
   :config
   (setq tmr-sound-file "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga"
         tmr-notification-urgency 'normal
@@ -2406,8 +2362,7 @@ Timers that expired while Emacs was closed fire immediately."
 
 #+begin_src emacs-lisp
 (use-package denote-merge
-  :ensure t ; not in any package archive
-  :straight (:host github :repo "protesilaos/denote-merge")
+  :ensure (:host github :repo "protesilaos/denote-merge") ; not in any package archive
   ;; You can bind these to keys.  They are here so you can learn about them.
   :commands
   (denote-merge-file
@@ -2438,7 +2393,6 @@ Timers that expired while Emacs was closed fire immediately."
 #+begin_src emacs-lisp
 (use-package vertico
   :ensure t
-  :straight t
   :hook
   (after-init . vertico-mode)
   :custom
@@ -2463,6 +2417,7 @@ Timers that expired while Emacs was closed fire immediately."
 
 #+begin_src emacs-lisp
 (use-package vertico-posframe
+  :ensure t
   :init
   (setq vertico-posframe-parameters   '((left-fringe  . 12)    ;; Fringes
                                         (right-fringe . 12)
@@ -2535,7 +2490,6 @@ Timers that expired while Emacs was closed fire immediately."
 #+begin_src emacs-lisp
 (use-package consult
   :ensure t
-  :straight t
   :defer t
   :init
   (advice-add #'register-preview :override #'consult-register-window)
@@ -2556,7 +2510,7 @@ Timers that expired while Emacs was closed fire immediately."
           "\\`\\*Flymake"
           "\\`\\*lsp-help\\*\\'"
           "\\`\\*eldoc"
-          "\\`\\*straight-process\\*\\'"
+          "\\`\\*elpaca-log\\*\\'"
           "\\`\\*Native-compile-Log\\*\\'"
           "\\`\\*Async-native-compile-log\\*\\'")))
 #+end_src
@@ -2620,7 +2574,6 @@ ensures that every available tree sitter is downloaded and set up for you.
 #+begin_src emacs-lisp
 ;; (use-package treesit-auto
 ;;   :ensure t
-;;   :straight t
 ;;   :defer t
 ;;   :custom
 ;;   (treesit-auto-install 'prompt)
@@ -2636,7 +2589,6 @@ ensures that every available tree sitter is downloaded and set up for you.
 #+begin_src emacs-lisp
 (use-package embark
   :ensure t
-  :straight t
   :defer t)
 #+end_src
 
@@ -2645,7 +2597,6 @@ ensures that every available tree sitter is downloaded and set up for you.
 #+begin_src emacs-lisp
 (use-package embark-consult
   :ensure t
-  :straight t
   :hook
   (embark-collect-mode . consult-preview-at-point-mode)) ;; Enable preview in Embark collect mode.
 #+end_src
@@ -2655,7 +2606,6 @@ ensures that every available tree sitter is downloaded and set up for you.
 #+begin_src emacs-lisp
 (use-package orderless
     :ensure t
-    :straight t
     :defer t                                    ;; Load Orderless on demand.
     :after vertico                              ;; Ensure Vertico is loaded before Orderless.
     :init
@@ -2669,7 +2619,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 #+begin_src emacs-lisp
 (use-package marginalia
   :ensure t
-  :straight t
   :hook
   (after-init . marginalia-mode))
 #+end_src
@@ -2680,7 +2629,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 #+begin_src emacs-lisp
 (use-package eglot
-  :straight nil
   :ensure nil
   :config
   (setq eglot-autoshutdown t)
@@ -2708,8 +2656,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 #+begin_src emacs-lisp
 ;; (use-package eglot-booster
-;;   :ensure t
-;;   :straight ( eglot-booster :type git :host nil :repo "https://github.com/jdtsmith/eglot-booster")
+;;   :ensure (:repo "https://github.com/jdtsmith/eglot-booster")
 ;;   :after eglot
 ;;   :config	(eglot-booster-mode))
 #+end_src
@@ -2768,9 +2715,9 @@ Automatic flake devshell activation.
 Because I have to and not want to.
 
 #+begin_src emacs-lisp 
-(use-package python-mode
-  :ensure t
-  :mode "\\.py\\'"
+(use-package python
+  :ensure nil
+  :mode ("\\.py\\'" . python-mode)
   :hook (python-mode . eglot-ensure)
   :config
   (with-eval-after-load 'eglot
@@ -2845,7 +2792,7 @@ Vue files use =web-mode= with the =rass vuetail= preset (=vue-language-server= +
 
 #+begin_src emacs-lisp
 (use-package js
-  :ensure t
+  :ensure nil
   :mode ("\\.js\\'" . js-mode)
   :hook (js-mode . eglot-ensure)
   :config
@@ -2862,7 +2809,6 @@ Requires tree-sitter grammars: =M-x treesit-install-language-grammar RET typescr
 
 #+begin_src emacs-lisp
 (use-package typescript-ts-mode
-  :straight nil
   :ensure nil
   :mode (("\\.ts\\'" . typescript-ts-mode)
          ("\\.tsx\\'" . tsx-ts-mode))
@@ -2896,10 +2842,7 @@ Requires tree-sitter grammars: =M-x treesit-install-language-grammar RET typescr
 
 #+begin_src emacs-lisp
 (use-package mint-mode
-  :straight (mint-mode
-             :type git
-             :host github
-             :repo "creatorrr/emacs-mint-mode")
+  :ensure (:host github :repo "creatorrr/emacs-mint-mode")
   :mode "\\.mint\\'"
   :hook (mint-mode . eglot-ensure)
   :config
@@ -2913,7 +2856,6 @@ Requires tree-sitter grammars: =M-x treesit-install-language-grammar RET typescr
 #+begin_src emacs-lisp
 ;; (use-package nushell-mode
 ;;   :ensure nil
-;;   :straight nil
 ;;   :mode "\\.nu\\'")
 #+end_src
 
@@ -2921,7 +2863,7 @@ Requires tree-sitter grammars: =M-x treesit-install-language-grammar RET typescr
 
 #+begin_src emacs-lisp
 ;; (use-package nushell-ts-babel
-;;   :straight (nushell-ts-babel :type git :host github :repo "herbertjones/nushell-ts-babel")
+;;   :ensure (:host github :repo "herbertjones/nushell-ts-babel")
 ;;   :after org
 ;;   :config
 ;;   (org-babel-do-load-languages
@@ -2982,7 +2924,6 @@ Requires tree-sitter grammars: =M-x treesit-install-language-grammar RET typescr
 
 #+begin_src emacs-lisp
 (use-package sh-mode
-  :straight nil
   :ensure nil
   :hook (bash-ts-mode . eglot-ensure)
         (sh-mode . eglot-ensure)
@@ -3048,6 +2989,7 @@ Requires tree-sitter grammars: =M-x treesit-install-language-grammar RET typescr
 
 #+begin_src emacs-lisp
 (use-package olivetti
+  :ensure t
   :hook (org-mode . olivetti-mode)
   :custom
   (olivetti-style nil)  ; Use window margins (fringes disabled in early-init)
@@ -3094,7 +3036,6 @@ Requires tree-sitter grammars: =M-x treesit-install-language-grammar RET typescr
 #+begin_src emacs-lisp
 ;; (use-package diff-hl
 ;;   :defer t
-;;   :straight t
 ;;   :ensure t
 ;;   :hook
 ;;   (find-file . (lambda ()
@@ -3114,8 +3055,7 @@ Requires tree-sitter grammars: =M-x treesit-install-language-grammar RET typescr
 
 #+begin_src emacs-lisp
 (use-package hl-todo
-  :ensure t
-  :straight (:host github :repo "tarsius/hl-todo")
+  :ensure (:host github :repo "tarsius/hl-todo")
   :config
   (global-hl-todo-mode) 
   (setq hl-todo-keyword-faces
@@ -3131,7 +3071,6 @@ Requires tree-sitter grammars: =M-x treesit-install-language-grammar RET typescr
 #+begin_src emacs-lisp
 (use-package magit
   :ensure t
-  :straight t
   :config
   (if ek-use-nerd-fonts
 	  (setopt magit-format-file-function #'magit-format-file-nerd-icons))
@@ -3154,7 +3093,6 @@ Requires tree-sitter grammars: =M-x treesit-install-language-grammar RET typescr
 #+begin_src emacs-lisp
 (use-package indent-guide
   :defer t
-  :straight t
   :ensure t
   :hook
   (prog-mode . indent-guide-mode)  ;; Activate indent-guide in programming modes.
@@ -3168,8 +3106,7 @@ Requires tree-sitter grammars: =M-x treesit-install-language-grammar RET typescr
 
 #+begin_src emacs-lisp
 (use-package general
-  :straight t
-  :ensure t
+  :ensure (:wait t)
   :demand t
   :config
   (general-evil-setup)
@@ -3189,7 +3126,7 @@ Requires tree-sitter grammars: =M-x treesit-install-language-grammar RET typescr
 
 #+begin_src emacs-lisp
 (use-package evil
-  :ensure t
+  :ensure (:wait t)
   :init
   (setq evil-want-integration t)
   (setq evil-want-keybinding nil)
@@ -3264,7 +3201,7 @@ Requires tree-sitter grammars: =M-x treesit-install-language-grammar RET typescr
 #+begin_src emacs-lisp
 (use-package evil-collection
   :after evil
-  :ensure t
+  :ensure (:wait t)
   :config
   (evil-collection-init))
 #+end_src
@@ -3274,7 +3211,6 @@ Requires tree-sitter grammars: =M-x treesit-install-language-grammar RET typescr
 #+begin_src emacs-lisp
 (use-package evil-surround
   :ensure t
-  :straight t
   :after evil-collection
   :config
   (global-evil-surround-mode 1))
@@ -3285,7 +3221,6 @@ Requires tree-sitter grammars: =M-x treesit-install-language-grammar RET typescr
 #+begin_src emacs-lisp
 (use-package evil-matchit
   :ensure t
-  :straight t
   :after evil-collection
   :config
   (global-evil-matchit-mode 1))
@@ -3379,8 +3314,7 @@ Requires tree-sitter grammars: =M-x treesit-install-language-grammar RET typescr
 
 #+begin_src emacs-lisp
 (use-package flash
-  :ensure t
-  :straight (:host github :repo "Prgebish/flash")
+  :ensure (:host github :repo "Prgebish/flash")
   :after evil
   :custom
   (flash-multi-window t)
@@ -3417,7 +3351,6 @@ Requires tree-sitter grammars: =M-x treesit-install-language-grammar RET typescr
 (use-package undo-tree
   :defer t
   :ensure t
-  :straight t
   :hook (after-init . global-undo-tree-mode)
   :init
   (setq undo-tree-visualizer-timestamps t
@@ -3436,7 +3369,6 @@ Requires tree-sitter grammars: =M-x treesit-install-language-grammar RET typescr
 #+begin_src emacs-lisp
 (use-package rainbow-delimiters
   :defer t
-  :straight t
   :ensure t
   :hook
   (prog-mode . rainbow-delimiters-mode))
@@ -3449,7 +3381,6 @@ Requires tree-sitter grammars: =M-x treesit-install-language-grammar RET typescr
 #+begin_src emacs-lisp
 (use-package dotenv-mode
   :defer t
-  :straight t
   :ensure t
   :config)
 #+end_src
@@ -3460,7 +3391,6 @@ Requires tree-sitter grammars: =M-x treesit-install-language-grammar RET typescr
 (add-hook 'org-agenda-finalize-hook #'org-save-all-org-buffers)
 (use-package org-agenda
   :ensure nil
-  :straight nil
   :config
   (setq org-agenda-window-setup 'current-window
    org-agenda-inhibit-startup t
@@ -3495,7 +3425,7 @@ every =emacsclient -c= frame gets its own set of perspectives.
 
 #+begin_src emacs-lisp
 (use-package perspective
-  :ensure t
+  :ensure (:wait t)
   :demand t
   :custom
   (persp-sort 'created)
@@ -3532,20 +3462,12 @@ every =emacsclient -c= frame gets its own set of perspectives.
 
 * nerd icons
 
-#+begin_src emacs-lisp
-(use-package nerd-icons
-  :if ek-use-nerd-fonts                   ;; Load the package only if the user has configured to use nerd fonts.
-  :ensure t)                               ;; Ensure the package is installed.
-;; Load the package only when needed to improve startup time.
-#+end_src
-
 ** nerd icons dired
 
 #+begin_src emacs-lisp
 (use-package nerd-icons-dired
   :if ek-use-nerd-fonts                   ;; Load the package only if the user has configured to use nerd fonts.
   :ensure t                               ;; Ensure the package is installed.
-  :straight t
   :defer t                                ;; Load the package only when needed to improve startup time.
   :hook
   (dired-mode . nerd-icons-dired-mode))
@@ -3557,7 +3479,6 @@ every =emacsclient -c= frame gets its own set of perspectives.
 (use-package nerd-icons-completion
   :if ek-use-nerd-fonts                   ;; Load the package only if the user has configured to use nerd fonts.
   :ensure t                               ;; Ensure the package is installed.
-  :straight t
   :after (:all nerd-icons marginalia)     ;; Load after `nerd-icons' and `marginalia' to ensure proper integration.
   :config
   (nerd-icons-completion-mode)            ;; Activate nerd icons for completion interfaces.
@@ -3880,7 +3801,7 @@ every =emacsclient -c= frame gets its own set of perspectives.
 
 #+begin_src emacs-lisp
 ;; (use-package awesome-tray
-;;   :straight (:host github :repo "manateelazycat/awesome-tray")
+;;   :ensure (:host github :repo "manateelazycat/awesome-tray")
 ;;   :custom
 ;;   ;; Position at the top
 ;;   ;; (setq awesome-tray-position 'right)
@@ -3931,7 +3852,7 @@ every =emacsclient -c= frame gets its own set of perspectives.
 #+begin_src emacs-lisp
 ;; (setq display-time-mode 1)
 ;; (use-package lambda-line
-;;   :straight (:type git :host github :repo "lambda-emacs/lambda-line") 
+;;   :ensure (:host github :repo "lambda-emacs/lambda-line")
 ;;   :custom
 ;;   (lambda-line-lsp-indicator nil)
 ;;   (lambda-line-icon-time t) ;; requires ClockFace font (see below)
@@ -3986,20 +3907,26 @@ every =emacsclient -c= frame gets its own set of perspectives.
                        (copy-sequence mode-line-misc-info)))
 
 (use-package maple-modeline
-  :ensure t
-  :straight (:host github :repo "honmaple/emacs-maple-modeline")
+  :ensure (:host github :repo "honmaple/emacs-maple-modeline")
   :hook (after-init . maple-modeline-mode)
   :config
   (setq maple-modeline-separator 'nil)
   (setq maple-modeline-height 25)
   (setq maple-modeline-icon t)
   
-  (defun maple-modeline-to-header-line ()
-    (unless (featurep 'ewm)
-      (setq-default tab-line-format mode-line-format)
-      (setq-default mode-line-format nil)))
+  ;; (defun maple-modeline-to-header-line ()
+  ;;   "Move maple-modeline from mode-line to header-line in all buffers."
+  ;;   (unless (featurep 'ewm)
+  ;;     (let ((fmt '(:eval (maple-modeline--init))))
+  ;;       (setq-default header-line-format fmt)
+  ;;       (setq-default mode-line-format nil)
+  ;;       (dolist (buf (buffer-list))
+  ;;         (with-current-buffer buf
+  ;;           (setq header-line-format fmt)
+  ;;           (setq mode-line-format nil)))
+  ;;       (force-mode-line-update t))))
 
-  (add-hook 'maple-modeline-mode-hook #'maple-modeline-to-header-line)
+  ;; (add-hook 'maple-modeline-mode-hook #'maple-modeline-to-header-line)
 
   (maple-modeline-define-segment my-modeline-time
     :format (propertize (downcase (format-time-string " %I:%M %p "))
@@ -4068,8 +3995,7 @@ every =emacsclient -c= frame gets its own set of perspectives.
 
 #+begin_src emacs-lisp
 ;; (use-package punch-line
-;;   :ensure t
-;;   :straight (:host github :repo "konrad1977/punch-line")
+;;   :ensure (:host github :repo "konrad1977/punch-line")
 ;;   :config
 ;;   (setq punch-line-left-separator "  "
 ;;         punch-line-right-separator "  "
@@ -4132,13 +4058,6 @@ every =emacsclient -c= frame gets its own set of perspectives.
   (setq grip-command 'auto)) ;; auto, grip, go-grip or mdopen
 #+end_src
 
-*** org mode grip dispatcher
-
-#+begin_src emacs-lisp
-(use-package ox-gfm
-  :ensure t)
-#+end_src
-
 * themes
 
 ** catppuccin-theme
@@ -4146,7 +4065,6 @@ every =emacsclient -c= frame gets its own set of perspectives.
 #+begin_src emacs-lisp
 ;; (use-package catppuccin-theme
 ;;   :ensure t
-;;   :straight t
 ;;   :config
 ;;   (setq catppuccin-flavor 'mocha)
 
@@ -4168,10 +4086,8 @@ every =emacsclient -c= frame gets its own set of perspectives.
 
 #+begin_src emacs-lisp
 ;; (use-package modus-catppuccin
-;;   :ensure t
-;;   :straight (:type git
-;;              :repo "https://gitlab.com/magus/modus-catppuccin"
-;;              :branch "main")
+;;   :ensure (:repo "https://gitlab.com/magus/modus-catppuccin"
+;;            :branch "main")
 ;;   :custom
 ;;   (catppuccin-mocha-palette-overrides
 ;;    '((base "#232136")
@@ -4538,7 +4454,7 @@ every =emacsclient -c= frame gets its own set of perspectives.
 
 #+begin_src emacs-lisp
 (use-package dirvish
-  :straight t
+  :ensure t
   :init
   (dirvish-override-dired-mode)
 
@@ -4569,8 +4485,7 @@ every =emacsclient -c= frame gets its own set of perspectives.
 
 #+begin_src emacs-lisp
 ;; (use-package tramp-hlo
-;;     :ensure t
-;; 	:straight (:host github :repo "jsadusk/tramp-hlo")
+;;     :ensure (:host github :repo "jsadusk/tramp-hlo")
 ;;     :config
 ;;     (tramp-hlo-setup))
 #+end_src
@@ -4619,7 +4534,7 @@ every =emacsclient -c= frame gets its own set of perspectives.
 
 #+begin_src emacs-lisp
 (use-package org-modern-indent
-  :straight (:host github :repo "jdtsmith/org-modern-indent")
+  :ensure (:host github :repo "jdtsmith/org-modern-indent")
   :hook (org-mode . org-modern-indent-mode))
 #+end_src
 
@@ -4648,7 +4563,7 @@ every =emacsclient -c= frame gets its own set of perspectives.
 
 #+begin_src emacs-lisp
 (use-package projectile
-  :ensure t
+  :ensure (:wait t)
   :demand t
   :config
   (projectile-mode +1)
@@ -4665,7 +4580,6 @@ every =emacsclient -c= frame gets its own set of perspectives.
 #+begin_src emacs-lisp
 (use-package consult-projectile
   :ensure t
-  :straight t
   :after (consult projectile)
   :defer t
   :config
@@ -4695,7 +4609,6 @@ every =emacsclient -c= frame gets its own set of perspectives.
 
 #+begin_src emacs-lisp
 (use-package auth-source
-  :straight nil
   :ensure nil                                  ;; This is built-in, no need to fetch it.
   :defer t
   :config
@@ -4732,7 +4645,7 @@ every =emacsclient -c= frame gets its own set of perspectives.
 
 #+begin_src emacs-lisp
 (use-package pdf-tools
-  :straight (:type built-in)
+  :ensure nil
   :magic ("%PDF" . pdf-view-mode)
   :config
   (pdf-loader-install)
@@ -5196,7 +5109,6 @@ every =emacsclient -c= frame gets its own set of perspectives.
 
 #+begin_src emacs-lisp
 (use-package mu4e
-  :straight nil
   :ensure nil
   :defer t
   :commands (mu4e mu4e-compose-new)
@@ -5283,12 +5195,9 @@ this package provides the ability to display rgb and hex colors.
 
 #+begin_src emacs-lisp
 ;; (use-package snippy
-;;   :ensure t
-;;   :straight
-;;   (:host github
-;; 	   :repo "MiniApollo/snippy.git"
-;; 	   :branch "main"
-;; 	   :rev :newest)
+;;   :ensure (:host github
+;; 	       :repo "MiniApollo/snippy.git"
+;; 	       :branch "main")
 ;;   :hook (after-init . global-snippy-minor-mode)
 ;;   :custom
 ;;   (snippy-global-languages '("global")) ;; Recomended
@@ -5353,11 +5262,9 @@ this package provides the ability to display rgb and hex colors.
                  (y (+ (cdr output-offset) (/ (+ (nth 1 edges) (nth 3 edges)) 2))))
             (ewm-warp-pointer (float x) (float y)))))))
 
-   ;; ── Modeline: move back to bottom, use minimal style ────
+   ;; ── Modeline: use minimal style under ewm ────
    (when (bound-and-true-p maple-modeline-mode)
      (setq maple-modeline-style 'ewm-style)
-     (setq-default mode-line-format tab-line-format)
-     (setq-default tab-line-format nil)
      (force-mode-line-update t))
 
    ;; ── Settings ─────────────────────────────────────────────
