@@ -690,6 +690,59 @@ Temporarily disables notifications during the fetch."
   (setq gptel-default-mode 'markdown-mode)
   (setq gptel-backends (list my/openrouter-backend)))
 
+(use-package markdown-mode
+  :ensure t
+  :hook (markdown-mode . nb/markdown-unhighlight)
+  :init
+  (setq-default abbrev-mode t)
+  :config
+  (defvar nb/current-line '(0 . 0)
+    "(start . end) of current line in current buffer")
+  (make-variable-buffer-local 'nb/current-line)
+
+  (defun nb/unhide-current-line (limit)
+    "Font-lock function"
+    (let ((start (max (point) (car nb/current-line)))
+          (end (min limit (cdr nb/current-line))))
+      (when (< start end)
+        (remove-text-properties start end
+                                '(invisible t display "" composition ""))
+        (goto-char limit)
+        t)))
+
+  (defun nb/refontify-on-linemove ()
+    "Post-command-hook"
+    (let* ((start (line-beginning-position))
+           (end (line-beginning-position 2))
+           (needs-update (not (equal start (car nb/current-line)))))
+      (setq nb/current-line (cons start end))
+      (when needs-update
+        ;; FIX: Verwende jit-lock-refontify statt font-lock-fontify-block
+        (jit-lock-refontify start end))))
+
+  (defun nb/markdown-unhighlight ()
+    "Enable markdown concealling"
+    (interactive)
+    (markdown-toggle-markup-hiding 'toggle)
+    (font-lock-add-keywords nil '((nb/unhide-current-line)) t)
+    ;; FIX: Stelle sicher dass jit-lock aktiv ist
+    (jit-lock-register #'font-lock-fontify-region)
+    (add-hook 'post-command-hook #'nb/refontify-on-linemove nil t))
+
+  :custom-face
+  (markdown-header-delimiter-face ((t (:foreground "#616161" :height 0.9))))
+  (markdown-header-face-1 ((t (:height 1.6 :foreground "#A3BE8C" :weight extra-bold :inherit markdown-header-face))))
+  (markdown-header-face-2 ((t (:height 1.4 :foreground "#EBCB8B" :weight extra-bold :inherit markdown-header-face))))
+  (markdown-header-face-3 ((t (:height 1.2 :foreground "#D08770" :weight extra-bold :inherit markdown-header-face))))
+  (markdown-header-face-4 ((t (:height 1.15 :foreground "#BF616A" :weight bold :inherit markdown-header-face))))
+  (markdown-header-face-5 ((t (:height 1.1 :foreground "#b48ead" :weight bold :inherit markdown-header-face))))
+  (markdown-header-face-6 ((t (:height 1.05 :foreground "#5e81ac" :weight semi-bold :inherit markdown-header-face)))))
+
+(use-package eca
+  :ensure (:host github :repo "editor-code-assistant/eca-emacs"
+           :files ("*.el"))
+  :defer t)
+
 (use-package eldoc
   :ensure nil
   :config
@@ -729,6 +782,7 @@ Temporarily disables notifications during the fetch."
   :ensure t
   :config
   (setq flycheck-global-modes '(not org-mode))
+  (setq flycheck-display-errors-function nil)
   (add-hook 'after-init-hook #'global-flycheck-mode))
 
 (use-package flycheck-rust
@@ -748,6 +802,19 @@ Temporarily disables notifications during the fetch."
   :config
   (global-flycheck-eglot-mode 1))
 
+(use-package sideline
+  :ensure t
+  :hook (flycheck-mode . sideline-mode)
+  :config
+  (setq sideline-delay 0.001)
+  :custom
+  (sideline-backends-right '(sideline-flycheck))
+  (sideline-display-backend-name t))
+
+(use-package sideline-flycheck
+  :ensure t
+  :hook (flycheck-mode . sideline-flycheck-setup))
+
 (use-package xref
   :ensure nil)
 
@@ -757,23 +824,26 @@ Temporarily disables notifications during the fetch."
 (setq org-directory "~/org/")
 (use-package org
   :ensure nil
+  :custom
+  (org-list-demote-modify-bullet '(("+" . "-") ("-" . "+")))
   :config
   (require 'org-tempo)
 
   (custom-set-faces
-   '(org-document-title ((t (:height 1.6))))
-   '(outline-1          ((t (:height 1.25))))
-   '(outline-2          ((t (:height 1.2))))
-   '(outline-3          ((t (:height 1.2))))
-   '(outline-4          ((t (:height 1.2))))
+   '(org-document-title ((t (:height 1.5))))
+   '(outline-1          ((t (:height 1.5))))
+   '(outline-2          ((t (:height 1.4))))
+   '(outline-3          ((t (:height 1.3))))
+   '(outline-4          ((t (:height 1.25))))
    '(outline-5          ((t (:height 1.2))))
-   '(outline-6          ((t (:height 1.2))))
-   '(outline-7          ((t (:height 1.2))))
-   '(outline-8          ((t (:height 1.2))))
-   '(outline-9          ((t (:height 1.2)))))
+   '(outline-6          ((t (:height 1.175))))
+   '(outline-7          ((t (:height 1.0))))
+   '(outline-8          ((t (:height 1.0))))
+   '(outline-9          ((t (:height 1.0)))))
 
   (setq org-startup-folded 'overview)
-  (setq org-adapt-indentation t
+  (setq
+   ;; org-adapt-indentation t
 		;; org-time-stamp-rounding-minutes '(5 5)	
 		org-return-follows-link t
         org-hide-leading-stars t
@@ -791,7 +861,7 @@ Temporarily disables notifications during the fetch."
         org-insert-heading-respect-content t)
 
   (add-hook 'org-mode-hook 'variable-pitch-mode)
-  (add-hook 'org-mode-hook 'org-indent-mode)
+  ;; (add-hook 'org-mode-hook 'org-indent-mode)
   (add-hook 'org-mode-hook 'visual-line-mode)
   (add-hook 'org-mode-hook (lambda () (electric-indent-local-mode -1)))
 
@@ -811,6 +881,15 @@ Temporarily disables notifications during the fetch."
       (funcall orig-fun t to-time from-string prompt default-time default-input inactive))))
 
 (advice-add 'org-read-date :around #'my-org-read-date-always-with-time)
+
+(use-package org-crypt
+  :ensure nil
+  :after org
+  :config
+  (org-crypt-use-before-save-magic)
+  (setq org-crypt-key "1ED9D600A040D0AF193AAF30B877C0AC3B080FBB")
+  (setq org-tags-exclude-from-inheritance '("crypt"))
+  (add-hook 'org-mode-hook (lambda () (setq-local auto-save-default nil))))
 
 (use-package org-appear
   :ensure t
@@ -2005,28 +2084,28 @@ Timers that expired while Emacs was closed fire immediately."
                                    "  ")
                                  cand))))
 
-(use-package vertico-posframe
-  :ensure t
-  :init
-  (setq vertico-posframe-parameters   '((left-fringe  . 12)    ;; Fringes
-                                        (right-fringe . 12)
-										(accept-focus . t)))
-                                        ;; (undecorated  . nil) ;; Rounded frame
+;; (use-package vertico-posframe
+;;   :ensure t
+;;   :init
+;;   (setq vertico-posframe-parameters   '((left-fringe  . 12)    ;; Fringes
+;;                                         (right-fringe . 12)
+;; 										(accept-focus . t)))
+;;                                         ;; (undecorated  . nil) ;; Rounded frame
 										 
-  :config
-  (vertico-posframe-mode 1)
-  (setq vertico-posframe-width        96                       ;; Narrow frame
-        vertico-posframe-height       vertico-count            ;; Default height
-        ;; Don't create posframe for these commands
-        vertico-multiform-commands    '((consult-line    (:not posframe))
-                                        (consult-ripgrep (:not posframe)))))
+;;   :config
+;;   (vertico-posframe-mode 1)
+;;   (setq vertico-posframe-width        96                       ;; Narrow frame
+;;         vertico-posframe-height       vertico-count            ;; Default height
+;;         ;; Don't create posframe for these commands
+;;         vertico-multiform-commands    '((consult-line    (:not posframe))
+;;                                         (consult-ripgrep (:not posframe)))))
 
 (use-package corfu
   :ensure t
   :custom
   (corfu-cycle t)
   (corfu-auto t)
-  (corfu-auto-delay 0.2)
+  (corfu-auto-delay 0.001)
   (corfu-auto-prefix 2)
   :init
   (global-corfu-mode)
@@ -2091,54 +2170,6 @@ Timers that expired while Emacs was closed fire immediately."
           "\\`\\*Native-compile-Log\\*\\'"
           "\\`\\*Async-native-compile-log\\*\\'")))
 
-(use-package markdown-mode
-  :ensure t
-  :hook (markdown-mode . nb/markdown-unhighlight)
-  :init
-  (setq-default abbrev-mode t)
-  :config
-  (defvar nb/current-line '(0 . 0)
-    "(start . end) of current line in current buffer")
-  (make-variable-buffer-local 'nb/current-line)
-
-  (defun nb/unhide-current-line (limit)
-    "Font-lock function"
-    (let ((start (max (point) (car nb/current-line)))
-          (end (min limit (cdr nb/current-line))))
-      (when (< start end)
-        (remove-text-properties start end
-                                '(invisible t display "" composition ""))
-        (goto-char limit)
-        t)))
-
-  (defun nb/refontify-on-linemove ()
-    "Post-command-hook"
-    (let* ((start (line-beginning-position))
-           (end (line-beginning-position 2))
-           (needs-update (not (equal start (car nb/current-line)))))
-      (setq nb/current-line (cons start end))
-      (when needs-update
-        ;; FIX: Verwende jit-lock-refontify statt font-lock-fontify-block
-        (jit-lock-refontify start end))))
-
-  (defun nb/markdown-unhighlight ()
-    "Enable markdown concealling"
-    (interactive)
-    (markdown-toggle-markup-hiding 'toggle)
-    (font-lock-add-keywords nil '((nb/unhide-current-line)) t)
-    ;; FIX: Stelle sicher dass jit-lock aktiv ist
-    (jit-lock-register #'font-lock-fontify-region)
-    (add-hook 'post-command-hook #'nb/refontify-on-linemove nil t))
-  
-  :custom-face
-  (markdown-header-delimiter-face ((t (:foreground "#616161" :height 0.9))))
-  (markdown-header-face-1 ((t (:height 1.6 :foreground "#A3BE8C" :weight extra-bold :inherit markdown-header-face))))
-  (markdown-header-face-2 ((t (:height 1.4 :foreground "#EBCB8B" :weight extra-bold :inherit markdown-header-face))))
-  (markdown-header-face-3 ((t (:height 1.2 :foreground "#D08770" :weight extra-bold :inherit markdown-header-face))))
-  (markdown-header-face-4 ((t (:height 1.15 :foreground "#BF616A" :weight bold :inherit markdown-header-face))))
-  (markdown-header-face-5 ((t (:height 1.1 :foreground "#b48ead" :weight bold :inherit markdown-header-face))))
-  (markdown-header-face-6 ((t (:height 1.05 :foreground "#5e81ac" :weight semi-bold :inherit markdown-header-face)))))
-
 ;; (use-package treesit-auto
 ;;   :ensure t
 ;;   :defer t
@@ -2171,7 +2202,9 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (use-package marginalia
   :ensure t
   :hook
-  (after-init . marginalia-mode))
+  (after-init . marginalia-mode)
+  :config
+  (setq marginalia-align 'center))
 
 (use-package eglot
   :ensure nil
@@ -2236,7 +2269,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :config
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
-                 '(python-mode . ("rass" "python")))))
+                 '(python-mode . ("rass" "--" "pyrefly" "lsp" "--" "ruff" "server")))))
 
 (use-package pyvenv
   :ensure t
@@ -2282,7 +2315,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (setq js-indent-level 2)
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
-                 '(js-mode . ("rass" "tslint")))))
+                 '(js-mode . ("rass" "--" "typescript-language-server" "--stdio" "--" "vscode-eslint-language-server" "--stdio")))))
 
 (use-package typescript-ts-mode
   :ensure nil
@@ -2293,7 +2326,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :config
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
-                 '((typescript-ts-mode tsx-ts-mode) . ("rass" "tslint")))))
+                 '(js-mode . ("rass" "--" "typescript-language-server" "--stdio" "--" "vscode-eslint-language-server" "--stdio")))))
 
 (use-package web-mode
   :ensure t
@@ -2430,17 +2463,17 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 (global-set-key (kbd "C-c o s") #'my-org-sidecar-left)
 
-(use-package visual-fill-column
-  :ensure t
-  :hook ((text-mode . visual-line-mode)        ;; Soft-Wrapping aktivieren
-         (text-mode . visual-fill-column-mode)) ;; Das Zentrieren aktivieren
-  :custom
-  (visual-fill-column-width 110)      ;; Maximale Breite des Textes (statt 0.67 relativ)
-  (visual-fill-column-center-text nil)
-  (visual-fill-column-enable-sensible-window-split t)
-  :config
-  (when (display-graphic-p)
-    (setq-default visual-fill-column-center-text t)))
+;; (use-package visual-fill-column
+;;   :ensure t
+;;   :hook ((text-mode . visual-line-mode)        ;; Soft-Wrapping aktivieren
+;;          (text-mode . visual-fill-column-mode)) ;; Das Zentrieren aktivieren
+;;   :custom
+;;   (visual-fill-column-width 110)      ;; Maximale Breite des Textes (statt 0.67 relativ)
+;;   (visual-fill-column-center-text nil)
+;;   (visual-fill-column-enable-sensible-window-split t)
+;;   :config
+;;   (when (display-graphic-p)
+;;     (setq-default visual-fill-column-center-text t)))
 
 ;; (use-package diff-hl
 ;;   :defer t
@@ -2958,6 +2991,29 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
            (desc (tmr-mode-line--format-description timer)))
       (concat remaining desc)))
 
+  (maple-modeline-define-segment mu4e-mail
+    :defines (mu4e-alert-mode-line)
+    :functions (mu4e-alert-view-unread-mails)
+    :if (and (bound-and-true-p mu4e-alert-mode-line)
+             (stringp mu4e-alert-mode-line)
+             (not (string-empty-p (string-trim mu4e-alert-mode-line))))
+    :format
+    (let* ((raw mu4e-alert-mode-line)
+           ;; Extract the count number from the mode-line string (e.g. " [5] ")
+           (count-str (if (string-match "\\[\\([0-9]+\\)\\]" raw)
+                          (match-string 1 raw)
+                        (string-trim raw))))
+      (concat
+       (maple-modeline--concat-or
+        (maple-modeline--icon 'mdicon "nf-md-email" face)
+        "Mail")
+       " " (propertize count-str
+                       'face face
+                       'mouse-face 'mode-line-highlight
+                       'help-echo "View unread emails"
+                       'local-map (make-mode-line-mouse-map
+                                   'mouse-1 'mu4e-alert-view-unread-mails)))))
+
   (maple-modeline-define my-custom-style
     :left ((evil :left (bar :left ""))
            macro
@@ -2969,6 +3025,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
     :right (narrow
             org-clock-task
             tmr-timer
+            mu4e-mail
             python
             my-modeline-time
             process
@@ -2982,6 +3039,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
            version-control)
     :right (org-clock-task
             tmr-timer
+            mu4e-mail
             position))
 
   (setq maple-modeline-style
@@ -3025,9 +3083,9 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (blink-cursor-mode 0)
 (setq-default cursor-type 'box)
 
-(defvar cashmere/font-height 180)
+(defvar cashmere/font-height 200)
 
-(set-face-attribute 'default nil :family "Maple Mono NF" :weight 'regular :height cashmere/font-height)
+(set-face-attribute 'default nil :family "Hack Nerd Font" :weight 'regular :height cashmere/font-height)
 (set-face-attribute 'fixed-pitch nil :family "RobotoMono Nerd Font" :weight 'regular)
 (set-face-attribute 'variable-pitch nil :family "Poppins" :weight 'regular :height 1.1)
 
@@ -3943,6 +4001,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :config
   
   (setq mu4e-mu-binary (executable-find "mu"))
+  (setq mu4e-split-view 'vertical)
+  (setq mu4e-thread-mode t)
   (setq mu4e-maildir "~/Mails")
   (setq mu4e-get-mail-command (concat (executable-find "mbsync") " -a"))
   (setq mu4e-update-interval 300)
@@ -4002,6 +4062,38 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
             (setq message-sendmail-extra-arguments (list '"-a" account))))))
   
   (add-hook 'message-send-mail-hook 'mu4e-set-msmtp-account))
+
+(use-package mu4e-alert
+  :ensure t
+  :after mu4e
+  :config
+  ;; Use libnotify for desktop notifications (notify-send / swaync)
+  (mu4e-alert-set-default-style 'libnotify)
+
+  ;; Interesting mail query: unread, exclude trash and sent folders
+  (setq mu4e-alert-interesting-mail-query
+        (concat "flag:unread AND NOT flag:trashed"
+                " AND NOT maildir:\"/autistici/Sent\""
+                " AND NOT maildir:\"/cashmere/cashmere/Sent\""))
+
+  ;; Show both count and per-sender subject notifications
+  (setq mu4e-alert-email-notification-types '(count subjects))
+
+  ;; Group desktop notifications by maildir (per-account grouping)
+  (setq mu4e-alert-group-by :maildir)
+
+  ;; Disable X11 urgency hints (does not work on Wayland)
+  (setq mu4e-alert-set-window-urgency nil)
+
+  ;; Enable desktop notifications
+  (mu4e-alert-enable-notifications)
+
+  ;; Enable mode-line data updates (populates mu4e-alert-mode-line variable).
+  ;; We strip the default global-mode-string entry afterwards since we use
+  ;; a custom maple-modeline segment instead.
+  (mu4e-alert-enable-mode-line-display)
+  (setq global-mode-string
+        (delete '(:eval mu4e-alert-mode-line) global-mode-string)))
 
 (use-package denote-project-notes
   :ensure t
@@ -4169,5 +4261,25 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
     "e T l" '(tab-next :wk "next tab")
     "e T h" '(tab-previous :wk "prev tab")
     "e T r" '(tab-recent :wk "recent tab")))
+
+(use-package arrow
+  :ensure t
+  :elpaca (arrow :host github :repo "vmargb/arrow.el")
+  :config
+  (setq arrow-mode 1))
+
+(use-package colorful-mode
+  ;; :diminish
+  :ensure t ; Optional
+  :custom
+  (colorful-use-prefix t)
+  (colorful-only-strings 'only-prog)
+  (css-fontify-colors nil)
+  :config
+  (global-colorful-mode t)
+  (add-to-list 'global-colorful-modes 'helpful-mode))
+
+(use-package plz
+  :ensure t)
 
 (provide 'init)
