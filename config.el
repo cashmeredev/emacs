@@ -1072,34 +1072,34 @@ Temporarily disables notifications during the fetch."
 ;;   (setq org-modern-replace-stars "◉○◉○◉")
 ;;   (global-org-modern-mode))
 
-(add-to-list 'load-path "~/render-org.el")
-(require 'render-org)
-(add-hook 'org-mode-hook #'render-org-mode)
+;; (add-to-list 'load-path "~/render-org.el")
+;; (require 'render-org)
+;; (add-hook 'org-mode-hook #'render-org-mode)
 
-;; Markdown support
-(require 'render-markdown)
-(add-hook 'markdown-mode-hook #'render-markdown-mode)
+;; ;; Markdown support
+;; (require 'render-markdown)
+;; (add-hook 'markdown-mode-hook #'render-markdown-mode)
 
-;; SVG scaled headings via kitty-graphics
-(setq render-org-heading-gfx-enabled 'nil)
-;; (setq render-org-heading-gfx-scales '(1.25 1.15 1.05 1.0 1.0 1.0))
-;; (setq render-org-heading-gfx-font-family "MapleMono NF")
+;; ;; SVG scaled headings via kitty-graphics
+;; (setq render-org-heading-gfx-enabled 'nil)
+;; ;; (setq render-org-heading-gfx-scales '(1.25 1.15 1.05 1.0 1.0 1.0))
+;; ;; (setq render-org-heading-gfx-font-family "MapleMono NF")
 
-;; (use-package kitty-graphics
-;;   :ensure (:host github :repo "cashmeredev/kitty-graphics.el")
-;;   :if (and (not (display-graphic-p)) (getenv "KITTY_PID"))
-;;   :config
-;;   (kitty-graphics-mode 1))
+(use-package kitty-graphics
+  :ensure (:host github :repo "cashmeredev/kitty-graphics.el")
+  :if (and (not (display-graphic-p)) (getenv "KITTY_PID"))
+  :config
+  (kitty-graphics-mode 1))
   ;; (with-eval-after-load 'dired
-  ;;   (define-key dired-mode-map (kbd "P") #'kitty-gfx-dired-preview))
+    ;; (define-key dired-mode-map (kbd "P") #'kitty-gfx-dired-preview))
 
-(when (and (not (display-graphic-p))
-           (or (getenv "KITTY_PID")                    ;; Kitty terminal
-               (string-prefix-p "foot" (or (getenv "TERM") "")))) ;; foot terminal (Sixel)
-  (load "~/projects/kitty-graphics/kitty-graphics.el")
-  (kitty-graphics-mode 1)
-  (with-eval-after-load 'dired
-    (define-key dired-mode-map (kbd "P") #'kitty-gfx-dired-preview)))
+;; (when (and (not (display-graphic-p))
+;;            (or (getenv "KITTY_PID")                    ;; Kitty terminal
+;;                (string-prefix-p "foot" (or (getenv "TERM") "")))) ;; foot terminal (Sixel)
+;;   (load "~/projects/kitty-graphics/kitty-graphics.el")
+;;   (kitty-graphics-mode 1)
+;;   (with-eval-after-load 'dired
+;;     (define-key dired-mode-map (kbd "P") #'kitty-gfx-dired-preview)))
 
 (use-package org-fancy-priorities
   :ensure t
