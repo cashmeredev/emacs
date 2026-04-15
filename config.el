@@ -27,6 +27,55 @@
 (setq kept-new-versions             5)
 (setq kept-old-versions             5)
 
+;;; Daemon detection — determines which daemon we're running as.
+;;; Start Emacs with: emacs --fg-daemon=hub   (persistent: IRC, mail, agenda)
+;;;                   emacs --fg-daemon=work  (restartable: code, projects)
+;;;                   emacs                   (standalone, loads everything)
+
+(defvar my/daemon-name
+  (let ((d (daemonp)))
+    (cond
+     ((stringp d) d)       ; named daemon: "hub" or "work"
+     (d           "work")  ; unnamed daemon (--daemon without name) → treat as work
+     (t           nil)))   ; standalone emacs
+  "Name of the current Emacs daemon, or nil for standalone.")
+
+(defun my/hub-p ()
+  "Return non-nil when running as the hub daemon."
+  (equal my/daemon-name "hub"))
+
+(defun my/work-p ()
+  "Return non-nil when running as the work daemon."
+  (equal my/daemon-name "work"))
+
+(defun my/standalone-p ()
+  "Return non-nil when running standalone (not as daemon)."
+  (null my/daemon-name))
+
+(defun my/load-for-hub-p ()
+  "Return non-nil if hub packages should be loaded (hub or standalone)."
+  (or (my/hub-p) (my/standalone-p)))
+
+(defun my/load-for-work-p ()
+  "Return non-nil if work packages should be loaded (work or standalone)."
+  (or (my/work-p) (my/standalone-p)))
+
+;; Per-daemon state files to avoid conflicts between hub and work daemons
+(when my/daemon-name
+  (let ((suffix (concat "-" my/daemon-name)))
+    (setq recentf-save-file
+          (expand-file-name (concat "recentf" suffix ".eld") user-emacs-directory))
+    (setq savehist-file
+          (expand-file-name (concat "savehist" suffix ".el") user-emacs-directory))
+    (setq save-place-file
+          (expand-file-name (concat "places" suffix ".eld") user-emacs-directory))
+    (setq bookmark-default-file
+          (expand-file-name (concat "bookmarks" suffix ".eld") user-emacs-directory))
+    (setq projectile-known-projects-file
+          (expand-file-name (concat "projectile-bookmarks" suffix ".eld") user-emacs-directory))
+    (setq org-clock-persist-file
+          (expand-file-name (concat "org-clock-save" suffix ".el") user-emacs-directory))))
+
 (use-package emacs
   :ensure nil
   :custom
@@ -59,6 +108,8 @@
   (prog-mode . display-line-numbers-mode)
   (org-mode . display-line-numbers-mode)
   (markdown-mode . display-line-numbers-mode)
+  (text-mode . visual-line-mode)       ;; Soft-wrap prose/text files at window edge.
+  (conf-mode . visual-line-mode)       ;; Soft-wrap .conf and similar config files.
 
   :config
   (add-to-list 'custom-theme-load-path user-emacs-directory)
@@ -111,6 +162,7 @@
   (winner-mode 1) ;; Enable winner mode to easily undo window configuration changes.
   (xterm-mouse-mode 1) ;; Enable mouse support in terminal mode.
   (file-name-shadow-mode 1) ;; Enable shadowing of filenames for clarity.
+  (repeat-mode 1) ;; Enable repeat key after key chord
 
   ;;oding system for files to UTF-8.
   (modify-coding-system-alist 'file "" 'utf-8)
@@ -123,7 +175,7 @@
 			  ;; Insert a welcome message in the *scratch* buffer displaying loading time and activated packages.
 			  (with-current-buffer (get-buffer-create "*scratch*")
 				(insert (format
-						 " ;; Welcome to Emacs!
+						 ";; Welcome to Emacs!
 ;;
 ;; Loading time : %s
 ;; Packages : %s
@@ -221,6 +273,7 @@
 
 (use-package async :ensure t)
 
+(when (my/load-for-hub-p)
 (use-package erc
   :ensure nil
   :defer t
@@ -231,7 +284,7 @@
 
   ;; behaviour
   (erc-join-buffer 'buffer)
-  (erc-kill-buffer-on-part t)
+  (erc-kill-buffer-on-part nil)
   (erc-kill-queries-on-quit t)
   (erc-kill-server-buffer-on-quit t)
 
@@ -405,6 +458,17 @@ Temporarily disables notifications during the fetch."
               (when (bound-and-true-p persp-mode)
                 (persp-add-buffer (current-buffer)))))
 
+  ;; Prevent accidental ERC buffer kills from parting channels
+  (add-hook 'kill-buffer-query-functions
+            (lambda ()
+              (if (and (derived-mode-p 'erc-mode)
+                       (erc-server-process-alive)
+                       (not (eq this-command 'my/erc-quit-all)))
+                  (yes-or-no-p
+                   (format "ERC buffer %s is connected. Really kill (will part channel)? "
+                           (buffer-name)))
+                t)))
+
   (general-def 'normal erc-mode-map
     "q"   'quit-window
     "Q"   'my/erc-quit-all
@@ -421,6 +485,15 @@ Temporarily disables notifications during the fetch."
     "M-n" 'erc-track-switch-buffer
     "C-k" 'erc-previous-command
     "C-j" 'erc-next-command))
+) ;; end (when (my/load-for-hub-p) ...)
+
+;; Auto-start ERC in hub daemon on first frame
+(when (my/hub-p)
+  (defun my/hub-auto-start-erc (&optional _frame)
+    "Auto-connect ERC when first hub frame is created."
+    (run-irc)
+    (remove-hook 'server-after-make-frame-hook #'my/hub-auto-start-erc))
+  (add-hook 'server-after-make-frame-hook #'my/hub-auto-start-erc))
 
 ;; (use-package lambda-themes
 ;;   :ensure (:host github :repo "lambda-emacs/lambda-themes")
@@ -590,6 +663,7 @@ Temporarily disables notifications during the fetch."
                        (mode . shell-script-mode)
                        (mode . shell-mode)
                        (mode . sh-mode)
+                       (mode . bash-ts-mode)
                        (mode . lua-mode)
                        (mode . bat-mode)))
            ("Config" (or
@@ -601,7 +675,7 @@ Temporarily disables notifications during the fetch."
                       (name . "^\\.gitignore$")
                       (name . "^Doxyfile$")
                       (name . "^config\\.toml$")
-                      (mode . yaml-mode)))
+                      (mode . yaml-ts-mode)))
            ("Web" (or
                    (mode . mhtml-mode)
                    (mode . html-mode)
@@ -632,6 +706,10 @@ Temporarily disables notifications during the fetch."
            ("Fundamental" (or
                            (mode . fundamental-mode)
                            (mode . text-mode)))
+           ("ECA - Editor Code Assistant"
+            (or
+             (mode . eca-chat-mode)))
+
            ("Emacs" (or
                      (mode . emacs-lisp-mode)
                      (name . "^\\*Help\\*$")
@@ -741,7 +819,89 @@ Temporarily disables notifications during the fetch."
 (use-package eca
   :ensure (:host github :repo "editor-code-assistant/eca-emacs"
            :files ("*.el"))
-  :defer t)
+  :defer t
+  :custom
+  ;; Chat window
+  (eca-chat-window-side 'left)
+  (eca-chat-window-width 0.35)
+  (eca-chat-use-side-window t)
+  (eca-chat-focus-on-open t)
+  (eca-chat-tab-line t)
+
+  ;; Diff tools
+  (eca-chat-diff-tool 'ediff)
+  (eca-rewrite-diff-tool 'ediff)
+
+  ;; Context
+  (eca-chat-auto-add-cursor t)
+  (eca-chat-auto-add-repomap t)
+  (eca-chat-custom-model nil)
+
+  ;; UI
+  (eca-chat-shrink-called-tools t)
+  (eca-chat-expand-pending-approval-tools t)
+  (eca-chat-table-beautify t)
+  (eca-buttons-allow-mouse t)
+
+  :config
+  ;; Disable corfu auto-popup in chat buffers (TAB-only completion)
+  (add-hook 'eca-chat-mode-hook
+            (lambda ()
+              (setq-local corfu-auto nil)))
+
+  ;; Evil mode integration
+  (with-eval-after-load 'evil
+    ;; Chat opens in normal state; press i to type in prompt
+    (evil-set-initial-state 'eca-chat-mode 'normal)
+    (evil-set-initial-state 'eca-mcp-details-mode 'normal))
+
+  ;; Keybindings via general with which-key labels
+  (with-eval-after-load 'general
+    ;; Normal state bindings in chat buffer
+    (general-def 'normal eca-chat-mode-map
+      "RET" '(eca-chat-send-prompt-at-chat :wk "send prompt")
+      "q"   '(eca-chat-toggle-window       :wk "close chat")
+      "C-l" '(eca-chat-clear               :wk "clear chat")
+      ;; g-prefix: chat navigation/management
+      "gr"  '(eca-chat-repeat-prompt       :wk "repeat prompt")
+      "gn"  '(eca-chat-new                 :wk "new chat")
+      "gs"  '(eca-chat-select              :wk "select chat")
+      "gm"  '(eca-chat-select-model        :wk "select model")
+      "gv"  '(eca-chat-select-variant      :wk "select variant")
+      "ga"  '(eca-chat-select-agent        :wk "select agent")
+      "gc"  '(eca-chat-cycle-agent         :wk "cycle agent")
+      ;; bracket navigation
+      "[["  '(eca-chat-go-to-prev-user-message    :wk "prev message")
+      "]]"  '(eca-chat-go-to-next-user-message    :wk "next message")
+      "[b"  '(eca-chat-go-to-prev-expandable-block :wk "prev block")
+      "]b"  '(eca-chat-go-to-next-expandable-block :wk "next block")
+      "TAB" '(eca-chat-toggle-expandable-block    :wk "toggle block")
+      "zR"  '(eca-chat-expand-all-blocks          :wk "expand all")
+      "zM"  '(eca-chat-collapse-all-blocks        :wk "collapse all"))
+
+    ;; C-c prefix in normal state — labeled group
+    (general-def 'normal eca-chat-mode-map
+      "C-c" '(:ignore t :wk "eca")
+      "C-c a" '(eca-chat-tool-call-accept-all          :wk "accept all tools")
+      "C-c A" '(eca-chat-tool-call-accept-all-and-remember :wk "accept & remember")
+      "C-c c" '(eca-chat-stop-prompt                   :wk "stop")
+      "C-c s" '(eca-chat-save-to-file                  :wk "save chat")
+      "C-c r" '(eca-chat-rename                        :wk "rename chat")
+      "C-c ." '(eca-transient-menu                     :wk "transient menu")
+      "C-c ," '(eca-mcp-details                        :wk "mcp details"))
+
+    ;; Insert state bindings
+    (general-def 'insert eca-chat-mode-map
+      "S-<return>" '(newline                               :wk "newline")
+      "C-<up>"     '(eca-chat-repeat-prompt                :wk "repeat prompt")
+      "C-c c"      '(eca-chat-stop-prompt                  :wk "stop")
+      "C-c a"      '(eca-chat-tool-call-accept-all         :wk "accept all tools")
+      "C-c ."      '(eca-transient-menu                    :wk "transient menu"))
+
+    ;; MCP details buffer
+    (general-def 'normal eca-mcp-details-mode-map
+      "q"     '(quit-window        :wk "close")
+      "C-c ." '(eca-transient-menu :wk "transient menu"))))
 
 (use-package eldoc
   :ensure nil
@@ -789,12 +949,11 @@ Temporarily disables notifications during the fetch."
   :ensure t
   :config
   (setq flycheck-rust-check-tests nil)
-  (add-hook 'rust-mode-hook #'flycheck-rust-setup)
   (add-hook 'rust-ts-mode-hook #'flycheck-rust-setup))
 
 (use-package flycheck-python-ruff
   :ensure (:host github :repo "v4n6/flycheck-python-ruff")
-  :hook ((python-mode python-ts-mode) . flycheck-python-ruff-setup))
+  :hook (python-ts-mode . flycheck-python-ruff-setup))
 
 (use-package flycheck-eglot
   :ensure t
@@ -903,29 +1062,44 @@ Temporarily disables notifications during the fetch."
 
 
 
-(use-package org-modern
-  :ensure t
-  :hook (org-mode . org-modern-mode)
-  :config
-  (setq org-modern-hide-stars t)
-  (setq org-modern-star 'replace)
-  (setq org-modern-fold-stars '(("◉" . "○")))
-  (setq org-modern-replace-stars "◉○◉○◉")
-  (global-org-modern-mode))
+;; (use-package org-modern
+;;   :ensure t
+;;   :hook (org-mode . org-modern-mode)
+;;   :config
+;;   (setq org-modern-hide-stars t)
+;;   (setq org-modern-star 'replace)
+;;   (setq org-modern-fold-stars '(("◉" . "○")))
+;;   (setq org-modern-replace-stars "◉○◉○◉")
+;;   (global-org-modern-mode))
 
-(use-package kitty-graphics
-  :ensure (:host github :repo "cashmeredev/kitty-graphics.el")
-  :if (and (not (display-graphic-p)) (getenv "KITTY_PID"))
-  :config
-  (kitty-graphics-mode 1))
+(add-to-list 'load-path "~/render-org.el")
+(require 'render-org)
+(add-hook 'org-mode-hook #'render-org-mode)
+
+;; Markdown support
+(require 'render-markdown)
+(add-hook 'markdown-mode-hook #'render-markdown-mode)
+
+;; SVG scaled headings via kitty-graphics
+(setq render-org-heading-gfx-enabled 'nil)
+;; (setq render-org-heading-gfx-scales '(1.25 1.15 1.05 1.0 1.0 1.0))
+;; (setq render-org-heading-gfx-font-family "MapleMono NF")
+
+;; (use-package kitty-graphics
+;;   :ensure (:host github :repo "cashmeredev/kitty-graphics.el")
+;;   :if (and (not (display-graphic-p)) (getenv "KITTY_PID"))
+;;   :config
+;;   (kitty-graphics-mode 1))
   ;; (with-eval-after-load 'dired
   ;;   (define-key dired-mode-map (kbd "P") #'kitty-gfx-dired-preview))
 
-;; (when (and (not (display-graphic-p)) (getenv "KITTY_PID"))
-;;   (load "~/projects/kitty-graphics/kitty-graphics.el")
-;;   (kitty-graphics-mode 1)
-;;   (with-eval-after-load 'dired
-;;     (define-key dired-mode-map (kbd "P") #'kitty-gfx-dired-preview)))
+(when (and (not (display-graphic-p))
+           (or (getenv "KITTY_PID")                    ;; Kitty terminal
+               (string-prefix-p "foot" (or (getenv "TERM") "")))) ;; foot terminal (Sixel)
+  (load "~/projects/kitty-graphics/kitty-graphics.el")
+  (kitty-graphics-mode 1)
+  (with-eval-after-load 'dired
+    (define-key dired-mode-map (kbd "P") #'kitty-gfx-dired-preview)))
 
 (use-package org-fancy-priorities
   :ensure t
@@ -997,6 +1171,27 @@ Temporarily disables notifications during the fetch."
 (use-package ob-async
   :ensure t
   :after org)
+
+(with-eval-after-load 'org
+  (defun org-babel-execute:just (body params)
+    "Execute a justfile source block.
+BODY is the justfile content.  PARAMS may include:
+  :recipe  — recipe name to run (default: the default recipe)
+  :dir     — working directory (default: `default-directory')"
+    (let* ((recipe (cdr (assq :recipe params)))
+           (dir (or (cdr (assq :dir params)) default-directory))
+           (tmp (make-temp-file "ob-just-" nil "justfile")))
+      (unwind-protect
+          (progn
+            (with-temp-file tmp (insert body))
+            (shell-command-to-string
+             (format "just --justfile %s --working-directory %s %s"
+                     (shell-quote-argument tmp)
+                     (shell-quote-argument (expand-file-name dir))
+                     (if recipe (shell-quote-argument recipe) ""))))
+        (delete-file tmp))))
+
+  (add-to-list 'org-src-lang-modes '("just" . just)))
 
 (defun my/snip-upload (&optional file)
   "Upload FILE, region, or current buffer to snips.sh.
@@ -1631,19 +1826,19 @@ Skips capture tasks and projects."
     ("DONE"      . (:inherit (success org-todo)))
     ("CANCELLED" . (:inherit (shadow org-done)))))
 
-(defun my/update-org-modern-faces ()
-  (setq org-modern-todo-faces
-    `(("TODO"      :background ,(face-attribute 'warning :foreground)
-                   :foreground ,(face-attribute 'default :background))
-      ("ACTIVE"    :background ,(face-attribute 'error :foreground)
-                   :foreground ,(face-attribute 'default :background))
-      ("DONE"      :background ,(face-attribute 'success :foreground)
-                   :foreground ,(face-attribute 'default :background))
-      ("CANCELLED" :background ,(face-attribute 'shadow :foreground)
-                   :foreground ,(face-attribute 'default :background)))))
-
-(add-hook 'after-load-theme-hook #'my/update-org-modern-faces)
-(add-hook 'after-init-hook #'my/update-org-modern-faces)
+;; (defun my/update-org-modern-faces ()
+;;   (setq org-modern-todo-faces
+;;     `(("TODO"      :background ,(face-attribute 'warning :foreground)
+;;                    :foreground ,(face-attribute 'default :background))
+;;       ("ACTIVE"    :background ,(face-attribute 'error :foreground)
+;;                    :foreground ,(face-attribute 'default :background))
+;;       ("DONE"      :background ,(face-attribute 'success :foreground)
+;;                    :foreground ,(face-attribute 'default :background))
+;;       ("CANCELLED" :background ,(face-attribute 'shadow :foreground)
+;;                    :foreground ,(face-attribute 'default :background)))))
+;;
+;; (add-hook 'after-load-theme-hook #'my/update-org-modern-faces)
+;; (add-hook 'after-init-hook #'my/update-org-modern-faces)
 
 ;;; --- Tag cleanup in agenda buffer ---
 
@@ -2249,34 +2444,30 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :ensure t
   :after yasnippet)
 
-(use-package nix-mode
+(use-package nix-ts-mode
   :ensure t
   :mode "\\.nix\\'"
-  :hook (nix-mode . eglot-ensure)
+  :hook (nix-ts-mode . eglot-ensure)
   :config
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
-                 '(nix-mode . ("nixd")))))
-
-(use-package envrc
-  :ensure t
-  :hook (after-init . envrc-global-mode))
+                 '(nix-ts-mode . ("nixd")))))
 
 (use-package python
   :ensure nil
-  :mode ("\\.py\\'" . python-mode)
-  :hook (python-mode . eglot-ensure)
+  :mode ("\\.py\\'" . python-ts-mode)
+  :hook (python-ts-mode . eglot-ensure)
   :config
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
-                 '(python-mode . ("rass" "--" "pyrefly" "lsp" "--" "ruff" "server")))))
+                 '(python-ts-mode . ("rass" "--" "pyrefly" "lsp" "--" "ruff" "server")))))
 
 (use-package pyvenv
   :ensure t
   :config
   (setq pyvenv-mode-line-indicator '(pyvenv-virtual-env-name 
                                       (" [venv:" pyvenv-virtual-env-name "] ")))
-  (add-hook 'python-mode-hook 
+  (add-hook 'python-ts-mode-hook 
             (lambda ()
               (pyvenv-mode 1))))
 
@@ -2288,14 +2479,14 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;   (with-eval-after-load 'eglot-server-programs
 ;; 	'(elm-mode . ("elm-language-server"))))
 
-(use-package rust-mode
-  :ensure t
+(use-package rust-ts-mode
+  :ensure nil
   :mode "\\.rs\\'"
-  :hook (rust-mode . eglot-ensure)
+  :hook (rust-ts-mode . eglot-ensure)
   :config
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
-                 '((rust-ts-mode rust-mode) .
+                 '(rust-ts-mode .
                    ("rust-analyzer" :initializationOptions 
                     (:check (:command "clippy")))))))
 
@@ -2309,13 +2500,13 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 
 (use-package js
   :ensure nil
-  :mode ("\\.js\\'" . js-mode)
-  :hook (js-mode . eglot-ensure)
+  :mode ("\\.js\\'" . js-ts-mode)
+  :hook (js-ts-mode . eglot-ensure)
   :config
   (setq js-indent-level 2)
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
-                 '(js-mode . ("rass" "--" "typescript-language-server" "--stdio" "--" "vscode-eslint-language-server" "--stdio")))))
+                 '(js-ts-mode . ("rass" "--" "typescript-language-server" "--stdio" "--" "vscode-eslint-language-server" "--stdio")))))
 
 (use-package typescript-ts-mode
   :ensure nil
@@ -2326,7 +2517,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :config
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
-                 '(js-mode . ("rass" "--" "typescript-language-server" "--stdio" "--" "vscode-eslint-language-server" "--stdio")))))
+                 '((typescript-ts-mode tsx-ts-mode) . ("rass" "--" "typescript-language-server" "--stdio" "--" "vscode-eslint-language-server" "--stdio")))))
 
 (use-package web-mode
   :ensure t
@@ -2364,55 +2555,57 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;    (append org-babel-load-languages
 ;;            '((nushell . t)))))
 
-;; (use-package go-mode
-;;   :ensure t
-;;   :mode "\\.go\\'"
-;;   :hook (go-mode . eglot-ensure)
-;;   :config
-;;   (with-eval-after-load 'eglot
-;;     (add-to-list 'eglot-server-programs
-;;                  '(go-mode . ("gopls" :initializationOptions 
-;;                               (:staticcheck t
-;;                                :matcher "CaseSensitive"
-;;                                :usePlaceholders t)))))
-  
-;;   (defun go-mode-setup ()
-;;     (add-hook 'before-save-hook #'eglot-format-buffer -10 t)
-;;     (add-hook 'before-save-hook 
-;;               (lambda ()
-;;                 (when (eglot-managed-p)
-;;                   (eglot-code-action-organize-imports nil t)))
-;;               nil t))
-  
-;;   (add-hook 'go-mode-hook #'go-mode-setup))
-
-(use-package json-mode
+(use-package go-mode
   :ensure t
-  :mode "\\.json\\'"
-  :hook (json-mode . eglot-ensure)
+  :mode "\\.go\\'"
+  :hook (go-mode . eglot-ensure)
   :config
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
-                 '(json-mode . ("vscode-json-language-server" "--stdio")))))
+                 '(go-mode . ("gopls" :initializationOptions 
+                              (:staticcheck t
+                               :matcher "CaseSensitive"
+                               :usePlaceholders t)))))
+  
+  (defun go-mode-setup ()
+    (add-hook 'before-save-hook #'eglot-format-buffer -10 t)
+    (add-hook 'before-save-hook 
+              (lambda ()
+                (when (eglot-managed-p)
+                  (eglot-code-action-organize-imports nil t)))
+              nil t))
+  
+  (add-hook 'go-mode-hook #'go-mode-setup))
 
-(use-package yaml-mode
-  :ensure t
-  :mode "\\.ya?ml\\'"
-  :hook (yaml-mode . eglot-ensure))
-
-(use-package sh-mode
+(use-package json-ts-mode
   :ensure nil
-  :hook (bash-ts-mode . eglot-ensure)
-        (sh-mode . eglot-ensure)
+  :mode "\\.json\\'"
+  :hook (json-ts-mode . eglot-ensure)
   :config
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
-                 '((sh-mode bash-ts-mode) . ("bash-language-server" "start"))))
-  
+                 '(json-ts-mode . ("vscode-json-language-server" "--stdio")))))
+
+(use-package yaml-ts-mode
+  :ensure nil
+  :mode "\\.ya?ml\\'"
+  :hook (yaml-ts-mode . eglot-ensure))
+
+(use-package bash-ts-mode
+  :ensure nil
+  :mode (("\\.sh\\'" . bash-ts-mode)
+         ("\\.bash\\'" . bash-ts-mode)
+         ("\\.bashrc\\'" . bash-ts-mode)
+         ("\\.bash_profile\\'" . bash-ts-mode))
+  :hook (bash-ts-mode . eglot-ensure)
+  :config
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 '(bash-ts-mode . ("bash-language-server" "start"))))
+
   (defun sh-mode-setup ()
     (add-hook 'before-save-hook #'eglot-format-buffer -10 t))
-  
-  (add-hook 'sh-mode-hook #'sh-mode-setup)
+
   (add-hook 'bash-ts-mode-hook #'sh-mode-setup))
 
 (use-package jinja2-mode
@@ -2420,7 +2613,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :defer t)
 
 (use-package protobuf-mode
-  :ensure t
+  :ensure (:host github :repo "protocolbuffers/protobuf"
+           :files ("editors/protobuf-mode.el"))
   :mode ("\\.proto\\'" . protobuf-mode))
 
 (use-package janet-mode
@@ -2431,6 +2625,19 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (add-to-list 'eglot-server-programs
                '(janet-mode . ("janet-lsp")))))
 
+(use-package just-mode
+  :ensure t
+  :mode ("[Jj]ustfile\\'" "\\.just\\'")
+  :hook (just-mode . eglot-ensure)
+  :config
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 '(just-mode . ("just-lsp")))))
+
+;; (use-package justl
+;;   :ensure t
+;;   :after just-mode)
+
 (use-package vterm
   :ensure t
   :config
@@ -2440,6 +2647,125 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (use-package multi-vterm
   :ensure t
   :defer t)
+
+(use-package eat
+  :ensure t
+  :custom
+  (eat-shell "fish")
+  (eat-kill-buffer-on-exit t)
+  (eat-enable-shell-prompt-annotation t)
+  (eat-term-name "xterm-256color")
+  :hook
+  ;; Enable shell integration for directory tracking, prompt navigation, etc.
+  (eshell-load . eat-eshell-mode)
+  (eshell-load . eat-eshell-visual-command-mode)
+  :config
+  ;; Tell yazi (and other programs) that this terminal supports Sixel.
+  ;; Eat supports Sixel rendering but yazi doesn't recognize it as a known
+  ;; terminal. Setting TERM_PROGRAM to "foot" (a known Sixel terminal) makes
+  ;; yazi select the Sixel adapter for image previews.
+  (advice-add 'eat :around
+              (lambda (orig-fn &rest args)
+                (let ((process-environment
+                       (append '("TERM_PROGRAM=foot"
+                                 "TERM_PROGRAM_VERSION=1.18.0")
+                               process-environment)))
+                  (apply orig-fn args))))
+  ;; ──────────────────────────────────────────────────
+  ;; Evil integration: make eat behave like vterm
+  ;;
+  ;; Strategy:
+  ;;   - "emacs mode" in eat = normal state (vim motions on buffer text)
+  ;;   - "semi-char mode" in eat = insert state (keys pass to terminal)
+  ;;   - ESC switches from semi-char → emacs mode (insert → normal)
+  ;;   - i/a/A etc switch from emacs → semi-char mode (normal → insert)
+  ;; ──────────────────────────────────────────────────
+
+  ;; Don't move cursor back on ESC (inappropriate in terminal buffers)
+  (add-hook 'eat-mode-hook (lambda () (setq-local evil-move-cursor-back nil)))
+
+  ;; Start eat in insert state (semi-char mode) so typing goes to shell
+  (evil-set-initial-state 'eat-mode 'insert)
+
+  ;; -- Normal state: vim motions on terminal text --------------------------
+
+  ;; Entering insert state switches eat to semi-char mode (passthrough)
+  (defun my/eat-semi-char-mode-entry ()
+    "Switch eat to semi-char mode when entering evil insert state."
+    (when (and (derived-mode-p 'eat-mode)
+               (eat-term-p (buffer-local-value 'eat-terminal (current-buffer))))
+      (eat-semi-char-mode)))
+
+  ;; Exiting insert state switches eat to emacs mode (vim motions)
+  (defun my/eat-emacs-mode-entry ()
+    "Switch eat to emacs mode when entering evil normal state."
+    (when (and (derived-mode-p 'eat-mode)
+               (eat-term-p (buffer-local-value 'eat-terminal (current-buffer))))
+      (eat-emacs-mode)))
+
+  (add-hook 'evil-insert-state-entry-hook #'my/eat-semi-char-mode-entry)
+  (add-hook 'evil-normal-state-entry-hook #'my/eat-emacs-mode-entry)
+
+  ;; In normal state, bind standard vim keys to re-enter insert (semi-char)
+  (evil-define-key 'normal eat-mode-map
+    "i" (lambda () (interactive) (eat-semi-char-mode) (evil-insert-state))
+    "a" (lambda () (interactive) (forward-char 1) (eat-semi-char-mode) (evil-insert-state))
+    "A" (lambda () (interactive) (end-of-line) (eat-semi-char-mode) (evil-insert-state))
+    "I" (lambda () (interactive) (back-to-indentation) (eat-semi-char-mode) (evil-insert-state))
+    "o" (lambda () (interactive) (eat-semi-char-mode) (evil-insert-state)
+         (eat-self-input 1 ?\n))
+    ;; Paste from kill ring in normal mode
+    "p"  (lambda () (interactive)
+           (eat-semi-char-mode)
+           (eat-yank)
+           (eat-emacs-mode))
+    ;; Navigate prompts
+    (kbd "[ [") #'eat-previous-shell-prompt
+    (kbd "] ]") #'eat-next-shell-prompt)
+
+  ;; In insert state: ESC escapes back to normal (emacs mode intercepts it)
+  ;; The default eat-semi-char-mode lets C-c, C-x, etc. pass through to Emacs
+  ;; which is exactly what we want. ESC is also not captured by semi-char mode,
+  ;; so evil's ESC → normal state transition works naturally.
+
+  ;; -- Multi-eat: manage multiple terminal buffers -------------------------
+
+  (defvar my/eat-buffer-counter 0
+    "Counter for naming eat terminal buffers.")
+
+  (defun my/eat-new ()
+    "Create a new eat terminal buffer."
+    (interactive)
+    (cl-incf my/eat-buffer-counter)
+    (let ((buf (generate-new-buffer
+                (format "*eat<%d>*" my/eat-buffer-counter)))
+          (process-environment
+           (append '("TERM_PROGRAM=foot" "TERM_PROGRAM_VERSION=1.18.0")
+                   process-environment)))
+      (with-current-buffer buf
+        (eat-mode)
+        (eat-exec buf (buffer-name buf) eat-shell nil nil))
+      (switch-to-buffer buf)))
+
+  (defun my/eat-toggle ()
+    "Toggle an eat terminal. Create one if none exists.
+With prefix arg, always create a new terminal."
+    (interactive)
+    (if current-prefix-arg
+        (my/eat-new)
+      (let ((eat-bufs (cl-remove-if-not
+                       (lambda (b) (with-current-buffer b
+                                     (derived-mode-p 'eat-mode)))
+                       (buffer-list))))
+        (cond
+         ;; Currently in an eat buffer → bury it
+         ((derived-mode-p 'eat-mode)
+          (bury-buffer))
+         ;; Existing eat buffers → switch to most recent
+         (eat-bufs
+          (switch-to-buffer (car eat-bufs)))
+         ;; No eat buffers → create one
+         (t (eat)))))))
 
 (use-package olivetti
   :ensure t
@@ -2452,16 +2778,25 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 )
 
 (defun my-org-sidecar-left ()
-  "Org-Datei interaktiv als Sidecar links (25%)."
+  "Pick an org-mode buffer via consult and display it as a left sidecar."
   (interactive)
-  (let ((file (read-file-name "Org-Sidecar: " nil nil t)))
-    (display-buffer-in-side-window
-     (find-file-noselect file)
-     '((side . left)
-       (window-width . 0.25)
-       (slot . 0)))))
-
-(global-set-key (kbd "C-c o s") #'my-org-sidecar-left)
+  (let* ((bufs (cl-remove-if-not
+                (lambda (b)
+                  (with-current-buffer b
+                    (derived-mode-p 'org-mode)))
+                (buffer-list)))
+         (names (mapcar #'buffer-name bufs))
+         (choice (consult--read names
+                   :prompt "Org sidecar: "
+                   :sort nil
+                   :require-match t
+                   :category 'buffer)))
+    (when-let* ((buf (get-buffer choice)))
+      (display-buffer-in-side-window
+       buf
+       '((side . left)
+         (window-width . 0.25)
+         (slot . 0))))))
 
 ;; (use-package visual-fill-column
 ;;   :ensure t
@@ -2494,13 +2829,17 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (use-package hl-todo
   :ensure (:host github :repo "tarsius/hl-todo")
   :config
-  (global-hl-todo-mode) 
+  (global-hl-todo-mode)
   (setq hl-todo-keyword-faces
-        '(("TODO"   . "#FF0000")
-          ("FIXME"  . "#FF0000")
-          ("DEBUG"  . "#A020F0")
-          ("GOTCHA" . "#FF4500")
-          ("STUB"   . "#1E90FF"))))
+        '(("FIXME"      . "#FF4500")
+          ("BUG"        . "#FF0000")
+          ("DEBUG"      . "#A020F0")
+          ("HACK"       . "#E6DB74")
+          ("TODO"       . "#FF8C00")
+          ("REVIEW"     . "#2D9574")
+          ("OPTIMIZE"   . "#1E90FF")
+          ("STUB"       . "#87CEEB")
+          ("DEPRECATED" . "#808080"))))
 
 (use-package magit
   :ensure t
@@ -2706,7 +3045,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (flash-multi-window t)
   (flash-backdrop t)
   (flash-case-fold t)
-  (flash-autojump nil)
+  (flash-autojump t)
   (flash-highlight-matches t)
   (flash-label-position 'overlay)
   (flash-jump-position 'start)
@@ -2714,6 +3053,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (flash-char-multi-line nil)
   (flash-nohlsearch t)
   (flash-jumplist t)
+  (flash-rainbow t)
+  (flash-rainbow-shade 5)
   :config
   ;; Evil integration: binds gs in normal/visual/operator + enhanced f/t/F/T
   (require 'flash-evil)
@@ -3083,11 +3424,17 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (blink-cursor-mode 0)
 (setq-default cursor-type 'box)
 
-(defvar cashmere/font-height 200)
+(defvar cashmere/font-height 160)
 
-(set-face-attribute 'default nil :family "Hack Nerd Font" :weight 'regular :height cashmere/font-height)
-(set-face-attribute 'fixed-pitch nil :family "RobotoMono Nerd Font" :weight 'regular)
-(set-face-attribute 'variable-pitch nil :family "Poppins" :weight 'regular :height 1.1)
+  (set-face-attribute 'default nil
+    :family "MapleMono NF"                                                                                           
+    :height 160
+    :font (font-spec                                                                                                 
+           :family "MapleMono NF"                                                                                    
+           :features '(cv04 ss05 zero)))
+
+(set-face-attribute 'fixed-pitch nil :family "MapleMono NF" :weight 'regular)
+(set-face-attribute 'variable-pitch nil :family "MapleMono NF" :weight 'regular :height 1.1)
 
 (use-package mixed-pitch
   :ensure t
@@ -3509,15 +3856,32 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :ensure t
   :after (dired-rsync transient))
 
+(defun my/reload-config ()
+  "Re-tangle config.org and reload the generated config.el in place.
+Applies changes to customs, hooks, keybindings, and variable
+settings without restarting Emacs. Packages that are newly added
+still require a restart since elpaca queues run at init time."
+  (interactive)
+  (let* ((org-file  (expand-file-name "config.org" user-emacs-directory))
+         (el-file   (expand-file-name "config.el"  user-emacs-directory))
+         (start     (current-time)))
+    (message "Reloading config…")
+    ;; 1. Tangle org → el (skips up-to-date blocks automatically)
+    (org-babel-tangle-file org-file el-file "emacs-lisp")
+    ;; 2. Load the freshly tangled file
+    (load-file el-file)
+    (message "Config reloaded in %.2fs"
+             (float-time (time-since start)))))
+
 (setq-default olivetti-body-width 100)
 (define-globalized-minor-mode my/global-olivetti-mode olivetti-mode
  (lambda () (olivetti-mode 1)))
-(my/centered-cursor)
+;; (my/centered-cursor)
 ;; (my/global-olivetti-mode)
 
-(use-package org-modern-indent
-  :ensure (:host github :repo "jdtsmith/org-modern-indent")
-  :hook (org-mode . org-modern-indent-mode))
+;; (use-package org-modern-indent
+;;   :ensure (:host github :repo "jdtsmith/org-modern-indent")
+;;   :hook (org-mode . org-modern-indent-mode))
 
 (setq ibuffer-never-show-predicates
       '(;; System buffers
@@ -3568,7 +3932,49 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :config
   (add-to-list 'display-buffer-alist
                '("\\*Pass.*\\*"
-                 (display-buffer-full-frame))))
+                 (display-buffer-full-frame)))
+
+  (defvar-local pass--hidden-overlays nil
+    "Overlays used to hide the password line.")
+
+  (defun pass-toggle-password ()
+    "Toggle visibility of the first line (password) in a pass-view buffer."
+    (interactive)
+    (if pass--hidden-overlays
+        (progn
+          (mapc #'delete-overlay pass--hidden-overlays)
+          (setq pass--hidden-overlays nil))
+      (save-excursion
+        (goto-char (point-min))
+        (let ((ov (make-overlay (line-beginning-position) (line-end-position))))
+          (overlay-put ov 'display (propertize "••••••••" 'face 'shadow))
+          (overlay-put ov 'pass-hidden t)
+          (push ov pass--hidden-overlays)))))
+
+  (add-hook 'pass-view-mode-hook #'pass-toggle-password)
+
+  (with-eval-after-load 'evil
+    (general-def 'normal pass-mode-map
+      "q"   'quit-window
+      "j"   'pass-next-entry
+      "k"   'pass-prev-entry
+      "RET" 'pass-view
+      "d"   'pass-kill
+      "y"   'pass-copy
+      "Y"   'pass-copy-field
+      "e"   'pass-edit
+      "a"   'pass-insert
+      "g"   'pass-update-buffer
+      "G"   'pass-insert-generated
+      "o"   'pass-otp-options
+      "r"   'pass-rename
+      "/"   'isearch-forward)
+
+    (general-def 'normal pass-view-mode-map
+      "q"   'quit-window
+      "t"   'pass-toggle-password
+      "y"   'pass-copy
+      "Y"   'pass-copy-field)))
 
 (use-package auth-source
   :ensure nil                                  ;; This is built-in, no need to fetch it.
@@ -3604,10 +4010,9 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (defun my/format-buffer ()
   (interactive)
   (cond
-   ((eq major-mode 'rust-mode) (eglot-format-buffer))
-   ((eq major-mode 'nix-mode) (eglot-format-buffer))  
-   ((or (eq major-mode 'python-mode) 
-        (eq major-mode 'python-ts-mode)) (eglot-format-buffer))
+   ((eq major-mode 'rust-ts-mode) (eglot-format-buffer))
+   ((eq major-mode 'nix-ts-mode) (eglot-format-buffer))  
+   ((eq major-mode 'python-ts-mode) (eglot-format-buffer))
    ((eq major-mode 'c-mode) (eglot-format-buffer))
    ((bound-and-true-p eglot--managed-mode) (eglot-format-buffer))
    (t (message "No formatter for %s" major-mode))))
@@ -3683,6 +4088,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "gr" '(xref-find-references :wk "find references")
   "gs" '(magit-file-stage :wk "stage file")
   "gb" '(vc-annotate :wk "blame")
+  "gT" '(my/code-todos-harvest :wk "harvest code TODOs")
 
   "o" '(:ignore t :wk "open")
   "os" '(my/snip-upload :wk "snip buffer/region")
@@ -3721,15 +4127,34 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "q" '(:ignore t :wk "quit")
   "qq" '(save-buffers-kill-terminal :wk "quit emacs")
   "qr" '(restart-emacs :wk "restart")
+  "hr" '(my/reload-config :wk "reload config")
 
   "x" '(org-capture :wk "capture")
 
-  "a" '(embark-act :wk "embark")
+  ";" '(embark-act :wk "embark")
   "u" '(undo-tree-visualize :wk "undo tree")
   "P" '(consult-yank-from-kill-ring :wk "paste history")
 
   "t" '(:ignore t :wk "treesitter")
-  "ts" '(flash-treesitter :wk "flash treesitter"))
+  "ts" '(flash-treesitter :wk "flash treesitter")
+
+  ;; ECA (AI assistant)
+  "a" '(:ignore t :wk "eca/ai")
+  "aa" '(eca :wk "open eca")
+  "ac" '(eca-chat-toggle-window :wk "toggle chat")
+  "an" '(eca-chat-new :wk "new chat")
+  "as" '(eca-chat-select :wk "select chat")
+  "ar" '(eca-rewrite :wk "rewrite region")
+  "am" '(eca-chat-select-model :wk "select model")
+  "av" '(eca-chat-select-variant :wk "select variant")
+  "ag" '(eca-chat-select-agent :wk "select agent")
+  "at" '(eca-transient-menu :wk "transient menu")
+  "ad" '(eca-mcp-details :wk "mcp details")
+  "aR" '(eca-restart :wk "restart eca")
+  "aS" '(eca-stop :wk "stop eca")
+  "aw" '(eca-workspaces :wk "workspaces")
+  "ae" '(eca-show-errors :wk "show errors")
+  "aC" '(eca-open-global-config :wk "global config"))
 
 (defun my/flash-enabled-p ()
   (and (not (derived-mode-p 'magit-mode 'dired-mode 'ibuffer-mode))
@@ -3795,7 +4220,9 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "l" '(:ignore :wk "link")
   "lc" '(org-cliplink :wk "cliplink")
   "li" '(org-download-clipboard :wk "image")
-  "ll" '(org-insert-link :wk "link various things"))
+  "ll" '(org-insert-link :wk "link various things")
+
+  "n" '(org-toggle-narrow-to-subtree :wk "narrow"))
 
 (evil-define-key 'normal org-mode-map (kbd "RET") 'org-open-at-point)
 
@@ -3810,7 +4237,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "mf" '(fill-paragraph :wk "fill paragraph"))
 
 (my-leader
-  :keymaps '(rust-mode-map rust-ts-mode-map)
+  :keymaps '(rust-ts-mode-map)
   "m" '(:wk "rust mode" :ignore)
   "mr" '(rust-run :wk "run")
   "mc" '(rust-run-clippy :wk "clippy")
@@ -3834,6 +4261,20 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
     "e" 'tmr-edit-description
     "r" 'tmr-reschedule))
 
+(defun dirvish-next-file (arg)
+  "Move down ARG lines, landing on the filename column.
+Uses raw line motion so hidden detail lines (permissions, owner,
+date) and the dired header are never skipped."
+  (interactive "^p")
+  (forward-line arg)
+  (dired-move-to-filename))
+
+(defun dirvish-prev-file (arg)
+  "Move up ARG lines, landing on the filename column."
+  (interactive "^p")
+  (forward-line (- arg))
+  (dired-move-to-filename))
+
 (general-def 'normal dirvish-mode-map
   "?" 'dirvish-dispatch
   "q" 'dirvish-quit
@@ -3843,6 +4284,8 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   "S" 'dirvish-quicksort
   "F" 'dirvish-layout-toggle
   "z" 'zoxide-travel
+  "j" 'dirvish-next-file
+  "k" 'dirvish-prev-file
   "gh" 'dirvish-subtree-up
   "gl" 'dirvish-subtree-toggle
   "h" 'dired-up-directory
@@ -3867,13 +4310,13 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (my-local-leader
   "a" '(org-agenda :wk "org agenda")
   "c" '(my/centered-cursor :wk "center cursor")
-   "f" '(dirvish :wk "file manager")
-  "t" '(multi-vterm :wk "terminal")
+  "f" '(dirvish :wk "file manager")
+  "r" '(async-shell-command :wk "run async")
+  "t" '(projectile-run-vterm :wk "terminal")
+  "e" '(eshell :wk "eshell")
   "z" '(golden-ratio-mode :wk "zoom/golden ratio")
-  "i" '(persp-irc :wk "irc")
-  "m" '(mu4e :wk "mail")
-  "p" '(pass :wk "pass")
   "o" '(my/global-olivetti-mode :wk "center buffer")
+  "s" '(my-org-sidecar-left :wk "org sidecar")
 
   "g" '(:wk "gptel" :ignore)
 
@@ -4280,6 +4723,32 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (add-to-list 'global-colorful-modes 'helpful-mode))
 
 (use-package plz
+  :ensure t)
+
+(use-package gleam-ts-mode
+  :ensure t
+  :mode "\\.gleam\\'"
+  :hook (gleam-ts-mode . eglot-ensure)
+  :config
+  (add-to-list 'eglot-server-programs
+               '(gleam-ts-mode . ("gleam" "lsp"))))
+
+(use-package envrc
+  :ensure t
+  :init (envrc-global-mode))
+
+(use-package bbj
+  :ensure (:host github :repo "bbj-dev/bbj"
+           :files ("clients/emacs/bbj.el"))
+  :defer t
+  :commands (bbj-browse-index bbj-login)
+  :custom
+  (bbj-host "bbs.moneyspread.st")
+  (bbj-port 7099)
+  ;; (bbj-width 80)
+  )
+
+(use-package tldr
   :ensure t)
 
 (provide 'init)
