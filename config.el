@@ -1,7 +1,7 @@
 ;;; config.el --- Emacs-Kick --- A feature rich Emacs config for (neo)vi(m)mers -*- lexical-binding: t; -*-
-;; (setenv "LSP_USE_PLISTS" "true")
+(setenv "LSP_USE_PLISTS" "true")
 ;; (setq debug-on-error t)
-;; (setq gc-cons-threshold #x40000000)
+(setq gc-cons-threshold #x40000000)
 ;; (setq gc-cons-threshold 50000000)
 ;; (setenv "LSP_USE_PLISTS" "true")
 ;; (setq lsp-use-plists t)
@@ -9,10 +9,7 @@
 (setq package-enable-at-startup nil)
 ;; (setq-default mode-line-format t) ;; disabled: boolean t is not valid for mode-line-format
 (setq default-frame-alist '((undecorated . t)))
-(setq gc-cons-threshold 100000000)
-
-(add-hook 'emacs-startup-hook
-          (lambda () (setq gc-cons-threshold (* 50 1024 1024))))
+;; GC + file-name-handler-alist tuning lives in early-init.el now.
 (setq create-lockfiles nil)
 (setq make-backup-files nil)
 
@@ -90,6 +87,7 @@
   (inhibit-startup-message t) ;; Disable the startup message when Emacs launches.
   (initial-scratch-message "") ;; Clear the initial message in the *scratch* buffer.
   (ispell-dictionary "en_US") ;; Set the default dictionary for spell checking.
+  (text-mode-ispell-word-completion nil) ;; Stop ispell capf in text/org buffers (no wordlist on NixOS → corfu errors).
   (make-backup-files nil) ;; Disable creation of backup files.
   ;; (pixel-scroll-precision-mode t) ;; Enable precise pixel scrolling.
   (pixel-scroll-precision-use-momentum nil) ;; Disable momentum scrolling for pixel precision.
@@ -273,6 +271,31 @@
 
 (use-package async :ensure t)
 
+;; Always-available IRC entry points so `M-x run-irc` works from any daemon
+;; (hub, work, standalone). Calling `erc-tls` autoloads ERC on demand.
+(defun my/soju-password ()
+  "Read the Soju bouncer password from the sops-nix secret."
+  (string-trim
+   (with-temp-buffer
+     (insert-file-contents
+      "/home/cashmere/.config/sops-nix/secrets/senpai_password")
+     (buffer-string))))
+
+(defun run-irc ()
+  "Connect to all IRC networks via Soju bouncer."
+  (interactive)
+  (let ((pw (my/soju-password)))
+    (erc-tls :server "bouncer.cashmere.rs"
+             :port 6699
+             :nick "cashmere1337"
+             :user "cashmere/irc.libera.chat@emacs"
+             :password pw)
+    (erc-tls :server "bouncer.cashmere.rs"
+             :port 6699
+             :nick "cashmere"
+             :user "cashmere/ergo@emacs"
+             :password pw)))
+
 (when (my/load-for-hub-p)
 (use-package erc
   :ensure nil
@@ -345,29 +368,6 @@
 
   (erc-update-modules))
 
-(defun my/soju-password ()
-  "Read the Soju bouncer password from the sops-nix secret."
-  (string-trim
-   (with-temp-buffer
-     (insert-file-contents
-      "/home/cashmere/.config/sops-nix/secrets/senpai_password")
-     (buffer-string))))
-
-(defun run-irc ()
-  "Connect to all IRC networks via Soju bouncer."
-  (interactive)
-  (let ((pw (my/soju-password)))
-    (erc-tls :server "bouncer.cashmere.rs"
-             :port 6699
-             :nick "cashmere1337"
-             :user "cashmere/irc.libera.chat@emacs"
-             :password pw)
-    (erc-tls :server "bouncer.cashmere.rs"
-             :port 6699
-             :nick "cashmere"
-             :user "cashmere/ergo@emacs"
-             :password pw)))
-
 (defvar my/consult-source-erc
   (list :name "IRC"
         :narrow ?i
@@ -424,39 +424,38 @@ Temporarily disables notifications during the fetch."
   (erc-cmd-LIST))
 
 (defun persp-irc ()
-  "Switch to the irc perspective and connect or show ERC buffers."
+  "Switch to (or create) the IRC frame and show ERC buffers."
   (interactive)
-  (let ((erc-bufs (cl-remove-if-not
-                   (lambda (buf)
-                     (with-current-buffer buf
-                       (derived-mode-p 'erc-mode)))
-                   (buffer-list))))
-    (persp-switch "irc")
+  (let* ((erc-bufs (cl-remove-if-not
+                    (lambda (buf)
+                      (with-current-buffer buf
+                        (derived-mode-p 'erc-mode)))
+                    (buffer-list)))
+         (irc-frame (cl-find-if
+                     (lambda (f)
+                       (string= (frame-parameter f 'name) "irc"))
+                     (frame-list))))
+    (if irc-frame
+        (select-frame-set-input-focus irc-frame)
+      (select-frame-set-input-focus (make-frame '((name . "irc")))))
     (if erc-bufs
-        (progn
-          (dolist (buf erc-bufs)
-            (persp-add-buffer buf))
-          (switch-to-buffer (car erc-bufs)))
+        (switch-to-buffer (car erc-bufs))
       (letrec ((hook-fn (lambda ()
-                          (when (bound-and-true-p persp-mode)
-                            (let ((buf (current-buffer)))
-                              (persp-add-buffer buf)
-                              (switch-to-buffer buf)))
+                          (switch-to-buffer (current-buffer))
                           (remove-hook 'erc-join-hook hook-fn))))
         (add-hook 'erc-join-hook hook-fn))
       (run-irc))))
 
+) ;; end (when (my/load-for-hub-p) ...)
+
+;; ERC keybindings and hooks — register from any daemon, since `run-irc`
+;; autoloads ERC even outside the hub daemon.
 (with-eval-after-load 'erc
   (add-hook 'erc-mode-hook
             (lambda ()
               (setq-local scroll-margin 0)
               (setq-local maximum-scroll-margin 0.0)
               (setq-local corfu-auto nil)))
-
-  (add-hook 'erc-join-hook
-            (lambda ()
-              (when (bound-and-true-p persp-mode)
-                (persp-add-buffer (current-buffer)))))
 
   ;; Prevent accidental ERC buffer kills from parting channels
   (add-hook 'kill-buffer-query-functions
@@ -469,23 +468,23 @@ Temporarily disables notifications during the fetch."
                            (buffer-name)))
                 t)))
 
-  (general-def 'normal erc-mode-map
-    "q"   'quit-window
-    "Q"   'my/erc-quit-all
-    "gb"  'my/erc-switch-channel
-    "gn"  'erc-track-switch-buffer
-    "gH"  'my/erc-fetch-history
-    "go"  'erc-channel-names
-    "gj"  'erc-join-channel
-    "gl"  'my/erc-list-channels
-    "gr"  'my/erc-reconnect
-    "RET" 'erc-send-current-line)
+  (with-eval-after-load 'general
+    (general-def 'normal erc-mode-map
+      "q"   'quit-window
+      "Q"   'my/erc-quit-all
+      "gb"  'my/erc-switch-channel
+      "gn"  'erc-track-switch-buffer
+      "gH"  'my/erc-fetch-history
+      "go"  'erc-channel-names
+      "gj"  'erc-join-channel
+      "gl"  'my/erc-list-channels
+      "gr"  'my/erc-reconnect
+      "RET" 'erc-send-current-line)
 
-  (general-def '(normal insert) erc-mode-map
-    "M-n" 'erc-track-switch-buffer
-    "C-k" 'erc-previous-command
-    "C-j" 'erc-next-command))
-) ;; end (when (my/load-for-hub-p) ...)
+    (general-def '(normal insert) erc-mode-map
+      "M-n" 'erc-track-switch-buffer
+      "C-k" 'erc-previous-command
+      "C-j" 'erc-next-command)))
 
 ;; Auto-start ERC in hub daemon on first frame
 (when (my/hub-p)
@@ -710,6 +709,8 @@ Temporarily disables notifications during the fetch."
             (or
              (mode . eca-chat-mode)))
 
+           ("ERC" (or (mode . erc-mode)))
+
            ("Emacs" (or
                      (mode . emacs-lisp-mode)
                      (name . "^\\*Help\\*$")
@@ -741,32 +742,21 @@ Temporarily disables notifications during the fetch."
                           ("C-c ^ n" . smerge-next)        ;; Move to the next conflict.
                           ("C-c ^ p" . smerge-previous)))  ;; Move to the previous conflict.
 
-(use-package gptel
-  :ensure t
-  :defer t
-  :commands (gptel gptel-send gptel-menu)
+(use-package general
+  :ensure (:wait t)
+  :demand t
   :config
-  (defun my/openrouter-key ()
-    (string-trim
-     (shell-command-to-string "pass code/openrouter")))
+  (general-evil-setup)
 
-  (setq my/openrouter-backend
-        (gptel-make-openai
-         "OpenRouter"
-         :host "openrouter.ai"
-         :endpoint "/api/v1/chat/completions"
-         :stream t
-         :key #'my/openrouter-key
-         :models '("google/gemini-3-flash-preview:online"
-				   "deepseek/deepseek-v3.2:online"
-                   "minimax/minimax-m2.1:online"
-				   )))
+  (general-create-definer my-leader
+    :states '(normal visual)
+    :keymaps 'override
+    :prefix "SPC")
 
-  (setq gptel-backend my/openrouter-backend)
-  (setq gptel-log-level 'debug)
-  (setq gptel-include-reasoning nil)
-  (setq gptel-default-mode 'markdown-mode)
-  (setq gptel-backends (list my/openrouter-backend)))
+  (general-create-definer my-local-leader
+    :states '(normal visual)
+    :keymaps 'override
+    :prefix ","))
 
 (use-package markdown-mode
   :ensure t
@@ -816,92 +806,109 @@ Temporarily disables notifications during the fetch."
   (markdown-header-face-5 ((t (:height 1.1 :foreground "#b48ead" :weight bold :inherit markdown-header-face))))
   (markdown-header-face-6 ((t (:height 1.05 :foreground "#5e81ac" :weight semi-bold :inherit markdown-header-face)))))
 
-(use-package eca
-  :ensure (:host github :repo "editor-code-assistant/eca-emacs"
+(use-package claude-code-ide
+  :ensure (:host github :repo "manzaltu/claude-code-ide.el"
            :files ("*.el"))
   :defer t
+  :commands (claude-code-ide
+             claude-code-ide-menu
+             claude-code-ide-toggle
+             claude-code-ide-toggle-recent
+             claude-code-ide-continue
+             claude-code-ide-resume
+             claude-code-ide-stop
+             claude-code-ide-send-prompt
+             claude-code-ide-insert-at-mentioned
+             claude-code-ide-switch-to-buffer
+             claude-code-ide-list-sessions
+             claude-code-ide-check-status
+             claude-code-ide-show-debug
+             claude-code-ide-clear-debug)
   :custom
-  ;; Chat window
-  (eca-chat-window-side 'left)
-  (eca-chat-window-width 0.35)
-  (eca-chat-use-side-window t)
-  (eca-chat-focus-on-open t)
-  (eca-chat-tab-line t)
+  ;; CLI
+  (claude-code-ide-cli-path "claude")
+  (claude-code-ide-cli-debug nil)
+  ;; Terminal backend — vterm is preferred, eat as fallback
+  (claude-code-ide-terminal-backend 'vterm)
+  (claude-code-ide-vterm-anti-flicker nil)
 
-  ;; Diff tools
-  (eca-chat-diff-tool 'ediff)
-  (eca-rewrite-diff-tool 'ediff)
+  ;; Window placement — mirror eca on the right side so the two AI assistants
+  ;; don't fight over the same slot
+  (claude-code-ide-use-side-window t)
+  (claude-code-ide-window-side 'right)
+  (claude-code-ide-window-width 100)
+  (claude-code-ide-focus-on-open t)
 
-  ;; Context
-  (eca-chat-auto-add-cursor t)
-  (eca-chat-auto-add-repomap t)
-  (eca-chat-custom-model nil)
+  ;; Ediff integration for code suggestions
+  (claude-code-ide-use-ide-diff t)
+  (claude-code-ide-focus-claude-after-ediff t)
+  (claude-code-ide-show-claude-window-in-ediff t)
+  (claude-code-ide-switch-tab-on-ediff t)
 
-  ;; UI
-  (eca-chat-shrink-called-tools t)
-  (eca-chat-expand-pending-approval-tools t)
-  (eca-chat-table-beautify t)
-  (eca-buttons-allow-mouse t)
+  ;; Diagnostics — auto-pick flycheck/flymake
+  (claude-code-ide-diagnostics-backend 'auto)
+
+  ;; Allow Claude to evaluate Elisp in this Emacs (executeCode MCP tool)
+  (claude-code-ide-enable-execute-code t)
+
+  :init
+  ;; Evil: open the Claude terminal in insert state so you can type immediately.
+  ;; Defined in :init so it applies even before claude-code-ide loads.
+  (with-eval-after-load 'evil
+    (evil-set-initial-state 'vterm-mode 'insert)
+    (evil-set-initial-state 'eat-mode 'insert))
+
+  (defun my/claude-code-ide--enter-insert (&rest _)
+    "Force evil insert state in the Claude terminal buffer after invocation."
+    (when (bound-and-true-p evil-mode)
+      (run-at-time
+       0.05 nil
+       (lambda ()
+         (when-let* ((buf (seq-find
+                           (lambda (b)
+                             (string-match-p "\\*claude-code"
+                                             (buffer-name b)))
+                           (buffer-list))))
+           (with-current-buffer buf
+             (when (get-buffer-window buf)
+               (select-window (get-buffer-window buf)))
+             (evil-insert-state)))))))
+
+  (dolist (cmd '(claude-code-ide
+                 claude-code-ide-toggle
+                 claude-code-ide-toggle-recent
+                 claude-code-ide-continue
+                 claude-code-ide-resume
+                 claude-code-ide-switch-to-buffer))
+    (advice-add cmd :after #'my/claude-code-ide--enter-insert))
+
+  ;; Leader-key bindings (SPC a …) — defined pre-load so :commands autoloads fire.
+  (with-eval-after-load 'general
+    (my-leader
+      "a"  '(:ignore t :wk "claude-code")
+      "aa" '(claude-code-ide :wk "start / toggle")
+      "am" '(claude-code-ide-menu :wk "transient menu")
+      "at" '(claude-code-ide-toggle :wk "toggle window")
+      "aT" '(claude-code-ide-toggle-recent :wk "toggle recent")
+      "ap" '(claude-code-ide-send-prompt :wk "send prompt")
+      "a@" '(claude-code-ide-insert-at-mentioned :wk "@mention region")
+      "ac" '(claude-code-ide-continue :wk "continue last")
+      "ar" '(claude-code-ide-resume :wk "resume session")
+      "as" '(claude-code-ide-switch-to-buffer :wk "switch buffer")
+      "al" '(claude-code-ide-list-sessions :wk "list sessions")
+      "aq" '(claude-code-ide-stop :wk "stop")
+      "a?" '(claude-code-ide-check-status :wk "check status")
+      "ad" '(claude-code-ide-show-debug :wk "show debug")
+      "aD" '(claude-code-ide-clear-debug :wk "clear debug"))
+
+    (my-leader 'visual
+      "a@" '(claude-code-ide-insert-at-mentioned :wk "@mention region")))
+
+  (global-set-key (kbd "C-c C-'") #'claude-code-ide-menu)
 
   :config
-  ;; Disable corfu auto-popup in chat buffers (TAB-only completion)
-  (add-hook 'eca-chat-mode-hook
-            (lambda ()
-              (setq-local corfu-auto nil)))
-
-  ;; Evil mode integration
-  (with-eval-after-load 'evil
-    ;; Chat opens in normal state; press i to type in prompt
-    (evil-set-initial-state 'eca-chat-mode 'normal)
-    (evil-set-initial-state 'eca-mcp-details-mode 'normal))
-
-  ;; Keybindings via general with which-key labels
-  (with-eval-after-load 'general
-    ;; Normal state bindings in chat buffer
-    (general-def 'normal eca-chat-mode-map
-      "RET" '(eca-chat-send-prompt-at-chat :wk "send prompt")
-      "q"   '(eca-chat-toggle-window       :wk "close chat")
-      "C-l" '(eca-chat-clear               :wk "clear chat")
-      ;; g-prefix: chat navigation/management
-      "gr"  '(eca-chat-repeat-prompt       :wk "repeat prompt")
-      "gn"  '(eca-chat-new                 :wk "new chat")
-      "gs"  '(eca-chat-select              :wk "select chat")
-      "gm"  '(eca-chat-select-model        :wk "select model")
-      "gv"  '(eca-chat-select-variant      :wk "select variant")
-      "ga"  '(eca-chat-select-agent        :wk "select agent")
-      "gc"  '(eca-chat-cycle-agent         :wk "cycle agent")
-      ;; bracket navigation
-      "[["  '(eca-chat-go-to-prev-user-message    :wk "prev message")
-      "]]"  '(eca-chat-go-to-next-user-message    :wk "next message")
-      "[b"  '(eca-chat-go-to-prev-expandable-block :wk "prev block")
-      "]b"  '(eca-chat-go-to-next-expandable-block :wk "next block")
-      "TAB" '(eca-chat-toggle-expandable-block    :wk "toggle block")
-      "zR"  '(eca-chat-expand-all-blocks          :wk "expand all")
-      "zM"  '(eca-chat-collapse-all-blocks        :wk "collapse all"))
-
-    ;; C-c prefix in normal state — labeled group
-    (general-def 'normal eca-chat-mode-map
-      "C-c" '(:ignore t :wk "eca")
-      "C-c a" '(eca-chat-tool-call-accept-all          :wk "accept all tools")
-      "C-c A" '(eca-chat-tool-call-accept-all-and-remember :wk "accept & remember")
-      "C-c c" '(eca-chat-stop-prompt                   :wk "stop")
-      "C-c s" '(eca-chat-save-to-file                  :wk "save chat")
-      "C-c r" '(eca-chat-rename                        :wk "rename chat")
-      "C-c ." '(eca-transient-menu                     :wk "transient menu")
-      "C-c ," '(eca-mcp-details                        :wk "mcp details"))
-
-    ;; Insert state bindings
-    (general-def 'insert eca-chat-mode-map
-      "S-<return>" '(newline                               :wk "newline")
-      "C-<up>"     '(eca-chat-repeat-prompt                :wk "repeat prompt")
-      "C-c c"      '(eca-chat-stop-prompt                  :wk "stop")
-      "C-c a"      '(eca-chat-tool-call-accept-all         :wk "accept all tools")
-      "C-c ."      '(eca-transient-menu                    :wk "transient menu"))
-
-    ;; MCP details buffer
-    (general-def 'normal eca-mcp-details-mode-map
-      "q"     '(quit-window        :wk "close")
-      "C-c ." '(eca-transient-menu :wk "transient menu"))))
+  ;; Runs only on first invocation — not at Emacs startup.
+  (claude-code-ide-emacs-tools-setup))
 
 (use-package eldoc
   :ensure nil
@@ -918,6 +925,7 @@ Temporarily disables notifications during the fetch."
   :config
   (setq eldoc-box-max-pixel-width 800)
   (setq eldoc-box-max-pixel-height 600))
+
 
 ;; (use-package eldoc-box
 ;;   :ensure t
@@ -1062,16 +1070,6 @@ Temporarily disables notifications during the fetch."
 
 
 
-;; (use-package org-modern
-;;   :ensure t
-;;   :hook (org-mode . org-modern-mode)
-;;   :config
-;;   (setq org-modern-hide-stars t)
-;;   (setq org-modern-star 'replace)
-;;   (setq org-modern-fold-stars '(("◉" . "○")))
-;;   (setq org-modern-replace-stars "◉○◉○◉")
-;;   (global-org-modern-mode))
-
 ;; (add-to-list 'load-path "~/render-org.el")
 ;; (require 'render-org)
 ;; (add-hook 'org-mode-hook #'render-org-mode)
@@ -1085,21 +1083,28 @@ Temporarily disables notifications during the fetch."
 ;; ;; (setq render-org-heading-gfx-scales '(1.25 1.15 1.05 1.0 1.0 1.0))
 ;; ;; (setq render-org-heading-gfx-font-family "MapleMono NF")
 
-(use-package kitty-graphics
-  :ensure (:host github :repo "cashmeredev/kitty-graphics.el")
-  :if (and (not (display-graphic-p)) (getenv "KITTY_PID"))
-  :config
+;; TEMP: load kitty-graphics from local dev clone (/home/cashmere/projects/
+;; kitty-graphics/) instead of the elpaca-managed build, so edits to the
+;; source apply on Emacs restart without an `elpaca-rebuild' cycle.
+;; Swap back to the `use-package' / `:ensure' form below once changes are
+;; committed + pushed and elpaca has pulled the new commit.
+(when (not (display-graphic-p))
+  (add-to-list 'load-path "/home/cashmere/projects/kitty-graphics")
+  (require 'kitty-graphics)
+  (setq kitty-gfx-enable-video t)
+  (add-hook 'dired-mode-hook #'kitty-gfx-dired-auto-preview-mode)
+  (setq kitty-gfx-debug nil)
   (kitty-graphics-mode 1))
-  ;; (with-eval-after-load 'dired
-    ;; (define-key dired-mode-map (kbd "P") #'kitty-gfx-dired-preview))
 
-;; (when (and (not (display-graphic-p))
-;;            (or (getenv "KITTY_PID")                    ;; Kitty terminal
-;;                (string-prefix-p "foot" (or (getenv "TERM") "")))) ;; foot terminal (Sixel)
-;;   (load "~/projects/kitty-graphics/kitty-graphics.el")
-;;   (kitty-graphics-mode 1)
-;;   (with-eval-after-load 'dired
-;;     (define-key dired-mode-map (kbd "P") #'kitty-gfx-dired-preview)))
+;; (use-package kitty-graphics
+;;     :ensure (:host github :repo "cashmeredev/kitty-graphics.el")
+;;     :if (not (display-graphic-p))
+;;     :custom
+;;     (kitty-gfx-enable-video t)
+;;     :hook
+;;     (dired-mode . kitty-gfx-dired-auto-preview-mode)
+;;     :config
+;;     (kitty-graphics-mode 1))
 
 (use-package org-fancy-priorities
   :ensure t
@@ -1172,6 +1177,32 @@ Temporarily disables notifications during the fetch."
   :ensure t
   :after org)
 
+(use-package jupyter
+  :ensure t
+  :defer t
+  :commands (jupyter-run-repl jupyter-connect-repl)
+  :init
+  ;; lazy: kein :after org, kein emacs-zmq native build beim startup.
+  ;; jupyter laedt erst wenn ein jupyter-* src block ausgefuehrt wird.
+  (with-eval-after-load 'org
+    (setq org-babel-default-header-args:jupyter-python
+          '((:async . "yes")
+            (:session . "py")
+            (:kernel . "python3")
+            (:results . "raw drawer")))
+    (advice-add 'org-babel-get-src-block-info :around
+                (lambda (orig &rest a)
+                  (let ((info (apply orig a)))
+                    (when (and info
+                               (stringp (nth 0 info))
+                               (string-prefix-p "jupyter-" (nth 0 info))
+                               (not (featurep 'jupyter)))
+                      (require 'jupyter)
+                      (org-babel-do-load-languages
+                       'org-babel-load-languages
+                       (append org-babel-load-languages '((jupyter . t)))))
+                    info)))))
+
 (with-eval-after-load 'org
   (defun org-babel-execute:just (body params)
     "Execute a justfile source block.
@@ -1209,7 +1240,7 @@ Copies the resulting URL to the kill ring and clipboard."
                ((and (not file) (buffer-file-name) (file-name-extension (buffer-file-name)))
                 (file-name-extension (buffer-file-name)))))
          (ext-flag (if ext (format " -- -ext %s" ext) ""))
-         (cmd (format "ssh pb@pb.cashmere.rs%s 2>/dev/null | sed 's/\\x1b\\[[0-9;]*m//g' | grep -oP 'https://\\S+/f/\\S+'" ext-flag))
+         (cmd (format "ssh pb@pb.moneyspread.st%s 2>/dev/null | sed 's/\\x1b\\[[0-9;]*m//g' | grep -oP 'https://\\S+/f/\\S+'" ext-flag))
          (url (string-trim
                (if (and file (file-exists-p file))
                    (shell-command-to-string (format "cat %s | %s" (shell-quote-argument file) cmd))
@@ -1264,6 +1295,7 @@ and convert it to Org using the pandoc utility."
        "pandoc -f markdown -t org --wrap=preserve" t t)
       (kill-region (point-min) (point-max)))
     (yank)))
+
 
 (with-eval-after-load 'org
   ;; Log state changes with timestamps
@@ -1454,6 +1486,7 @@ Skips capture tasks and projects."
     (org-mode)
     (goto-char (point-min))
     (search-forward "- Goal :: " nil t)))
+
 
 (defun my/org-capture-timeblock-to-journal ()
   "Capture function: jump to today's journal for a timeblock."
@@ -1927,6 +1960,7 @@ Usage: emacs --eval '(my/agenda-app)' --no-splash"
   (setq org-download-timestamp "%Y%m%d-%H%M%S_")
   (setq org-download-heading-lvl nil))
 
+
 ;; (setq org-publish-project-alist
 ;;       '(("wiki"
 ;;          :author "cashmere"
@@ -1982,7 +2016,7 @@ Usage: emacs --eval '(my/agenda-app)' --no-splash"
   (setq denote-rename-buffer-format "%t"
         denote-buffer-name-prefix ""
         denote-directory (expand-file-name "~/org/"))
-  (denote-rename-buffer-mode 1))
+  (denote-rename-buffer-mode 1)) 
 
 (use-package denote-agenda
   :ensure t
@@ -1996,28 +2030,28 @@ Usage: emacs --eval '(my/agenda-app)' --no-splash"
   :config
   (setopt denote-journal-title-format 'day-date-month-year))
 
-(defun my/denote-journal-template ()
-  "Insert journal structure into a new journal entry.
-Only inserts when the buffer has just the front-matter (fresh file)."
-  (when (and (buffer-file-name)
-             (string-match-p "journal" (buffer-file-name))
-             (<= (count-lines (point-min) (point-max)) 6))
-    (goto-char (point-max))
-    (insert
-     "\n* Clockreport \n"
-     "\n#+BEGIN: clocktable :scope file :maxlevel 3 :emphasize nil :link t\n"
-     "#+END:\n"
-     "\n* Agenda \n"
-     "\n** NEXT Plan the day\n"
-     ":LOGBOOK:\n"
-     ":END:\n"
-     "\n* Braindump \n"
-     ":PROPERTIES:\n"
-     ":VISIBILITY: folded\n"
-     ":END:\n")))
+;; (defun my/denote-journal-template ()
+;;   "Insert journal structure into a new journal entry.
+;; Only inserts when the buffer has just the front-matter (fresh file)."
+;;   (when (and (buffer-file-name)
+;;              (string-match-p "journal" (buffer-file-name))
+;;              (<= (count-lines (point-min) (point-max)) 6))
+;;     (goto-char (point-max))
+;;     (insert
+;;      "\n* Clockreport \n"
+;;      "\n#+BEGIN: clocktable :scope file :maxlevel 3 :emphasize nil :link t\n"
+;;      "#+END:\n"
+;;      "\n* Agenda \n"
+;;      "\n** NEXT Plan the day\n"
+;;      ":LOGBOOK:\n"
+;;      ":END:\n"
+;;      "\n* Braindump \n"
+;;      ":PROPERTIES:\n"
+;;      ":VISIBILITY: folded\n"
+;;      ":END:\n")))
 
-(advice-add 'denote-journal-new-or-existing-entry :after
-            (lambda (&rest _) (my/denote-journal-template)))
+;; (advice-add 'denote-journal-new-or-existing-entry :after
+;;             (lambda (&rest _) (my/denote-journal-template)))
 
 (defcustom my/denote-agenda-filename-component-regexp
   "\\(?:[-_.]\\|:\\)agenda\\(?:[-_.]\\|:\\|$\\)"
@@ -2147,8 +2181,7 @@ Works on the base filename (without extension), e.g. matches \"-agenda\", \":age
 
 
 (use-package denote-explore
-  :ensure t
-  )
+  :ensure t)
 
 (use-package ox-gfm
   :ensure t)
@@ -2236,6 +2269,7 @@ Timers that expired while Emacs was closed fire immediately."
   (add-hook 'kill-emacs-hook #'my/tmr-save-timers)
   (add-hook 'emacs-startup-hook #'my/tmr-restore-timers))
 
+
 (use-package denote-merge
   :ensure (:host github :repo "protesilaos/denote-merge") ; not in any package archive
   ;; You can bind these to keys.  They are here so you can learn about them.
@@ -2279,22 +2313,6 @@ Timers that expired while Emacs was closed fire immediately."
                                    "  ")
                                  cand))))
 
-;; (use-package vertico-posframe
-;;   :ensure t
-;;   :init
-;;   (setq vertico-posframe-parameters   '((left-fringe  . 12)    ;; Fringes
-;;                                         (right-fringe . 12)
-;; 										(accept-focus . t)))
-;;                                         ;; (undecorated  . nil) ;; Rounded frame
-										 
-;;   :config
-;;   (vertico-posframe-mode 1)
-;;   (setq vertico-posframe-width        96                       ;; Narrow frame
-;;         vertico-posframe-height       vertico-count            ;; Default height
-;;         ;; Don't create posframe for these commands
-;;         vertico-multiform-commands    '((consult-line    (:not posframe))
-;;                                         (consult-ripgrep (:not posframe)))))
-
 (use-package corfu
   :ensure t
   :custom
@@ -2307,18 +2325,18 @@ Timers that expired while Emacs was closed fire immediately."
   (corfu-history-mode)
   (corfu-popupinfo-mode))
 
-(defun my/suppress-corfu-terminal-warning (orig-fun type message &rest args)
-  (unless (and (eq type 'corfu)
-               (string-match-p "corfu-terminal.*not needed" message))
-    (apply orig-fun type message args)))
+;; (defun my/suppress-corfu-terminal-warning (orig-fun type message &rest args)
+;;   (unless (and (eq type 'corfu)
+;;                (string-match-p "corfu-terminal.*not needed" message))
+;;     (apply orig-fun type message args)))
 
-(advice-add 'display-warning :around #'my/suppress-corfu-terminal-warning)
+;; (advice-add 'display-warning :around #'my/suppress-corfu-terminal-warning)
 
-(use-package corfu-terminal
-  :ensure t
-  :after corfu
-  :init
-  (corfu-terminal-mode +1))
+;; (use-package corfu-terminal
+;;   :ensure t
+;;   :after corfu
+;;   :init
+;;   (corfu-terminal-mode +1))
 
 (use-package cape
   :ensure t
@@ -2378,7 +2396,16 @@ Timers that expired while Emacs was closed fire immediately."
 
 (use-package embark
   :ensure t
-  :defer t)
+  :defer t
+  :bind
+  (("C-." . embark-act)
+   ("M-." . embark-dwim)
+   ("C-h B" . embark-bindings)
+   :map minibuffer-local-map
+   ("C-c C-e" . embark-export)
+   ("C-c C-o" . embark-collect))
+  :init
+  (setq prefix-help-command #'embark-prefix-help-command))
 
 (use-package embark-consult
   :ensure t
@@ -2404,7 +2431,10 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (use-package eglot
   :ensure nil
   :config
-  (setq eglot-autoshutdown t)
+  ;; nil: LSP server stays alive when last managed buffer closes.
+  ;; Verhindert churn bei org src edit buffers (C-c ' macht buffer auf/zu
+  ;; → mit t neuer pyrefly process jedes Mal).
+  (setq eglot-autoshutdown nil)
   (setq eglot-send-changes-idle-time 0.1)
   (setq eglot-sync-connect nil)
   (setq eglot-connect-timeout 30)
@@ -2453,14 +2483,21 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
     (add-to-list 'eglot-server-programs
                  '(nix-ts-mode . ("nixd")))))
 
+(put 'eglot-workspace-configuration 'safe-local-variable #'listp)
+
 (use-package python
   :ensure nil
   :mode ("\\.py\\'" . python-ts-mode)
   :hook (python-ts-mode . eglot-ensure)
+  :custom
+  (python-indent-offset 4)
+  (python-indent-guess-indent-offset-verbose nil)
+  (python-shell-interpreter "python3")
+  (python-shell-completion-native-enable nil)
   :config
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
-                 '(python-ts-mode . ("rass" "--" "pyrefly" "lsp" "--" "ruff" "server")))))
+                 '((python-ts-mode python-mode) . ("rass" "--" "pyrefly" "lsp" "--" "ruff" "server")))))
 
 (use-package pyvenv
   :ensure t
@@ -2555,6 +2592,76 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 ;;    (append org-babel-load-languages
 ;;            '((nushell . t)))))
 
+(use-package xonsh-mode
+  :ensure (:host github :repo "seanfarley/xonsh-mode")
+  :mode ("\\.xsh\\'" "\\.xonshrc\\'"))
+
+(define-derived-mode xonsh-ts-mode python-ts-mode "Xonsh[ts]"
+  "Major mode for xonsh, derived from `python-ts-mode'.
+Xonsh is a python superset; reuse python tree-sitter parser."
+  (setq-local comment-start "# "
+              comment-end ""))
+
+(with-eval-after-load 'treesit
+  (when (treesit-language-available-p 'python)
+    (add-to-list 'auto-mode-alist '("\\.xsh\\'" . xonsh-ts-mode))
+    (add-to-list 'auto-mode-alist '("\\.xonshrc\\'" . xonsh-ts-mode))))
+
+(defun my/org-src-eglot-python ()
+  "Give org src edit buffers a stable temp file name so eglot can attach.
+Name derived from owning org file path → identical across re-opens of
+the same src block file, so eglot reuses the existing connection
+instead of churning."
+  (when (and (derived-mode-p 'python-ts-mode 'python-mode)
+             (not buffer-file-name)
+             (bound-and-true-p org-src-mode))
+    (let* ((parent (or (buffer-file-name (org-src-source-buffer))
+                       (buffer-name (org-src-source-buffer))
+                       "scratch"))
+           (root (or (and (project-current)
+                          (project-root (project-current)))
+                     temporary-file-directory))
+           (name (format ".ob-src-%s.py"
+                         (substring (md5 parent) 0 8))))
+      (setq-local buffer-file-name (expand-file-name name root))
+      (set-buffer-modified-p nil)
+      (eglot-ensure))))
+
+(add-hook 'org-src-mode-hook #'my/org-src-eglot-python)
+
+;; Kein cleanup-hook: temp file bleibt liegen. Sonst killed eglot
+;; jedesmal die LSP connection wenn C-c ' das buffer schliesst →
+;; neuer pyrefly process beim naechsten Edit. File ist harmlos (gitignored
+;; via .gitignore pattern .ob-src-*.py).
+
+(with-eval-after-load 'eglot
+  (add-to-list 'eglot-server-programs
+               '((xonsh-mode xonsh-ts-mode)
+                 . ("rass" "--" "pyrefly" "lsp" "--" "ruff" "server"))))
+
+;; kein auto-eglot fuer xonsh — pyrefly.toml waere noetig. Manuell via
+;; M-x my/pyrefly-here-xonsh (legt temp pyrefly.toml an + startet eglot).
+;; (add-hook 'xonsh-mode-hook #'eglot-ensure)
+;; (add-hook 'xonsh-ts-mode-hook #'eglot-ensure)
+
+(with-eval-after-load 'org
+  (defun org-babel-execute:xonsh (body params)
+    "Execute a xonsh source block.
+BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
+    (let* ((dir (or (cdr (assq :dir params)) default-directory))
+           (cmdline (or (cdr (assq :cmdline params)) ""))
+           (tmp (make-temp-file "ob-xonsh-" nil ".xsh")))
+      (unwind-protect
+          (progn
+            (with-temp-file tmp (insert body))
+            (let ((default-directory dir))
+              (shell-command-to-string
+               (format "xonsh %s %s"
+                       cmdline
+                       (shell-quote-argument tmp)))))
+        (when (file-exists-p tmp) (delete-file tmp)))))
+  (add-to-list 'org-src-lang-modes '("xonsh" . xonsh)))
+
 (use-package go-mode
   :ensure t
   :mode "\\.go\\'"
@@ -2642,7 +2749,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :ensure t
   :config
   (setq vterm-timer-delay 0.0001)
-  (setq vterm-shell "fish"))
+  (setq vterm-shell "xonsh"))
 
 (use-package multi-vterm
   :ensure t
@@ -2775,7 +2882,18 @@ With prefix arg, always create a new terminal."
   (olivetti-margin-width 10)  ; No side margins
   ;; (olivetti-shrink t)
   (olivetti-safe t)
-)
+  :config
+  ;; Guard: vertico-posframe calls `text-scale-set' on *Minibuf-1*, which
+  ;; triggers olivetti's buffer-local text-scale-mode-hook. olivetti then
+  ;; calls window-width on the minibuffer window (nil) -> wrong-type-argument.
+  (add-hook 'minibuffer-setup-hook
+            (lambda ()
+              (when (bound-and-true-p olivetti-mode)
+                (olivetti-mode -1))))
+  (define-advice olivetti-set-window
+      (:around (orig win) my/skip-minibuffer)
+    (unless (window-minibuffer-p win)
+      (funcall orig win))))
 
 (defun my-org-sidecar-left ()
   "Pick an org-mode buffer via consult and display it as a left sidecar."
@@ -2810,22 +2928,6 @@ With prefix arg, always create a new terminal."
 ;;   (when (display-graphic-p)
 ;;     (setq-default visual-fill-column-center-text t)))
 
-;; (use-package diff-hl
-;;   :defer t
-;;   :ensure t
-;;   :hook
-;;   (find-file . (lambda ()
-;;                  (global-diff-hl-mode)           ;; Enable Diff-HL mode for all files.
-;;                  (diff-hl-flydiff-mode)          ;; Automatically refresh diffs.
-;;                  (diff-hl-margin-mode)))         ;; Show diff indicators in the margin.
-;;   :custom
-;;   (diff-hl-side 'left)                           ;; Set the side for diff indicators.
-;;   (diff-hl-margin-symbols-alist '((insert . "┃") ;; Customize symbols for each change type.
-;;                                   (delete . "-")
-;;                                   (change . "┃")
-;;                                   (unknown . "┆")
-;;                                   (ignored . "i"))))
-
 (use-package hl-todo
   :ensure (:host github :repo "tarsius/hl-todo")
   :config
@@ -2859,6 +2961,36 @@ With prefix arg, always create a new terminal."
       (lambda (window buffer bury-or-kill)
         (string-match-p "\\*magit" (buffer-name buffer))))
 
+(defcustom my/auto-git-add-exclude-regexps
+  '("/\\.git/" "/node_modules/" "/\\.direnv/" "/straight/" "/elpaca/"
+    "\\.gpg\\'" "/\\.cache/" "/__pycache__/")
+  "Paths matching these regexps are skipped by `my/auto-git-add-new-file'."
+  :type '(repeat regexp)
+  :group 'my)
+
+(defun my/auto-git-add-new-file ()
+  "Stage newly created file with intent-to-add so magit shows diffs.
+Runs on `after-save-hook'. Only acts when the saved file is inside a
+git project and currently untracked. Uses `git add -N' (intent-to-add)
+so the working-tree diff stays visible until the user explicitly stages."
+  (let ((file buffer-file-name))
+    (when (and file
+               (file-exists-p file)
+               (not (seq-some (lambda (re) (string-match-p re file))
+                              my/auto-git-add-exclude-regexps))
+               (locate-dominating-file file ".git"))
+      (let ((default-directory (file-name-directory file)))
+        (when (and (zerop (call-process "git" nil nil nil "rev-parse" "--is-inside-work-tree"))
+                   ;; ls-files --error-unmatch exits non-zero if untracked
+                   (not (zerop (call-process "git" nil nil nil
+                                             "ls-files" "--error-unmatch" file))))
+          (call-process "git" nil nil nil "add" "-N" file)
+          (when (fboundp 'magit-refresh)
+            (magit-refresh))
+          (message "auto-staged (intent-to-add): %s" (file-name-nondirectory file)))))))
+
+(add-hook 'after-save-hook #'my/auto-git-add-new-file)
+
 (use-package indent-guide
   :defer t
   :ensure t
@@ -2866,22 +2998,6 @@ With prefix arg, always create a new terminal."
   (prog-mode . indent-guide-mode)  ;; Activate indent-guide in programming modes.
   :config
   (setq indent-guide-char "│"))    ;; Set the character used for the indent guide.
-
-(use-package general
-  :ensure (:wait t)
-  :demand t
-  :config
-  (general-evil-setup)
-
-  (general-create-definer my-leader
-    :states '(normal visual)
-    :keymaps 'override
-    :prefix "SPC")
-
-  (general-create-definer my-local-leader
-    :states '(normal visual)
-    :keymaps 'override
-    :prefix ","))
 
 (use-package evil
   :ensure (:wait t)
@@ -2893,6 +3009,7 @@ With prefix arg, always create a new terminal."
   (setq evil-undo-system 'undo-tree)
   (setq evil-split-window-below t)
   (setq evil-vsplit-window-right t)
+  (setq evil-paste-from-register nil)
   :config
   (evil-mode 1)
   (define-key evil-normal-state-map "u" 'undo-tree-undo)
@@ -2999,20 +3116,16 @@ With prefix arg, always create a new terminal."
 (define-key evil-inner-text-objects-map "q" 'my-evil-textobj-anyblock-inner-quote)
 (define-key evil-outer-text-objects-map "q" 'my-evil-textobj-anyblock-a-quote)
 
-;; Paket für echte Multiple Cursors
 (use-package evil-mc
   :ensure t
   :after evil
   :config
   (global-evil-mc-mode 1)
   
-  ;; Hilfsfunktion: Prüfen, ob wir im Visual-Block-Mode sind
-  ;; Diese Funktion fängt den Fehler ab, falls Variablen nicht existieren.
   (defun my/evil-visual-block-p ()
     (and (bound-and-true-p evil-visual-selection)
          (eq evil-visual-selection 'block)))
 
-  ;; Funktion für Insert am Anfang (I)
   (defun my/evil-mc-visual-block-insert ()
     "Erstellt Cursor am Anfang des Blocks und wechselt in Insert-Mode."
     (interactive)
@@ -3020,10 +3133,8 @@ With prefix arg, always create a new terminal."
         (progn
           (evil-mc-make-cursor-in-visual-selection-beg)
           (evil-insert 1))
-      ;; Fallback: normales Verhalten, falls kein Block-Mode
       (call-interactively 'evil-insert)))
 
-  ;; Funktion für Append am Ende (A)
   (defun my/evil-mc-visual-block-append ()
     "Erstellt Cursor am Ende des Blocks und wechselt in Insert-Mode."
     (interactive)
@@ -3034,7 +3145,6 @@ With prefix arg, always create a new terminal."
       ;; Fallback: normales Verhalten
       (call-interactively 'evil-append)))
 
-  ;; Tastenbelegung im Visual Mode überschreiben
   (define-key evil-visual-state-map (kbd "I") 'my/evil-mc-visual-block-insert)
   (define-key evil-visual-state-map (kbd "A") 'my/evil-mc-visual-block-append))
 
@@ -3120,39 +3230,6 @@ With prefix arg, always create a new terminal."
   :config
   (require 'evil-org-agenda)
   (evil-org-agenda-set-keys))
-
-(use-package perspective
-  :ensure (:wait t)
-  :demand t
-  :custom
-  (persp-sort 'created)
-  (persp-suppress-no-prefix-key-warning t)
-  :init
-  (setq persp-mode-prefix-key (kbd "C-c M-p"))
-  :config
-  (persp-mode)
-
-  ;; ---- consult integration --------------------------------------
-  ;; Make SPC , show only buffers from the current perspective.
-  ;; SPC TAB B gives the unfiltered global list.
-
-  (with-eval-after-load 'consult
-    (consult-customize consult--source-buffer :hidden t :default nil)
-    (add-to-list 'consult-buffer-sources persp-consult-source))
-
-  ;; ---- keybindings via general ----------------------------------
-
-  (my-leader
-    "TAB" '(:ignore t :wk "perspective")
-    "TAB TAB" '(persp-switch :wk "switch")
-    "TAB n" '(persp-next :wk "next")
-    "TAB p" '(persp-prev :wk "prev")
-    "TAB d" '(persp-kill :wk "delete")
-    "TAB r" '(persp-rename :wk "rename")
-    "TAB b" '(persp-switch-to-buffer :wk "buffer")
-    "TAB B" '(consult-buffer :wk "global buffer")
-    "TAB a" '(persp-add-buffer :wk "add buffer")
-    "TAB k" '(persp-remove-buffer :wk "remove buffer")))
 
 (use-package nerd-icons-dired
   :if ek-use-nerd-fonts                   ;; Load the package only if the user has configured to use nerd fonts.
@@ -3284,27 +3361,14 @@ With prefix arg, always create a new terminal."
                        (copy-sequence mode-line-misc-info)))
 
 (use-package maple-modeline
+  :disabled t
   :ensure (:host github :repo "honmaple/emacs-maple-modeline")
-  :hook (after-init . maple-modeline-mode)
+  ;; :hook (elpaca-after-init . maple-modeline-mode)
   :config
   (setq maple-modeline-separator 'nil)
   (setq maple-modeline-height 25)
   (setq maple-modeline-icon t)
   
-  ;; (defun maple-modeline-to-header-line ()
-  ;;   "Move maple-modeline from mode-line to header-line in all buffers."
-  ;;   (unless (featurep 'ewm)
-  ;;     (let ((fmt '(:eval (maple-modeline--init))))
-  ;;       (setq-default header-line-format fmt)
-  ;;       (setq-default mode-line-format nil)
-  ;;       (dolist (buf (buffer-list))
-  ;;         (with-current-buffer buf
-  ;;           (setq header-line-format fmt)
-  ;;           (setq mode-line-format nil)))
-  ;;       (force-mode-line-update t))))
-
-  ;; (add-hook 'maple-modeline-mode-hook #'maple-modeline-to-header-line)
-
   (maple-modeline-define-segment my-modeline-time
     :format (propertize (downcase (format-time-string " %I:%M %p "))
                         'face 'bold))
@@ -3373,42 +3437,30 @@ With prefix arg, always create a new terminal."
             count
             position))
 
-  (maple-modeline-define ewm-style
-    :left ((evil :left (bar :left ""))
-           buffer-info
-           flycheck
-           version-control)
-    :right (org-clock-task
-            tmr-timer
-            mu4e-mail
-            position))
-
-  (setq maple-modeline-style
-        (if (featurep 'ewm) 'ewm-style 'my-custom-style))
+  (setq maple-modeline-style 'my-custom-style)
 
   :custom-face
   (header-line ((t (:inherit mode-line :box nil))))
   (mode-line ((t (:box nil))))
   (mode-line-inactive ((t (:box nil)))))
 
-;; (use-package punch-line
-;;   :ensure (:host github :repo "konrad1977/punch-line")
-;;   :config
-;;   (setq punch-line-left-separator "  "
-;;         punch-line-right-separator "  "
-;; 		punch-show-git-info nil
-;; 		punch-show-buffer-position t
-;;         punch-line-music-max-length 80
-;; 		punch-line-modal-divider-style 'block
-;; 		punch-line-section-backgrounds 'auto
-;; 		punch-show-weather-info t
-;; 		punch-weather-longitude "10.41"
-;; 		punch-weather-latitude "53.25"
-;; 		punch-cpu-usage t
-;; 		punch-show-processes-info t)
-;;   (punch-line-mode 1)
-;;   (setq-default header-line-format mode-line-format)
-;;   (setq-default mode-line-format nil))
+(use-package punch-line
+  :ensure (:host github :repo "cashmeredev/punch-line")
+  :config
+  (setq punch-line-left-separator "  "
+        punch-line-right-separator "  "
+		punch-show-git-info nil
+		punch-show-buffer-position t
+		punch-show-column-info t
+        punch-line-music-max-length 80
+		punch-line-modal-divider-style 'block
+		punch-line-section-backgrounds 'auto
+		punch-show-weather-info t
+		punch-weather-longitude "10.41"
+		punch-weather-latitude "53.25"
+		punch-cpu-usage t
+		punch-show-processes-info t)
+  (punch-line-mode 1))
 
 (use-package adaptive-wrap
   :ensure t
@@ -3811,6 +3863,29 @@ With prefix arg, always create a new terminal."
 (add-to-list 'custom-theme-load-path "~/.emacs.d/themes/")
 (load-theme 'noctalia t)
 
+;; (use-package nano-theme
+;;   :ensure (:host github :repo "rougier/nano-theme")
+;;   :init
+;;   (setq nano-fonts-use nil)              ;; keep MapleMono NF, don't force Roboto
+;;   (setq nano-window-divider-show t)      ;; subtle dividers between windows
+;;   :config
+;;   (load-theme 'nano-dark t)
+
+;;   ;; Convenience: cycle between nano-light and nano-dark.
+;;   (defun cashmere/nano-toggle-theme ()
+;;     "Toggle between `nano-light' and `nano-dark'."
+;;     (interactive)
+;;     (let ((dark-active (member 'nano-dark custom-enabled-themes)))
+;;       (mapc #'disable-theme custom-enabled-themes)
+;;       (load-theme (if dark-active 'nano-light 'nano-dark) t)))
+
+;;   ;; Soften a few faces that nano leaves a bit too plain.
+;;   (with-eval-after-load 'org
+;;     (set-face-attribute 'org-document-title nil :height 1.4 :weight 'light)
+;;     (set-face-attribute 'org-level-1 nil :height 1.2 :weight 'medium)
+;;     (set-face-attribute 'org-level-2 nil :height 1.1 :weight 'medium)
+;;     (set-face-attribute 'org-level-3 nil :height 1.05 :weight 'medium)))
+
 (use-package dirvish
   :ensure t
   :init
@@ -3820,7 +3895,8 @@ With prefix arg, always create a new terminal."
   (dirvish-quick-access-entries
    '(("h" "~/" "Home")
      ("d" "~/Downloads/" "Downloads")
-     ("p" "~/projects/" "Projects")))
+     ;; ("p" "~/projects/" "Projects")
+     ))
 
   (dirvish-reuse-session 'open)
   (dirvish-attributes '(file-size))
@@ -3836,7 +3912,27 @@ With prefix arg, always create a new terminal."
   :config
   (setq dired-dwim-target t)
   (setq delete-by-moving-to-trash t)
-  (setq dired-mouse-drag-files t))
+  (setq dired-mouse-drag-files t)
+
+  ;; On TTY: drop dirvish's GUI-only media dispatchers (image/video/gif).
+  ;; They call `create-image' + `image-size' on cached thumbnails →
+  ;; "Window system frame should be used" on terminal frames.  Bare
+  ;; symbols here — `dirvish-*-dp' names only appear after
+  ;; `dirvish--preview-dps-validate' interns them (dirvish.el:577).
+  ;;
+  ;; kitty-graphics ships its own dirvish dispatcher (`kitty-image',
+  ;; registered by `kitty-gfx--install-dirvish' on `kitty-graphics-mode'
+  ;; enable, see kitty-graphics.el:4040) that handles images + video
+  ;; thumbnails via the Kitty protocol.  It runs before this filter
+  ;; thanks to being prepended; removing the GUI dispatchers is purely
+  ;; a safety net for cases where `kitty-image' returns nil (backend
+  ;; lost, mode disabled mid-flight).
+  (unless (display-graphic-p)
+    (with-eval-after-load 'dirvish
+      (setq dirvish-preview-dispatchers
+            (cl-remove-if (lambda (d)
+                            (memq d '(image gif video video-mtn)))
+                          dirvish-preview-dispatchers)))))
 
 ;; (use-package tramp-hlo
 ;;     :ensure (:host github :repo "jsadusk/tramp-hlo")
@@ -3846,8 +3942,9 @@ With prefix arg, always create a new terminal."
 (add-to-list 'load-path "/home/cashmere/.emacs.d/tramp-rpc/lisp")
 (require 'tramp-rpc)
 
+
 (use-package zoxide
-  :ensure t)
+  :ensure t) 
 
 (use-package dired-rsync 
   :ensure t)
@@ -3879,10 +3976,6 @@ still require a restart since elpaca queues run at init time."
 ;; (my/centered-cursor)
 ;; (my/global-olivetti-mode)
 
-;; (use-package org-modern-indent
-;;   :ensure (:host github :repo "jdtsmith/org-modern-indent")
-;;   :hook (org-mode . org-modern-indent-mode))
-
 (setq ibuffer-never-show-predicates
       '(;; System buffers
         ;; "^\\*Messages\\*$"
@@ -3910,7 +4003,8 @@ still require a restart since elpaca queues run at init time."
         projectile-indexing-method 'alien
         projectile-sort-order 'recentf
         projectile-require-project-root nil
-        projectile-globally-ignored-buffers '("\\*magit.*")))
+        projectile-globally-ignored-buffers '("\\*magit.*"))
+  (add-hook 'after-save-hook #'projectile-cache-current-file))
 
 (use-package consult-projectile
   :ensure t
@@ -3919,11 +4013,28 @@ still require a restart since elpaca queues run at init time."
   :config
   (setq consult-project-function #'projectile-project-root))
 
-(use-package hidepw
+(use-package wgrep
   :ensure t
+  :defer t
   :custom
-  (hidepw-hide-first-line t)
-  :hook (pass-view-mode . hidepw-mode))
+  (wgrep-auto-save-buffer t)
+  (wgrep-change-readonly-file t))
+
+(defun my/project-replace ()
+  "Project-wide search via `consult-ripgrep'.
+In the minibuffer press `C-c C-e' (embark-export) — wgrep mode
+activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
+  (interactive)
+  (call-interactively #'consult-ripgrep))
+
+(defun my/embark-export-auto-wgrep (&rest _)
+  "Enter wgrep mode automatically after `embark-export'."
+  (when (and (derived-mode-p 'grep-mode)
+             (fboundp 'wgrep-change-to-wgrep-mode))
+    (wgrep-change-to-wgrep-mode)))
+
+(with-eval-after-load 'embark
+  (advice-add 'embark-export :after #'my/embark-export-auto-wgrep))
 
 (use-package pass
   :ensure t
@@ -3933,25 +4044,6 @@ still require a restart since elpaca queues run at init time."
   (add-to-list 'display-buffer-alist
                '("\\*Pass.*\\*"
                  (display-buffer-full-frame)))
-
-  (defvar-local pass--hidden-overlays nil
-    "Overlays used to hide the password line.")
-
-  (defun pass-toggle-password ()
-    "Toggle visibility of the first line (password) in a pass-view buffer."
-    (interactive)
-    (if pass--hidden-overlays
-        (progn
-          (mapc #'delete-overlay pass--hidden-overlays)
-          (setq pass--hidden-overlays nil))
-      (save-excursion
-        (goto-char (point-min))
-        (let ((ov (make-overlay (line-beginning-position) (line-end-position))))
-          (overlay-put ov 'display (propertize "••••••••" 'face 'shadow))
-          (overlay-put ov 'pass-hidden t)
-          (push ov pass--hidden-overlays)))))
-
-  (add-hook 'pass-view-mode-hook #'pass-toggle-password)
 
   (with-eval-after-load 'evil
     (general-def 'normal pass-mode-map
@@ -3972,7 +4064,7 @@ still require a restart since elpaca queues run at init time."
 
     (general-def 'normal pass-view-mode-map
       "q"   'quit-window
-      "t"   'pass-toggle-password
+      "t"   'pass-view-toggle-password
       "y"   'pass-copy
       "Y"   'pass-copy-field)))
 
@@ -4002,10 +4094,19 @@ still require a restart since elpaca queues run at init time."
 
 (use-package pdf-tools
   :ensure nil
+  :if (display-graphic-p)
   :magic ("%PDF" . pdf-view-mode)
   :config
   (pdf-loader-install)
   :hook (pdf-view-mode . (lambda () (display-line-numbers-mode -1))))
+
+;; Site-lisp may pre-register pdf-view-mode in magic-mode-alist on TUI emacs.
+;; Strip those entries so opening a PDF in -nw falls back to doc-view/fundamental.
+(unless (display-graphic-p)
+  (setq magic-mode-alist
+        (seq-remove (lambda (e) (eq (cdr e) 'pdf-view-mode)) magic-mode-alist))
+  (setq auto-mode-alist
+        (seq-remove (lambda (e) (eq (cdr e) 'pdf-view-mode)) auto-mode-alist)))
 
 (defun my/format-buffer ()
   (interactive)
@@ -4053,7 +4154,7 @@ still require a restart since elpaca queues run at init time."
 
   "b" '(:ignore t :wk "buffer/bookmarks")
   "bb" '(consult-bookmark :wk "display current bookmarks")
-  "bI" '(ibuffer :wk "ibuffer")
+  "ba" '(ibuffer :wk "ibuffer")
   "bi" '(projectile-ibuffer :wk "ibuffer project")
   "bd" '(bookmark-delete :wk "delete bookmark")
   "bk" '(kill-current-buffer :wk "kill buffer")
@@ -4066,7 +4167,7 @@ still require a restart since elpaca queues run at init time."
   "pb" '(consult-projectile-buffer :wk "buffers") 
   "pk" '(projectile-kill-buffers :wk "kill buffers") 
   "pd" '(projectile-remove-known-project :wk "delete project")
-  "pr" '(projectile-recentf :wk "recent files")
+  "pr" '(my/project-replace :wk "project replace (wgrep)")
   "pa" '(projectile-add-known-project :wk "add project")
   "pi" '(projectile-invalidate-cache :wk "invalidate cache")
 
@@ -4093,6 +4194,7 @@ still require a restart since elpaca queues run at init time."
   "o" '(:ignore t :wk "open")
   "os" '(my/snip-upload :wk "snip buffer/region")
   "oS" '(my/snip-upload-file :wk "snip file")
+  "op" '(pass :wk "pass")
 
   "h" '(:ignore t :wk "help")
   "hm" '(describe-mode :wk "mode")
@@ -4138,23 +4240,17 @@ still require a restart since elpaca queues run at init time."
   "t" '(:ignore t :wk "treesitter")
   "ts" '(flash-treesitter :wk "flash treesitter")
 
-  ;; ECA (AI assistant)
-  "a" '(:ignore t :wk "eca/ai")
-  "aa" '(eca :wk "open eca")
-  "ac" '(eca-chat-toggle-window :wk "toggle chat")
-  "an" '(eca-chat-new :wk "new chat")
-  "as" '(eca-chat-select :wk "select chat")
-  "ar" '(eca-rewrite :wk "rewrite region")
-  "am" '(eca-chat-select-model :wk "select model")
-  "av" '(eca-chat-select-variant :wk "select variant")
-  "ag" '(eca-chat-select-agent :wk "select agent")
-  "at" '(eca-transient-menu :wk "transient menu")
-  "ad" '(eca-mcp-details :wk "mcp details")
-  "aR" '(eca-restart :wk "restart eca")
-  "aS" '(eca-stop :wk "stop eca")
-  "aw" '(eca-workspaces :wk "workspaces")
-  "ae" '(eca-show-errors :wk "show errors")
-  "aC" '(eca-open-global-config :wk "global config"))
+
+  "e"   '(:ignore t :wk "eww/web")
+  "e e" '(eww :wk "eww browse / search")
+  "e n" '(my/eww-new-buffer :wk "new eww buffer")
+  "e b" '(eww-list-bookmarks :wk "bookmarks")
+  "e h" '(eww-list-histories :wk "history")
+  "e f" '(elfeed :wk "elfeed (rss)")
+  "e s" '(engine/search-duckduckgo :wk "search duckduckgo")
+  "e L" '(link-hint-open-link :wk "hint open link")
+  "e C" '(link-hint-copy-link :wk "hint copy link")
+  )
 
 (defun my/flash-enabled-p ()
   (and (not (derived-mode-p 'magit-mode 'dired-mode 'ibuffer-mode))
@@ -4307,6 +4403,26 @@ date) and the dired header are never skipped."
   "S" 'dirvish-relative-symlink
   "h" 'dirvish-hardlink)
 
+(defun my/eshell-clear ()
+  (interactive)
+  (eshell/clear-scrollback))
+
+(defun my/atuin-history ()
+  (interactive)
+  (eshell-atuin-history))
+
+(with-eval-after-load 'eshell
+  (add-hook 'eshell-mode-hook
+            (lambda ()
+              (local-set-key (kbd "C-l") 'my/eshell-clear)
+              (local-set-key (kbd "C-r") 'my/atuin-history))))
+
+(with-eval-after-load 'evil
+  (with-eval-after-load 'eshell
+    (evil-define-key '(normal insert) eshell-mode-map
+      (kbd "C-r") 'my/atuin-history
+      (kbd "C-l") 'my/eshell-clear)))
+
 (my-local-leader
   "a" '(org-agenda :wk "org agenda")
   "c" '(my/centered-cursor :wk "center cursor")
@@ -4316,36 +4432,7 @@ date) and the dired header are never skipped."
   "e" '(eshell :wk "eshell")
   "z" '(golden-ratio-mode :wk "zoom/golden ratio")
   "o" '(my/global-olivetti-mode :wk "center buffer")
-  "s" '(my-org-sidecar-left :wk "org sidecar")
-
-  "g" '(:wk "gptel" :ignore)
-
-  "gg" '(gptel :wk "open gptel")
-  "ga" '(gptel-add :wk "add buffer to gptel")
-  "gf" '(gptel-add-file :wk "add file to gptel")
-  "gA" '(gptel-abort :wk "abort response")
-  "gr" '(gptel-rewrite :wk "rewrite section")
-  "gm" '(gptel-menu :wk "open gptel menu"))
-
-;; (my-leader
-;;   :keymaps 'override
-;;   "m" '(:ignore t :wk "music/emms")
-;;   "mm" '(emms-browser :wk "browser")
-;;   "mp" '(emms-playlist-mode-go :wk "playlist")
-;;   "ma" '(emms-add-directory-tree :wk "add directory")
-;;   "mf" '(emms-play-file :wk "play file")
-;;   "md" '(emms-play-directory :wk "play directory")
-;;   "ms" '(emms-start :wk "start/play")
-;;   "mS" '(emms-stop :wk "stop")
-;;   "mn" '(emms-next :wk "next track")
-;;   "mN" '(emms-previous :wk "previous track")
-;;   "mP" '(emms-pause :wk "pause")
-;;   "mr" '(emms-random :wk "random track")
-;;   "mc" '(emms-playlist-clear :wk "clear playlist")
-;;   "mC" '(emms-cache-set-from-mpd-all :wk "sync mpd cache")
-;;   "mu" '(emms-player-mpd-update-all :wk "update mpd db")
-;;   "mw" '(emms-playlist-save :wk "save playlist")
-;;   "ml" '(emms-playlist-load :wk "load playlist"))
+  "s" '(my-org-sidecar-left :wk "org sidecar"))
 
 (global-set-key (kbd "C-=") 'text-scale-increase)
 (global-set-key (kbd "C--") 'text-scale-decrease)
@@ -4406,6 +4493,7 @@ date) and the dired header are never skipped."
              ((string< a-feed b-feed) t)
              ((string> a-feed b-feed) nil)
              (t (string< a-title b-title)))))))
+
 (use-package elfeed-org
   :ensure t
   :after elfeed
@@ -4413,6 +4501,34 @@ date) and the dired header are never skipped."
   (rmh-elfeed-org-files (list "~/org/rss.org"))
   :config
   (elfeed-org))
+
+(use-package elfeed-goodies
+  :ensure t
+  :after elfeed
+  :config
+  (elfeed-goodies/setup))
+
+(use-package shrface
+  :ensure t
+  :after elfeed
+  :config
+  (shrface-basic)
+  (shrface-trial)
+  (shrface-default-keybindings)
+  (setq shrface-href-versatile t
+        shrface-bullets-bullet-list '("◉" "○" "✸" "✿")))
+
+(with-eval-after-load 'elfeed
+  (require 'shrface)
+  (add-hook 'elfeed-show-mode-hook
+            (lambda ()
+              (visual-line-mode 1)
+              (setq-local shr-width nil
+                          shr-use-fonts t
+                          shr-max-image-proportion 0.6
+                          shr-indentation 2
+                          line-spacing 0.2)
+              (shrface-mode 1))))
 
 (defun elfeed-export-from-index-to-csv (output-file)
   (interactive "FExport CSV nach: ")
@@ -4436,6 +4552,110 @@ date) and the dired header are never skipped."
 
 (setq browse-url-browser-function 'browse-url-generic
       browse-url-generic-program "qutebrowser")
+
+(use-package eww
+  :ensure nil
+  :commands (eww eww-search-words)
+  :custom
+  (eww-search-prefix "https://duckduckgo.com/html/?q=")
+  (eww-auto-rename-buffer 'title)
+  (eww-browse-url-new-window-is-tab nil)
+  (eww-download-directory (expand-file-name "~/Downloads"))
+  (eww-bookmarks-directory (locate-user-emacs-file "eww-bookmarks/"))
+  (eww-restore-desktop t)
+  (eww-desktop-remove-duplicates t)
+  (eww-history-limit 150)
+  (eww-suggest-uris '(eww-links-at-point
+                      thing-at-point-url-at-point))
+  (eww-header-line-format "%t — %u")
+  (url-privacy-level '(email os emacs lastloc))
+  (url-cookie-trusted-urls '())
+  :config
+  (setq-default shr-inhibit-images nil
+                shr-use-fonts t
+                shr-use-colors t
+                shr-folding-mode t
+                shr-bullet "• "
+                shr-image-animate nil
+                shr-max-image-proportion 0.6
+                shr-width nil
+                shr-cookie-policy nil)
+  (make-directory eww-bookmarks-directory t)
+
+  (with-eval-after-load 'general
+    (my-local-leader
+      :keymaps 'eww-mode-map
+      "B" '(eww-add-bookmark :wk "add bookmark")
+      "r" '(eww-readable :wk "reader mode")
+      "i" '(my/eww-toggle-images :wk "toggle images")
+      "y" '(my/eww-copy-as-org :wk "copy page as org")
+      "d" '(eww-download :wk "download"))))
+
+(defun my/eww-new-buffer (url)
+  "Open URL in a fresh eww buffer (keep current)."
+  (interactive (list (read-from-minibuffer "URL: ")))
+  (eww url 4))
+
+(defun my/eww-toggle-images ()
+  "Toggle image rendering and reload page."
+  (interactive)
+  (setq-local shr-inhibit-images (not shr-inhibit-images))
+  (eww-reload)
+  (message "Images %s" (if shr-inhibit-images "off" "on")))
+
+(defun my/eww-copy-as-org ()
+  "Yank visible eww region/page as org-formatted text."
+  (interactive)
+  (require 'ol-eww)
+  (org-eww-copy-for-org-mode))
+
+(use-package shrface
+  :ensure t
+  :hook (eww-after-render . shrface-mode)
+  :custom
+  (shrface-bullets-bullet-list '("◉" "○" "✸" "✿"))
+  (shrface-href-versatile t)
+  :config
+  (shrface-basic)
+  (shrface-trial))
+
+(use-package shr-tag-pre-highlight
+  :ensure (:host github :repo "xuchunyang/shr-tag-pre-highlight.el")
+  :after shr
+  :config
+  (add-to-list 'shr-external-rendering-functions
+               '(pre . shr-tag-pre-highlight)))
+
+(use-package ace-link
+  :ensure t
+  :commands (ace-link-eww ace-link-info ace-link-help ace-link-org)
+  :config (ace-link-setup-default))
+
+(use-package link-hint
+  :ensure t
+  :commands (link-hint-open-link link-hint-copy-link))
+
+(use-package engine-mode
+  :ensure t
+  :commands (engine/search-duckduckgo
+             engine/search-google
+             engine/search-github
+             engine/search-mdn
+             engine/search-wikipedia
+             engine/search-arch-wiki
+             engine/search-nixpkgs
+             engine/search-rustdocs)
+  :config
+  (engine-mode 1)
+  (setq engine/browser-function 'eww-browse-url)
+  (defengine duckduckgo "https://duckduckgo.com/html/?q=%s" :keybinding "d")
+  (defengine google     "https://google.com/search?q=%s"    :keybinding "g")
+  (defengine github     "https://github.com/search?q=%s&type=code" :keybinding "h")
+  (defengine mdn        "https://developer.mozilla.org/en-US/search?q=%s" :keybinding "m")
+  (defengine wikipedia  "https://en.wikipedia.org/wiki/Special:Search?search=%s" :keybinding "w")
+  (defengine arch-wiki  "https://wiki.archlinux.org/index.php?search=%s" :keybinding "a")
+  (defengine nixpkgs    "https://search.nixos.org/packages?query=%s" :keybinding "n")
+  (defengine rustdocs   "https://docs.rs/releases/search?query=%s" :keybinding "r"))
 
 (use-package mu4e
   :ensure nil
@@ -4544,16 +4764,6 @@ date) and the dired header are never skipped."
   :config
   (setq denote-project-notes-identifier '(project stayem)))
 
-;; (use-package snippy
-;;   :ensure (:host github
-;; 	       :repo "MiniApollo/snippy.git"
-;; 	       :branch "main")
-;;   :hook (after-init . global-snippy-minor-mode)
-;;   :custom
-;;   (snippy-global-languages '("global")) ;; Recomended
-;;   :config
-;;   (snippy-install-or-update-snippets)) ;; Autoupdate git repo
-
 (use-package emacs-everywhere
   :ensure t)
 
@@ -4561,149 +4771,6 @@ date) and the dired header are never skipped."
 ;; (org-agenda nil "c")
 ;; (profiler-report)
 ;; (profiler-stop)
-
-(with-eval-after-load 'ewm
-  (require 'ewm-transient)
-
-  ;; ── Bugfix: guard against nil output in pointer functions ──
-  ;; ewm-input--pointer-in-window-p crashes with "stringp, nil" when
-  ;; called on a frame without ewm-output (e.g. the initial daemon frame
-  ;; during startup when dashboard does switch-to-buffer).
-  (defun ewm-input--pointer-in-window-p (window)
-    "Return non-nil if pointer is inside WINDOW. Safe for non-EWM frames."
-    (let* ((frame (window-frame window))
-           (output (frame-parameter frame 'ewm-output)))
-      (when output
-        (let* ((output-offset (ewm--get-output-offset output))
-               (edges (window-inside-pixel-edges window))
-               (left (+ (car output-offset) (nth 0 edges)))
-               (top (+ (cdr output-offset) (nth 1 edges)))
-               (right (+ (car output-offset) (nth 2 edges)))
-               (bottom (+ (cdr output-offset) (nth 3 edges)))
-               (pointer (ewm-get-pointer-location))
-               (px (car pointer))
-               (py (cdr pointer)))
-          (and (<= left px right)
-               (<= top py bottom))))))
-
-  (defun ewm-input--warp-pointer-to-window (window)
-    "Warp pointer to center of WINDOW. Safe for non-EWM frames."
-    (unless (minibufferp (window-buffer window))
-      (let* ((frame (window-frame window))
-             (output (frame-parameter frame 'ewm-output)))
-        (when (and output (not (ewm-input--pointer-in-window-p window)))
-          (let* ((output-offset (ewm--get-output-offset output))
-                 (edges (window-inside-pixel-edges window))
-                 (x (+ (car output-offset) (/ (+ (nth 0 edges) (nth 2 edges)) 2)))
-                 (y (+ (cdr output-offset) (/ (+ (nth 1 edges) (nth 3 edges)) 2))))
-            (ewm-warp-pointer (float x) (float y)))))))
-
-   ;; ── Modeline: use minimal style under ewm ────
-   (when (bound-and-true-p maple-modeline-mode)
-     (setq maple-modeline-style 'ewm-style)
-     (force-mode-line-update t))
-
-   ;; ── Settings ─────────────────────────────────────────────
-   (setq ewm-mouse-follows-focus t)
-  (setq ewm-input-config '((keyboard :repeat-delay 200 :repeat-rate 25)))
-  (setq ewm-idle '(300 . "swaylock -f -c 333333"))
-
-  ;; Per-host output config
-  (pcase (system-name)
-    ("md"
-     (setq ewm-output-config
-           '(("DP-1" :x 0 :y 0 :refresh 144))))
-    ("sportmacher"
-     (setq ewm-output-config
-           '(("DSI-1" :width 800 :height 1280 :transform 3 :scale 1.0)))))
-
-  ;; ── Programm-Launcher ──────────────────────────────────────
-  (define-key ewm-mode-map (kbd "s-<return>")
-    (lambda () (interactive) (start-process "kitty" nil "kitty")))
-  (define-key ewm-mode-map (kbd "M-s-7")
-    (lambda (command)
-      (interactive (list (read-shell-command "$ ")))
-      (start-process-shell-command command nil command)))
-  (define-key ewm-mode-map (kbd "s-SPC")
-    (lambda () (interactive) (start-process "vicinae" nil "vicinae" "toggle")))
-  (define-key ewm-mode-map (kbd "s-b")
-    (lambda () (interactive) (start-process "helium" nil "helium-browser")))
-  (define-key ewm-mode-map (kbd "s-p")
-    (lambda () (interactive) (start-process "vicinae" nil "vicinae" "vicinae://extensions/tinkerbells/pass/pass")))
-  (define-key ewm-mode-map (kbd "s-v")
-    (lambda () (interactive) (start-process "vicinae" nil "vicinae" "vicinae://extensions/vicinae/clipboard/history")))
-  (define-key ewm-mode-map (kbd "s-s")
-    (lambda () (interactive) (start-process "vicinae" nil "vicinae" "vicinae://extensions/vicinae/power")))
-  (define-key ewm-mode-map (kbd "s-d")
-    (lambda () (interactive) (start-process "vicinae" nil "vicinae" "vicinae://extensions/cashmere/deepl-improve/deepl-improve")))
-  (define-key ewm-mode-map (kbd "M-s")
-    (lambda () (interactive) (start-process "snipe" nil "snipe")))
-  (define-key ewm-mode-map (kbd "s-<print>")
-    (lambda () (interactive)
-      (start-process-shell-command "screenshot" nil "grim -g \"$(slurp)\" - | wl-copy")))
-  (define-key ewm-mode-map (kbd "<print>")
-    (lambda () (interactive)
-      (start-process-shell-command "screenshot-pb" nil
-        "grim -g \"$(slurp)\" - | ssh pb@pb.cashmere.rs -- -ext png 2>/dev/null | sed 's/\\x1b\\[[0-9;]*m//g' | grep -oP 'https://\\S+/f/\\S+' | sed 's/$/?r=1/' | wl-copy")))
-
-  ;; ── Window Management ────────────────────────────────────
-  (define-key ewm-mode-map (kbd "s-h") #'windmove-left)
-  (define-key ewm-mode-map (kbd "s-j") #'windmove-down)
-  (define-key ewm-mode-map (kbd "s-k") #'windmove-up)
-  (define-key ewm-mode-map (kbd "s-l") #'windmove-right)
-  (define-key ewm-mode-map (kbd "s-q") #'kill-current-buffer)
-  (define-key ewm-mode-map (kbd "s-f") #'ewm-toggle-fullscreen)
-  (define-key ewm-mode-map (kbd "s-S-q") #'ewm-stop-module)
-
-  ;; tab switching s-0..s-9 (s-0 = tab 10)
-  (dotimes (i 10)
-    (define-key ewm-mode-map
-      (kbd (format "s-%d" i))
-      (let ((n i))
-        (lambda () (interactive) (tab-bar-select-tab (if (= n 0) 10 n))))))
-
-  ;; ── Media Keys ───────────────────────────────────────────
-  (define-key ewm-mode-map (kbd "<XF86AudioLowerVolume>")
-    (lambda () (interactive) (start-process "vol-" nil "pamixer" "-d" "5")))
-  (define-key ewm-mode-map (kbd "<XF86AudioRaiseVolume>")
-    (lambda () (interactive) (start-process "vol+" nil "pamixer" "-i" "5")))
-  (define-key ewm-mode-map (kbd "<XF86AudioMute>")
-    (lambda () (interactive) (start-process "mute" nil "pamixer" "--toggle-mute")))
-  (define-key ewm-mode-map (kbd "<XF86AudioMicMute>")
-    (lambda () (interactive)
-      (start-process-shell-command "micmute" nil
-        "pactl list sources short | grep input | awk '{print $1}' | xargs -I{} pactl set-source-mute {} toggle")))
-  (define-key ewm-mode-map (kbd "<XF86AudioPlay>")
-    (lambda () (interactive) (start-process "play" nil "playerctl" "play-pause")))
-  (define-key ewm-mode-map (kbd "<XF86AudioMedia>")
-    (lambda () (interactive) (start-process "play" nil "playerctl" "play-pause")))
-  (define-key ewm-mode-map (kbd "<XF86AudioNext>")
-    (lambda () (interactive) (start-process "next" nil "playerctl" "next")))
-  (define-key ewm-mode-map (kbd "<XF86AudioPrev>")
-    (lambda () (interactive) (start-process "prev" nil "playerctl" "previous")))
-  (define-key ewm-mode-map (kbd "<XF86MonBrightnessUp>")
-    (lambda () (interactive) (start-process "bri+" nil "brightnessctl" "set" "+5%")))
-  (define-key ewm-mode-map (kbd "<XF86MonBrightnessDown>")
-    (lambda () (interactive) (start-process "bri-" nil "brightnessctl" "set" "5%-")))
-
-  ;; ── Leader bindings under SPC e ──────────────────────────
-  (my-leader
-    "e"   '(:ignore t :wk "ewm")
-    "e a" '(ewm-launch-app :wk "launch app")
-    "e n" '(ewm-next-surface-buffer :wk "next surface")
-    "e p" '(ewm-prev-surface-buffer :wk "prev surface")
-    "e f" '(ewm-toggle-fullscreen :wk "fullscreen")
-    "e t" '(ewm-transient :wk "control panel")
-    "e s" '(ewm-screenshot :wk "screenshot")
-    "e i" '(ewm-show-state :wk "inspect state")
-    "e d" '(ewm-debug-mode :wk "debug")
-    "e l" '(ewm-lock-session :wk "lock")
-    "e T" '(:ignore t :wk "tab")
-    "e T n" '(tab-new :wk "new tab")
-    "e T c" '(tab-close :wk "close tab")
-    "e T l" '(tab-next :wk "next tab")
-    "e T h" '(tab-previous :wk "prev tab")
-    "e T r" '(tab-recent :wk "recent tab")))
 
 (use-package arrow
   :ensure t
@@ -4722,9 +4789,6 @@ date) and the dired header are never skipped."
   (global-colorful-mode t)
   (add-to-list 'global-colorful-modes 'helpful-mode))
 
-(use-package plz
-  :ensure t)
-
 (use-package gleam-ts-mode
   :ensure t
   :mode "\\.gleam\\'"
@@ -4735,20 +4799,72 @@ date) and the dired header are never skipped."
 
 (use-package envrc
   :ensure t
-  :init (envrc-global-mode))
-
-(use-package bbj
-  :ensure (:host github :repo "bbj-dev/bbj"
-           :files ("clients/emacs/bbj.el"))
-  :defer t
-  :commands (bbj-browse-index bbj-login)
-  :custom
-  (bbj-host "bbs.moneyspread.st")
-  (bbj-port 7099)
-  ;; (bbj-width 80)
-  )
+  :defer 1
+  :init
+  (require 'notifications)
+  (defvar my/envrc-notified (make-hash-table :test 'equal)
+    "Directories already notified about, to avoid spam.")
+  (defun my/envrc-notify (dir status)
+    "Desktop notification for DIR with STATUS symbol.
+Skip when no .envrc (STATUS `none'). Dedupe by .envrc root so
+opening another file in same project does not re-notify."
+    (when (and dir (memq status '(on error)))
+      (let ((root (or (locate-dominating-file dir ".envrc") dir)))
+        (unless (gethash root my/envrc-notified)
+          (puthash root t my/envrc-notified)
+          (ignore-errors
+            (notifications-notify
+             :title "direnv"
+             :body (format "%s — %s"
+                           (abbreviate-file-name root)
+                           (pcase status
+                             ('on    "environment loaded")
+                             ('error "load failed")
+                             (_      (format "%s" status))))
+             :app-name "emacs"
+             :urgency (if (eq status 'error) 'critical 'low)
+             :timeout 3000))
+          (message "envrc: %s [%s]" root status)))))
+  (defun my/envrc-maybe-async ()
+    "Enable `envrc-mode' asynchronously for current buffer."
+    (when (and (not (bound-and-true-p envrc-mode))
+               buffer-file-name
+               (not (file-remote-p buffer-file-name)))
+      (let ((buf (current-buffer)))
+        (run-with-idle-timer
+         0.2 nil
+         (lambda ()
+           (when (buffer-live-p buf)
+             (with-current-buffer buf
+               (envrc-mode 1)
+               (let ((dir (and (boundp 'envrc--status)
+                               (car-safe (bound-and-true-p envrc--process-env))
+                               default-directory))
+                     (status (bound-and-true-p envrc--status)))
+                 (when status
+                   (my/envrc-notify default-directory status))))))))))
+  :hook ((find-file . my/envrc-maybe-async)
+         (dired-mode . my/envrc-maybe-async))
+  :config
+  (when (bound-and-true-p envrc-global-mode)
+    (envrc-global-mode -1)))
 
 (use-package tldr
+  :ensure t)
+
+(use-package eshell
+  :ensure nil
+  :config
+  (setq eshell-command-aliases-list
+        '(("nh-switch" "nh os switch --quiet $*"))))
+
+(use-package eshell-atuin
+  :ensure t
+  :after eshell
+  :config
+  (eshell-atuin-mode))
+
+(use-package el-fetch
   :ensure t)
 
 (provide 'init)

@@ -47,12 +47,36 @@
 
 ;; Install use-package support
 (elpaca (elpaca-use-package :wait t)
-  (elpaca-use-package-mode))
+  (elpaca-use-package-mode)
+  (setq elpaca-use-package-by-default t))
 
 ;; Install org before tangling config.org
 (elpaca (org :wait t))
 
-(org-babel-load-file (expand-file-name "config.org" user-emacs-directory))
+;; Shadow built-in transient with newer version before magit loads
+(elpaca (transient :wait t))
+
+;; Load config: tangle only when org is newer than the tangled .el.
+;; Saves the entire org parse on hot starts.
+(let* ((dir user-emacs-directory)
+       (org-file (expand-file-name "config.org" dir))
+       (el-file  (expand-file-name "config.el"  dir)))
+  (when (or (not (file-exists-p el-file))
+            (file-newer-than-file-p org-file el-file))
+    (require 'org)
+    (require 'ob-tangle)
+    (let ((gc-cons-threshold most-positive-fixnum))
+      (org-babel-tangle-file org-file el-file "emacs-lisp")))
+  ;; Prefer .elc when present; native-compile asynchronously in the background.
+  (load (file-name-sans-extension el-file) nil 'nomessage)
+  (when (and (featurep 'native-compile)
+             (fboundp 'native-comp-available-p)
+             (native-comp-available-p))
+    ;; Defer until elpaca finishes building all packages so macro-providing
+    ;; libraries (e.g. general.el / my-leader) are on load-path when the
+    ;; subprocess re-evaluates config.el.
+    (add-hook 'elpaca-after-init-hook
+              (lambda () (native-compile-async el-file nil t)))))
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
