@@ -1,8 +1,6 @@
 ;;; config.el --- Emacs-Kick --- A feature rich Emacs config for (neo)vi(m)mers -*- lexical-binding: t; -*-
 (setenv "LSP_USE_PLISTS" "true")
 ;; (setq debug-on-error t)
-(setq gc-cons-threshold #x40000000)
-;; (setq gc-cons-threshold 50000000)
 ;; (setenv "LSP_USE_PLISTS" "true")
 ;; (setq lsp-use-plists t)
 (setq pgtk-wait-for-event-timeout 0.001)
@@ -151,7 +149,7 @@
   (add-to-list 'default-frame-alist '(horizontal-scroll-bars . nil))
   ;; (set-frame-parameter (selected-frame) 'alpha-background 80)
   ;; (add-to-list 'default-frame-alist '(alpha-background . 80))
-  ;; (global-hl-line-mode -1) ;; Disable highlight of the current line
+  (global-hl-line-mode 1) ;; Highlight the current line
   (global-auto-revert-mode 1) ;; Enable global auto-revert mode to keep buffers up to date with their corresponding files.
   (setq-default indent-tabs-mode nil)
   (recentf-mode 1) ;; Enable tracking of recently opened files.
@@ -296,7 +294,6 @@
              :user "cashmere/ergo@emacs"
              :password pw)))
 
-(when (my/load-for-hub-p)
 (use-package erc
   :ensure nil
   :defer t
@@ -446,8 +443,6 @@ Temporarily disables notifications during the fetch."
         (add-hook 'erc-join-hook hook-fn))
       (run-irc))))
 
-) ;; end (when (my/load-for-hub-p) ...)
-
 ;; ERC keybindings and hooks — register from any daemon, since `run-irc`
 ;; autoloads ERC even outside the hub daemon.
 (with-eval-after-load 'erc
@@ -518,7 +513,7 @@ Temporarily disables notifications during the fetch."
         (message "centered-cursor off"))
     (progn
       (setq scroll-preserve-screen-position t
-            scroll-conservatively 0
+            scroll-conservatively 101
             maximum-scroll-margin 0.5
             scroll-margin 99999)
       (setq my/centered-cursor-enabled t)
@@ -586,6 +581,10 @@ Temporarily disables notifications during the fetch."
 (use-package clipetty
   :ensure t
   :hook (after-init . global-clipetty-mode))
+
+;; (use-package kkp
+;;   :ensure t
+;;   :hook (tty-setup . global-kkp-mode))
 
 (use-package isearch
   :ensure nil                                  ;; This is built-in, no need to fetch it.
@@ -660,7 +659,6 @@ Temporarily disables notifications during the fetch."
                      (mode . nix-ts-mode)))
            ("Scripts" (or
                        (mode . shell-script-mode)
-                       (mode . shell-mode)
                        (mode . sh-mode)
                        (mode . bash-ts-mode)
                        (mode . lua-mode)
@@ -690,7 +688,12 @@ Temporarily disables notifications during the fetch."
                    (mode . markdown-mode)
                    (mode . adoc-mode)))
            ("Org" (mode . org-mode))
-           ("Terminal" (mode . vterm-mode))
+           ("Terminal" (or
+                        (mode . ghostel-mode)
+                        (mode . eat-mode)
+                        (mode . eshell-mode)
+                        (mode . shell-mode)
+                        (mode . term-mode)))
            ("LaTeX" (name . "\.tex$"))
            ("Magit" (or
                      (mode . magit-blame-mode)
@@ -828,15 +831,14 @@ Temporarily disables notifications during the fetch."
   ;; CLI
   (claude-code-ide-cli-path "claude")
   (claude-code-ide-cli-debug nil)
-  ;; Terminal backend — vterm is preferred, eat as fallback
-  (claude-code-ide-terminal-backend 'vterm)
-  (claude-code-ide-vterm-anti-flicker nil)
+  ;; Terminal backend
+  (claude-code-ide-terminal-backend 'eat)
 
   ;; Window placement — mirror eca on the right side so the two AI assistants
   ;; don't fight over the same slot
   (claude-code-ide-use-side-window t)
   (claude-code-ide-window-side 'right)
-  (claude-code-ide-window-width 100)
+  (claude-code-ide-window-width 75)
   (claude-code-ide-focus-on-open t)
 
   ;; Ediff integration for code suggestions
@@ -855,7 +857,6 @@ Temporarily disables notifications during the fetch."
   ;; Evil: open the Claude terminal in insert state so you can type immediately.
   ;; Defined in :init so it applies even before claude-code-ide loads.
   (with-eval-after-load 'evil
-    (evil-set-initial-state 'vterm-mode 'insert)
     (evil-set-initial-state 'eat-mode 'insert))
 
   (defun my/claude-code-ide--enter-insert (&rest _)
@@ -1083,28 +1084,19 @@ Temporarily disables notifications during the fetch."
 ;; ;; (setq render-org-heading-gfx-scales '(1.25 1.15 1.05 1.0 1.0 1.0))
 ;; ;; (setq render-org-heading-gfx-font-family "MapleMono NF")
 
-;; TEMP: load kitty-graphics from local dev clone (/home/cashmere/projects/
-;; kitty-graphics/) instead of the elpaca-managed build, so edits to the
-;; source apply on Emacs restart without an `elpaca-rebuild' cycle.
-;; Swap back to the `use-package' / `:ensure' form below once changes are
-;; committed + pushed and elpaca has pulled the new commit.
-(when (not (display-graphic-p))
-  (add-to-list 'load-path "/home/cashmere/projects/kitty-graphics")
-  (require 'kitty-graphics)
-  (setq kitty-gfx-enable-video t)
-  (add-hook 'dired-mode-hook #'kitty-gfx-dired-auto-preview-mode)
-  (setq kitty-gfx-debug nil)
-  (kitty-graphics-mode 1))
-
-;; (use-package kitty-graphics
-;;     :ensure (:host github :repo "cashmeredev/kitty-graphics.el")
-;;     :if (not (display-graphic-p))
-;;     :custom
-;;     (kitty-gfx-enable-video t)
-;;     :hook
-;;     (dired-mode . kitty-gfx-dired-auto-preview-mode)
-;;     :config
-;;     (kitty-graphics-mode 1))
+(use-package kitty-graphics
+  :ensure nil
+  :load-path "/home/cashmere/projects/kitty-graphics"
+  :demand t
+  :custom
+  (kitty-gfx-enable-video t)
+  (kitty-gfx-debug nil)
+  (kitty-gfx-shr-scale 'fit)
+  (kitty-gfx-shr-fit-width 0.6)
+  (kitty-gfx-shr-fit-height 20)
+  :hook (dired-mode . kitty-gfx-dired-auto-preview-mode)
+  :config
+  (kitty-graphics-setup))
 
 (use-package org-fancy-priorities
   :ensure t
@@ -1225,42 +1217,32 @@ BODY is the justfile content.  PARAMS may include:
   (add-to-list 'org-src-lang-modes '("just" . just)))
 
 (defun my/snip-upload (&optional file)
-  "Upload FILE, region, or current buffer to snips.sh.
-Passes -ext flag to hint the file type for syntax highlighting.
-Copies the resulting URL to the kill ring and clipboard."
+  "Upload FILE, region, or current buffer to bouncer.cashmere.rs.
+The xonsh `upload' command copies the URL to the clipboard; it is
+also added to the kill ring."
   (interactive)
-  (let* ((input (cond
-                 (file file)
-                 ((use-region-p)
-                  (buffer-substring-no-properties (region-beginning) (region-end)))
-                 (t (buffer-substring-no-properties (point-min) (point-max)))))
-         (ext (cond
-               ((and file (file-name-extension file))
-                (file-name-extension file))
-               ((and (not file) (buffer-file-name) (file-name-extension (buffer-file-name)))
-                (file-name-extension (buffer-file-name)))))
-         (ext-flag (if ext (format " -- -ext %s" ext) ""))
-         (cmd (format "ssh pb@pb.moneyspread.st%s 2>/dev/null | sed 's/\\x1b\\[[0-9;]*m//g' | grep -oP 'https://\\S+/f/\\S+'" ext-flag))
-         (url (string-trim
-               (if (and file (file-exists-p file))
-                   (shell-command-to-string (format "cat %s | %s" (shell-quote-argument file) cmd))
-                 (with-temp-buffer
-                   (insert input)
-                   (shell-command-on-region (point-min) (point-max) cmd nil t)
-                   (buffer-string))))))
-    (if (string-prefix-p "https://" url)
-        (let ((final-url (if (and ext (member (downcase ext)
-                                              '("png" "jpg" "jpeg" "gif" "webp" "svg" "bmp" "ico" "tiff")))
-                              (concat url "?r=1")
-                            url)))
-          (kill-new final-url)
-          (message "Uploaded: %s" final-url))
-      (message "Upload failed"))))
+  (let* ((ext (or (and file (file-name-extension file))
+                  (and (buffer-file-name) (file-name-extension (buffer-file-name)))
+                  "txt"))
+         (cmd (format "xonsh -c 'upload %s'" ext)))
+    (if (and file (file-exists-p file))
+        (call-process-shell-command
+         (format "cat %s | %s" (shell-quote-argument file) cmd))
+      (shell-command-on-region
+       (if (use-region-p) (region-beginning) (point-min))
+       (if (use-region-p) (region-end) (point-max))
+       cmd nil nil))
+    (let ((url (string-trim (shell-command-to-string "wl-paste"))))
+      (if (string-prefix-p "https://" url)
+          (progn
+            (kill-new url)
+            (message "Uploaded: %s" url))
+        (message "Upload failed: %s" url)))))
 
 (defun my/snip-upload-file ()
-  "Prompt for a file and upload it to snips.sh."
+  "Prompt for a file and upload it to bouncer.cashmere.rs."
   (interactive)
-  (my/snip-upload (read-file-name "Upload to snips.sh: ")))
+  (my/snip-upload (read-file-name "Upload to bouncer: ")))
 
 (defun my/setup-git-remote (dev-name srht-name)
   "Set up origin (dual-push) and backup remotes for the current git repo.
@@ -1987,8 +1969,8 @@ Usage: emacs --eval '(my/agenda-app)' --no-splash"
 
 (setq org-publish-project-alist
       '(("wiki"
-         :base-directory "~/wiki"
-         :publishing-directory "~/blog/content/wiki"
+         :base-directory "~/garden"
+         :publishing-directory "~/cashmere.rs/content/wiki"
          :publishing-function denote-publish-to-md
          :recursive nil
          :exclude-tags ("noexport" "draft")
@@ -2189,8 +2171,8 @@ Works on the base filename (without extension), e.g. matches \"-agenda\", \":age
 (use-package denote-publish
   :ensure (:repo "https://github.com/vedang/denote-publish"))
 
-(setq denote-publish-default-base-dir "~/wiki")
-(setq denote-publish-default-output-dir "~/blog/wiki")
+(setq denote-publish-default-base-dir "~/garden")
+(setq denote-publish-default-output-dir "~/cashmere.rs/content/wiki")
 
 (setq denote-publish-link-class "internal-link")
 
@@ -2325,18 +2307,11 @@ Timers that expired while Emacs was closed fire immediately."
   (corfu-history-mode)
   (corfu-popupinfo-mode))
 
-;; (defun my/suppress-corfu-terminal-warning (orig-fun type message &rest args)
-;;   (unless (and (eq type 'corfu)
-;;                (string-match-p "corfu-terminal.*not needed" message))
-;;     (apply orig-fun type message args)))
-
-;; (advice-add 'display-warning :around #'my/suppress-corfu-terminal-warning)
-
-;; (use-package corfu-terminal
-;;   :ensure t
-;;   :after corfu
-;;   :init
-;;   (corfu-terminal-mode +1))
+(use-package corfu-terminal
+  :ensure t
+  :after corfu
+  :config
+  (corfu-terminal-mode +1))
 
 (use-package cape
   :ensure t
@@ -2355,7 +2330,10 @@ Timers that expired while Emacs was closed fire immediately."
   (add-hook 'completion-at-point-functions #'cape-file)
   ;; (add-hook 'completion-at-point-functions #'cape-history)
   ;; ...
-)
+  :config
+  (with-eval-after-load 'eglot
+    (advice-add 'eglot-completion-at-point :around #'cape-wrap-noninterruptible)
+    (advice-add 'eglot-completion-at-point :around #'cape-wrap-buster)))
 
 (use-package consult
   :ensure t
@@ -2621,18 +2599,13 @@ instead of churning."
            (root (or (and (project-current)
                           (project-root (project-current)))
                      temporary-file-directory))
-           (name (format ".ob-src-%s.py"
+           (name (format "ob-src-%s.py"
                          (substring (md5 parent) 0 8))))
       (setq-local buffer-file-name (expand-file-name name root))
       (set-buffer-modified-p nil)
       (eglot-ensure))))
 
 (add-hook 'org-src-mode-hook #'my/org-src-eglot-python)
-
-;; Kein cleanup-hook: temp file bleibt liegen. Sonst killed eglot
-;; jedesmal die LSP connection wenn C-c ' das buffer schliesst →
-;; neuer pyrefly process beim naechsten Edit. File ist harmlos (gitignored
-;; via .gitignore pattern .ob-src-*.py).
 
 (with-eval-after-load 'eglot
   (add-to-list 'eglot-server-programs
@@ -2644,23 +2617,31 @@ instead of churning."
 ;; (add-hook 'xonsh-mode-hook #'eglot-ensure)
 ;; (add-hook 'xonsh-ts-mode-hook #'eglot-ensure)
 
-(with-eval-after-load 'org
-  (defun org-babel-execute:xonsh (body params)
-    "Execute a xonsh source block.
+(defvar my/ob-xonsh-installer
+  (lambda ()
+    (defun org-babel-execute:xonsh (body params)
+      "Execute a xonsh source block.
 BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
-    (let* ((dir (or (cdr (assq :dir params)) default-directory))
-           (cmdline (or (cdr (assq :cmdline params)) ""))
-           (tmp (make-temp-file "ob-xonsh-" nil ".xsh")))
-      (unwind-protect
-          (progn
-            (with-temp-file tmp (insert body))
-            (let ((default-directory dir))
-              (shell-command-to-string
-               (format "xonsh %s %s"
-                       cmdline
-                       (shell-quote-argument tmp)))))
-        (when (file-exists-p tmp) (delete-file tmp)))))
+      (let* ((dir (or (cdr (assq :dir params)) default-directory))
+             (cmdline (or (cdr (assq :cmdline params)) ""))
+             (tmp (make-temp-file "ob-xonsh-" nil ".xsh")))
+        (unwind-protect
+            (progn
+              (with-temp-file tmp (insert body))
+              (let ((default-directory dir))
+                (shell-command-to-string
+                 (format "xonsh %s %s"
+                         cmdline
+                         (shell-quote-argument tmp)))))
+          (when (file-exists-p tmp) (delete-file tmp))))))
+  "Defines `org-babel-execute:xonsh'; reused in ob-async child processes.")
+
+(with-eval-after-load 'org
+  (funcall my/ob-xonsh-installer)
   (add-to-list 'org-src-lang-modes '("xonsh" . xonsh)))
+
+(with-eval-after-load 'ob-async
+  (add-hook 'ob-async-pre-execute-src-block-hook my/ob-xonsh-installer))
 
 (use-package go-mode
   :ensure t
@@ -2745,134 +2726,16 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
 ;;   :ensure t
 ;;   :after just-mode)
 
-(use-package vterm
-  :ensure t
-  :config
-  (setq vterm-timer-delay 0.0001)
-  (setq vterm-shell "xonsh"))
-
-(use-package multi-vterm
-  :ensure t
-  :defer t)
-
 (use-package eat
   :ensure t
   :custom
-  (eat-shell "fish")
+  (eat-shell "xonsh")
   (eat-kill-buffer-on-exit t)
   (eat-enable-shell-prompt-annotation t)
   (eat-term-name "xterm-256color")
   :hook
-  ;; Enable shell integration for directory tracking, prompt navigation, etc.
   (eshell-load . eat-eshell-mode)
-  (eshell-load . eat-eshell-visual-command-mode)
-  :config
-  ;; Tell yazi (and other programs) that this terminal supports Sixel.
-  ;; Eat supports Sixel rendering but yazi doesn't recognize it as a known
-  ;; terminal. Setting TERM_PROGRAM to "foot" (a known Sixel terminal) makes
-  ;; yazi select the Sixel adapter for image previews.
-  (advice-add 'eat :around
-              (lambda (orig-fn &rest args)
-                (let ((process-environment
-                       (append '("TERM_PROGRAM=foot"
-                                 "TERM_PROGRAM_VERSION=1.18.0")
-                               process-environment)))
-                  (apply orig-fn args))))
-  ;; ──────────────────────────────────────────────────
-  ;; Evil integration: make eat behave like vterm
-  ;;
-  ;; Strategy:
-  ;;   - "emacs mode" in eat = normal state (vim motions on buffer text)
-  ;;   - "semi-char mode" in eat = insert state (keys pass to terminal)
-  ;;   - ESC switches from semi-char → emacs mode (insert → normal)
-  ;;   - i/a/A etc switch from emacs → semi-char mode (normal → insert)
-  ;; ──────────────────────────────────────────────────
-
-  ;; Don't move cursor back on ESC (inappropriate in terminal buffers)
-  (add-hook 'eat-mode-hook (lambda () (setq-local evil-move-cursor-back nil)))
-
-  ;; Start eat in insert state (semi-char mode) so typing goes to shell
-  (evil-set-initial-state 'eat-mode 'insert)
-
-  ;; -- Normal state: vim motions on terminal text --------------------------
-
-  ;; Entering insert state switches eat to semi-char mode (passthrough)
-  (defun my/eat-semi-char-mode-entry ()
-    "Switch eat to semi-char mode when entering evil insert state."
-    (when (and (derived-mode-p 'eat-mode)
-               (eat-term-p (buffer-local-value 'eat-terminal (current-buffer))))
-      (eat-semi-char-mode)))
-
-  ;; Exiting insert state switches eat to emacs mode (vim motions)
-  (defun my/eat-emacs-mode-entry ()
-    "Switch eat to emacs mode when entering evil normal state."
-    (when (and (derived-mode-p 'eat-mode)
-               (eat-term-p (buffer-local-value 'eat-terminal (current-buffer))))
-      (eat-emacs-mode)))
-
-  (add-hook 'evil-insert-state-entry-hook #'my/eat-semi-char-mode-entry)
-  (add-hook 'evil-normal-state-entry-hook #'my/eat-emacs-mode-entry)
-
-  ;; In normal state, bind standard vim keys to re-enter insert (semi-char)
-  (evil-define-key 'normal eat-mode-map
-    "i" (lambda () (interactive) (eat-semi-char-mode) (evil-insert-state))
-    "a" (lambda () (interactive) (forward-char 1) (eat-semi-char-mode) (evil-insert-state))
-    "A" (lambda () (interactive) (end-of-line) (eat-semi-char-mode) (evil-insert-state))
-    "I" (lambda () (interactive) (back-to-indentation) (eat-semi-char-mode) (evil-insert-state))
-    "o" (lambda () (interactive) (eat-semi-char-mode) (evil-insert-state)
-         (eat-self-input 1 ?\n))
-    ;; Paste from kill ring in normal mode
-    "p"  (lambda () (interactive)
-           (eat-semi-char-mode)
-           (eat-yank)
-           (eat-emacs-mode))
-    ;; Navigate prompts
-    (kbd "[ [") #'eat-previous-shell-prompt
-    (kbd "] ]") #'eat-next-shell-prompt)
-
-  ;; In insert state: ESC escapes back to normal (emacs mode intercepts it)
-  ;; The default eat-semi-char-mode lets C-c, C-x, etc. pass through to Emacs
-  ;; which is exactly what we want. ESC is also not captured by semi-char mode,
-  ;; so evil's ESC → normal state transition works naturally.
-
-  ;; -- Multi-eat: manage multiple terminal buffers -------------------------
-
-  (defvar my/eat-buffer-counter 0
-    "Counter for naming eat terminal buffers.")
-
-  (defun my/eat-new ()
-    "Create a new eat terminal buffer."
-    (interactive)
-    (cl-incf my/eat-buffer-counter)
-    (let ((buf (generate-new-buffer
-                (format "*eat<%d>*" my/eat-buffer-counter)))
-          (process-environment
-           (append '("TERM_PROGRAM=foot" "TERM_PROGRAM_VERSION=1.18.0")
-                   process-environment)))
-      (with-current-buffer buf
-        (eat-mode)
-        (eat-exec buf (buffer-name buf) eat-shell nil nil))
-      (switch-to-buffer buf)))
-
-  (defun my/eat-toggle ()
-    "Toggle an eat terminal. Create one if none exists.
-With prefix arg, always create a new terminal."
-    (interactive)
-    (if current-prefix-arg
-        (my/eat-new)
-      (let ((eat-bufs (cl-remove-if-not
-                       (lambda (b) (with-current-buffer b
-                                     (derived-mode-p 'eat-mode)))
-                       (buffer-list))))
-        (cond
-         ;; Currently in an eat buffer → bury it
-         ((derived-mode-p 'eat-mode)
-          (bury-buffer))
-         ;; Existing eat buffers → switch to most recent
-         (eat-bufs
-          (switch-to-buffer (car eat-bufs)))
-         ;; No eat buffers → create one
-         (t (eat)))))))
+  (eshell-load . eat-eshell-visual-command-mode))
 
 (use-package olivetti
   :ensure t
@@ -3170,6 +3033,21 @@ so the working-tree diff stays visible until the user explicitly stages."
   (require 'flash-evil)
   (flash-evil-setup t)
 
+  (defun my/flash-visual-extend (orig match)
+    (if (and match
+             (bound-and-true-p evil-local-mode)
+             (eq evil-state 'visual))
+        (let* ((origin (point))
+               (mpos (flash-match-pos-value match))
+               (forward (and mpos (>= mpos origin)))
+               (flash-jump-position (if forward 'end 'start)))
+          (prog1 (funcall orig match)
+            (when (and forward (not (bolp)) (> (point) (point-min)))
+              (backward-char))))
+      (funcall orig match)))
+
+  (advice-add 'flash-jump-to-match :around #'my/flash-visual-extend)
+
   ;; Restore ; and , after flash-char overwrites them
   ;; ; is used as prefix for prev-navigation (;b, ;d)
   ;; , is the local leader
@@ -3238,6 +3116,12 @@ so the working-tree diff stays visible until the user explicitly stages."
   :hook
   (dired-mode . nerd-icons-dired-mode))
 
+(use-package diredfl
+  :ensure t
+  :hook
+  ((dired-mode . diredfl-mode)
+   (dirvish-directory-view-mode . diredfl-mode)))
+
 (use-package nerd-icons-completion
   :if ek-use-nerd-fonts                   ;; Load the package only if the user has configured to use nerd fonts.
   :ensure t                               ;; Ensure the package is installed.
@@ -3265,185 +3149,6 @@ so the working-tree diff stays visible until the user explicitly stages."
 (use-package hide-mode-line
   :ensure t)
 
-;; (use-package awesome-tray
-;;   :ensure (:host github :repo "manateelazycat/awesome-tray")
-;;   :custom
-;;   ;; Position at the top
-;;   ;; (setq awesome-tray-position 'right)
-  
-;;   ;; Basic Visual Settings
-;;   ;; (awesome-tray-hide-mode-line t)
-;;   (awesome-tray-separator " │ ")
-;;   (awesome-tray-ellipsis "…")
-  
-;;   ;; Module Customizations
-;;   (awesome-tray-date-format "%I:%M %p")  ; 12-hour format with AM/PM
-;;   (awesome-tray-git-format " ᚴ %s")
-;;   (awesome-tray-git-show-status t)
-;;   (awesome-tray-location-format "%l:%c")
-;;   (awesome-tray-evil-show-mode t)
-;;   (awesome-tray-evil-show-macro t)
-;;   (awesome-tray-evil-show-cursor-count t)
-;;   (awesome-tray-file-path-full-dirname-levels 2)
-;;   (awesome-tray-file-path-shorten-start-length 1)
-;;   (awesome-tray-input-method-default-style "EN")
-;;   (awesome-tray-input-method-local-style "中")
-;;   (awesome-tray-input-method-local-methods '("rime" "pinyin"))
-  
-;;   ;; Performance settings
-;;   (awesome-tray-refresh-idle-delay 0.5)
-;;   (awesome-tray-refresh-timer t)
-;;   (awesome-tray-update-interval 1)
-  
-;;   :config
-;;   ;; Start with essential modules for performance
-;;   (setq awesome-tray-active-modules
-;;         '(
-;;           "buffer-name"
-;;           "mode-name"
-;;           "date"
-;;           "location"
-;;           "evil"
-;;           "input-method"
-;;           ))
-  
-;;   ;; Enable awesome-tray
-;;   (awesome-tray-mode 1)
-;; )
-
-;; (setq display-time-mode 1)
-;; (use-package lambda-line
-;;   :ensure (:host github :repo "lambda-emacs/lambda-line")
-;;   :custom
-;;   (lambda-line-lsp-indicator nil)
-;;   (lambda-line-icon-time t) ;; requires ClockFace font (see below)
-;;   (lambda-line-clockface-update-fontset "ClockFaceRect") ;; set clock icon
-;;   (lambda-line-position 'top) ;; Set position of status-line 
-;;   (lambda-line-abbrev nil) ;; abbreviate major modes
-;;   (lambda-line-hspace "  ")  ;; add some cushion
-;;   (lambda-line-prefix t) ;; use a prefix symbol
-;;   (lambda-line-prefix-padding nil) ;; no extra space for prefix 
-;;   (lambda-line-status-invert nil)  ;; no invert colors
-;;   (lambda-line-gui-ro-symbol  " ⨂") ;; symbols
-;;   (lambda-line-gui-mod-symbol " ⬤") 
-;;   (lambda-line-gui-rw-symbol  " ◯") 
-;;   (lambda-line-vc-symbol nil)
-;;   (lambda-line-space-top -.50)  ;; padding on top and bottom of line
-;;   (lambda-line-space-bottom -.50)
-;;   (lambda-line-symbol-position 0.1) ;; adjust the vertical placement of symbol
-;;   :config
-;;   ;; activate lambda-line 
-;;   (lambda-line-mode) 
-;;   ;; set divider line in footer
-;;   (when (eq lambda-line-position 'top)
-;;     (setq-default mode-line-format (list "%_"))
-;;     (setq mode-line-format (list "%_"))))
-
-;; (use-package doom-modeline
-;;   :ensure t
-;;   :hook (after-init . doom-modeline-mode)
-;;   :custom
-;;   (doom-modeline-time t)
-;;   (doom-modeline-time-icon t)
-;;   (doom-modeline-buffer-file-name-style 'buffer-name)
-;;   (doom-modeline-height 24)
-;;   (doom-modeline-buffer-encoding nil)
-;;   (doom-modeline-env-version t)
-;;   (doom-modeline-env-setup-rust nil)
-;;   :config
-;;   (setq display-time-24hr-format nil)
-;;   (display-time-mode 1))
-;;   ;; (set-face-attribute 'mode-line nil :height 180)
-;;   ;; (set-face-attribute 'mode-line-inactive nil :height 180))
-
-(setq mode-line-misc-info
-      (assq-delete-all 'eglot--managed-mode 
-                       (copy-sequence mode-line-misc-info)))
-
-(use-package maple-modeline
-  :disabled t
-  :ensure (:host github :repo "honmaple/emacs-maple-modeline")
-  ;; :hook (elpaca-after-init . maple-modeline-mode)
-  :config
-  (setq maple-modeline-separator 'nil)
-  (setq maple-modeline-height 25)
-  (setq maple-modeline-icon t)
-  
-  (maple-modeline-define-segment my-modeline-time
-    :format (propertize (downcase (format-time-string " %I:%M %p "))
-                        'face 'bold))
-
-  (maple-modeline-define-segment org-clock-task
-    :if (and (fboundp 'org-clocking-p) (org-clocking-p))
-    :format
-    (let ((heading (truncate-string-to-width
-                    (substring-no-properties org-clock-heading) 35 nil nil "...")))
-      (concat
-       (maple-modeline--concat-or
-        (maple-modeline--icon 'mdicon "nf-md-clock_outline" face)
-        "CLK")
-       " " (propertize heading 'face face
-                       'mouse-face 'mode-line-highlight
-                       'help-echo "Go to clocked task"
-                       'local-map (make-mode-line-mouse-map 'mouse-1 'org-clock-goto)))))
-
-  (maple-modeline-define-segment tmr-timer
-    :if (and (fboundp 'tmr-mode-line--get-active-timers)
-             (tmr-mode-line--get-active-timers))
-    :format
-    (let* ((timer (car (tmr-mode-line--get-active-timers)))
-           (remaining (tmr-mode-line--format-remaining timer))
-           (desc (tmr-mode-line--format-description timer)))
-      (concat remaining desc)))
-
-  (maple-modeline-define-segment mu4e-mail
-    :defines (mu4e-alert-mode-line)
-    :functions (mu4e-alert-view-unread-mails)
-    :if (and (bound-and-true-p mu4e-alert-mode-line)
-             (stringp mu4e-alert-mode-line)
-             (not (string-empty-p (string-trim mu4e-alert-mode-line))))
-    :format
-    (let* ((raw mu4e-alert-mode-line)
-           ;; Extract the count number from the mode-line string (e.g. " [5] ")
-           (count-str (if (string-match "\\[\\([0-9]+\\)\\]" raw)
-                          (match-string 1 raw)
-                        (string-trim raw))))
-      (concat
-       (maple-modeline--concat-or
-        (maple-modeline--icon 'mdicon "nf-md-email" face)
-        "Mail")
-       " " (propertize count-str
-                       'face face
-                       'mouse-face 'mode-line-highlight
-                       'help-echo "View unread emails"
-                       'local-map (make-mode-line-mouse-map
-                                   'mouse-1 'mu4e-alert-view-unread-mails)))))
-
-  (maple-modeline-define my-custom-style
-    :left ((evil :left (bar :left ""))
-           macro
-           buffer-info
-           flycheck
-           version-control
-           remote-host
-           region)
-    :right (narrow
-            org-clock-task
-            tmr-timer
-            mu4e-mail
-            python
-            my-modeline-time
-            process
-            count
-            position))
-
-  (setq maple-modeline-style 'my-custom-style)
-
-  :custom-face
-  (header-line ((t (:inherit mode-line :box nil))))
-  (mode-line ((t (:box nil))))
-  (mode-line-inactive ((t (:box nil)))))
-
 (use-package punch-line
   :ensure (:host github :repo "cashmeredev/punch-line")
   :config
@@ -3459,7 +3164,8 @@ so the working-tree diff stays visible until the user explicitly stages."
 		punch-weather-longitude "10.41"
 		punch-weather-latitude "53.25"
 		punch-cpu-usage t
-		punch-show-processes-info t)
+		punch-show-processes-info t
+        punch-line-music-info t)
   (punch-line-mode 1))
 
 (use-package adaptive-wrap
@@ -3480,7 +3186,7 @@ so the working-tree diff stays visible until the user explicitly stages."
 
   (set-face-attribute 'default nil
     :family "MapleMono NF"                                                                                           
-    :height 160
+    :height 180
     :font (font-spec                                                                                                 
            :family "MapleMono NF"                                                                                    
            :features '(cv04 ss05 zero)))
@@ -3499,392 +3205,8 @@ so the working-tree diff stays visible until the user explicitly stages."
   :config 
   (setq grip-command 'auto)) ;; auto, grip, go-grip or mdopen
 
-;; (use-package catppuccin-theme
-;;   :ensure t
-;;   :config
-;;   (setq catppuccin-flavor 'mocha)
-
-;;   (load-theme 'catppuccin :no-confirm)
-
-;;   (custom-set-faces
-;;    `(diff-hl-change ((t (:background unspecified :foreground ,(catppuccin-get-color 'blue))))))
-
-;;   (custom-set-faces
-;;    `(diff-hl-delete ((t (:background unspecified :foreground ,(catppuccin-get-color 'red))))))
-
-;;   (custom-set-faces
-;;    `(diff-hl-insert ((t (:background unspecified :foreground ,(catppuccin-get-color 'green)))))))
-
-;; (use-package modus-catppuccin
-;;   :ensure (:repo "https://gitlab.com/magus/modus-catppuccin"
-;;            :branch "main")
-;;   :custom
-;;   (catppuccin-mocha-palette-overrides
-;;    '((base "#232136")
-;;      (mantle "#2d2a45")
-;;      (crust "#373354")
-;;      (surface0 "#373354")
-;;      (surface1 "#47407d")
-;;      (surface2 "#6e6a86")
-;;      (overlay0 "#6e6a86")
-;;      (overlay1 "#6e6a86")
-;;      (overlay2 "#6e6a86")
-;;      (subtext0 "#e0def4")
-;;      (subtext1 "#cdcbe0")
-;;      (text "#e2e0f7")
-;;      (rosewater "#eb98c3")
-;;      (flamingo "#ea9a97")
-;;      (pink "#eb98c3")
-;;      (mauve "#c4a7e7")
-;;      (red "#eb6f92")
-;;      (maroon "#eb6f92")
-;;      (peach "#ea9a97")
-;;      (yellow "#f6c177")
-;;      (green "#a3be8c")
-;;      (teal "#9ccfd8")
-;;      (sky "#9ccfd8")
-;;      (sapphire "#9ccfd8")
-;;      (blue "#569fba")
-;;      (lavender "#c4a7e7")))
-;;   (catppuccin-latte-palette-overrides
-;;    '((base "#f6f2ee")
-;;      (mantle "#e4dcd4")
-;;      (crust "#dbd1dd")
-;;      (surface0 "#d3c7bb")
-;;      (surface1 "#c4b8ac")
-;;      (surface2 "#b5a99d")
-;;      (overlay0 "#9ca0b0")
-;;      (overlay1 "#8c8fa1")
-;;      (overlay2 "#7c7f93")
-;;      (subtext0 "#6c6f85")
-;;      (subtext1 "#5c5f77")
-;;      (text "#3d2b5a")
-;;      (rosewater "#955f61")
-;;      (flamingo "#a5222f")
-;;      (pink "#a440b5")
-;;      (mauve "#6e33ce")
-;;      (red "#a5222f")
-;;      (maroon "#824d5b")
-;;      (peach "#955f61")
-;;      (yellow "#ac5402")
-;;      (green "#396847")
-;;      (teal "#287980")
-;;      (sky "#2d8a93")
-;;      (sapphire "#2d8a93")
-;;      (blue "#2848a9")
-;;      (lavender "#6e33ce")))
-;;   :config
-;;   (load-theme 'catppuccin-latte :no-confirm))
-
-;; (use-package modus-themes
-;;   :ensure t
-;;   :demand t
-;;   :custom
-;;   ;; Optional: Schriften schöner machen
-;;   (modus-themes-italic-constructs t)
-;;   (modus-themes-bold-constructs t)
-;;   (modus-themes-prompts '(bold intense))
-  
-;;   ;; Hier injizieren wir DUSKFOX Farben in Modus Vivendi
-;;   (modus-themes-common-palette-overrides
-;;    '(
-;;      ;; --- Basis Farben (Duskfox) ---
-;;      (bg-main     "#232136")
-;;      (fg-main     "#e0def4")
-;;      (bg-dim      "#2d2a45") ; Etwas heller als Main
-;;      (fg-dim      "#9090c0") ; Abgedunkelter Text
-;;      (bg-active   "#393552") ; Aktive Zeile/Elemente
-
-;;      ;; --- Akzente (Duskfox) ---
-;;      (red         "#eb6f92")
-;;      (green       "#a3be8c")
-;;      (yellow      "#f6c177")
-;;      (blue        "#569fba")
-;;      (magenta     "#c4a7e7")
-;;      (cyan        "#9ccfd8")
-     
-;;      ;; --- Fein-Tuning (Mappings) ---
-;;      ;; Damit es nicht "arsch" aussieht, mappen wir wichtige Elemente neu:
-     
-;;      (border        "#47407d")
-;;      (cursor        magenta)
-     
-;;      ;; Modeline (Statusleiste)
-;;      (bg-mode-line-active   "#47407d")
-;;      (fg-mode-line-active   "#e0def4")
-;;      (bg-mode-line-inactive "#232136")
-;;      (fg-mode-line-inactive "#6e6a86")
-
-;;      ;; Syntax Highlighting Anpassungen
-;;      (keyword       magenta)   ; Keywords in Duskfox-Pink/Lila
-;;      (builtin       blue)      ; Builtins in Blau
-;;      (type          cyan)      ; Typen in Cyan
-;;      (string        green)     ; Strings in Grün
-;;      (constant      red)       ; Konstanten in Rot
-;;      (fnname        blue)      ; Funktionsnamen
-;;      (variable      cyan)      ; Variablen
-
-;;      ;; UI Elemente
-;;      (bg-region     "#393552") ; Selection Background
-;;      (fg-region     unspecified)
-;;      (bg-paren-match "#47407d")
-;;      (bg-hl-line    "#2d2a45")
-     
-;;      ;; Line Numbers
-;;      (bg-line-number-inactive "#232136")
-;;      (fg-line-number-inactive "#6e6a86")
-;;      (bg-line-number-active   "#2d2a45")
-;;      (fg-line-number-active   "#e0def4")
-;;      ))
-;;   :config
-;;   ;; Lade das Basis-Theme (vivendi = dunkel)
-;;   (load-theme 'modus-vivendi :no-confirm))
-
-;; (use-package ef-themes
-;;   :ensure t
-;;   :demand t
-;;   :init
-;;   (ef-themes-take-over-modus-themes-mode 1)
-  
-;;   :custom
-;;   (modus-themes-italic-constructs t)
-;;   (modus-themes-bold-constructs t)
-;;   (modus-themes-prompts '(bold intense))
-  
-;;   (ef-light-palette-overrides
-;;    '(
-;;      (bg-main     "#efefef")
-;;      (fg-main     "#313145")
-;;      (bg-dim      "#bebed2")
-;;      (fg-dim      "#7c7c98")
-;;      (bg-alt      "#9e9eaf")
-;;      (fg-alt      "#505063")
-;;      (bg-active   "#22223a")
-;;      (bg-inactive "#efefef")
-
-;;      (red         "#f43979")
-;;      (red-warmer  "#ff669b")
-;;      (red-cooler  "#d22a8b")
-;;      (red-faint   "#f43979")
-     
-;;      (green       "#0073a8")
-;;      (green-warmer "#0073a8")
-;;      (green-cooler "#0073a8")
-;;      (green-faint  "#0073a8")
-     
-;;      (yellow      "#ff669b")
-;;      (yellow-warmer "#f43979")
-;;      (yellow-cooler "#d22a8b")
-;;      (yellow-faint  "#ff669b")
-     
-;;      (blue        "#2155d6")
-;;      (blue-warmer "#0073a8")
-;;      (blue-cooler "#2155d6")
-;;      (blue-faint  "#2155d6")
-     
-;;      (magenta     "#6916b6")
-;;      (magenta-warmer "#8d17a5")
-;;      (magenta-cooler "#471397")
-;;      (magenta-faint  "#6916b6")
-     
-;;      (cyan        "#0073a8")
-;;      (cyan-warmer "#2155d6")
-;;      (cyan-cooler "#2155d6")
-;;      (cyan-faint  "#0073a8")
-
-;;      (bg-red-intense "#ff669b")
-;;      (bg-green-intense "#0073a8")
-;;      (bg-yellow-intense "#f43979")
-;;      (bg-blue-intense "#2155d6")
-;;      (bg-magenta-intense "#8d17a5")
-;;      (bg-cyan-intense "#0073a8")
-
-;;      (bg-red-subtle "#bebed2")
-;;      (bg-green-subtle "#bebed2")
-;;      (bg-yellow-subtle "#bebed2")
-;;      (bg-blue-subtle "#bebed2")
-;;      (bg-magenta-subtle "#bebed2")
-;;      (bg-cyan-subtle "#bebed2")
-
-;;      (bg-added "#bebed2")
-;;      (bg-added-faint "#efefef")
-;;      (bg-added-refine "#9e9eaf")
-;;      (fg-added "#0073a8")
-     
-;;      (bg-changed "#bebed2")
-;;      (bg-changed-faint "#efefef")
-;;      (bg-changed-refine "#9e9eaf")
-;;      (fg-changed "#f43979")
-     
-;;      (bg-removed "#bebed2")
-;;      (bg-removed-faint "#efefef")
-;;      (bg-removed-refine "#9e9eaf")
-;;      (fg-removed "#d22a8b")
-
-;;      (bg-mode-line "#9e9eaf")
-;;      (fg-mode-line "#313145")
-;;      (bg-mode-line-active "#9e9eaf")
-;;      (fg-mode-line-active "#313145")
-;;      (bg-mode-line-inactive "#efefef")
-;;      (fg-mode-line-inactive "#7c7c98")
-
-;;      (border        "#7c7c98")
-;;      (cursor        "#471397")
-     
-;;      (bg-region     "#bebed2")
-;;      (fg-region     unspecified)
-;;      (bg-paren-match "#9e9eaf")
-;;      (bg-hl-line    "#bebed2")
-     
-;;      (bg-line-number-inactive "#efefef")
-;;      (fg-line-number-inactive "#7c7c98")
-;;      (bg-line-number-active   "#bebed2")
-;;      (fg-line-number-active   "#313145")
-
-;;      (builtin       blue)
-;;      (comment       yellow-faint)
-;;      (constant      red)
-;;      (fnname        blue)
-;;      (keyword       magenta)
-;;      (string        green)
-;;      (type          cyan)
-;;      (variable      blue-warmer)
-
-;;      (err red-warmer)
-;;      (warning yellow-warmer)
-;;      (info green)
-     
-;;      (link blue-warmer)
-;;      (link-alt magenta)
-;;      (name magenta-cooler)
-;;      (keybind blue-cooler)
-;;      (identifier magenta-faint)
-;;      (prompt green-cooler)
-
-;;      (date-common cyan-cooler)
-;;      (date-deadline red)
-;;      (date-event fg-alt)
-;;      (date-holiday magenta-warmer)
-;;      (date-scheduled yellow)
-;;      (date-weekday cyan)
-;;      (date-weekend red-faint)
-
-;;      (mail-cite-0 blue-warmer)
-;;      (mail-cite-1 magenta)
-;;      (mail-cite-2 cyan-cooler)
-;;      (mail-cite-3 yellow-cooler)
-;;      (mail-recipient magenta-cooler)
-;;      (mail-subject blue-cooler)
-
-;;      (prose-code magenta-warmer)
-;;      (prose-done green)
-;;      (prose-macro green-cooler)
-;;      (prose-tag green-faint)
-;;      (prose-todo red-warmer)
-;;      (prose-verbatim blue-warmer)
-;;      ))
-  
-;;   :config
-;;   (load-theme 'ef-light :no-confirm))
-
-;; (use-package kanagawa-themes
-;;   :ensure t
-;;   :config
-;;   (setq kanagawa-themes-org-height nil)
-;;   (setq kanagawa-themes-org-highlight t)
-;;   (load-theme 'kanagawa-lotus t))
-
-;; (use-package base16-theme
-;;   :ensure t
-;;   :demand t
-;;   :config
-;;   (setq base16-distinct-fringe-background t)
-;;   (setq base16-highlight-mode-line t)
-  
-;;   (deftheme base24-duskfox)
-;;   (setq base24-duskfox-colors
-;;         (list :base00 "#232136"
-;;               :base01 "#2d2a45"
-;;               :base02 "#373354"
-;;               :base03 "#47407d"
-;;               :base04 "#6e6a86"
-;;               :base05 "#e0def4"
-;;               :base06 "#cdcbe0"
-;;               :base07 "#e2e0f7"
-;;               :base08 "#eb6f92"
-;;               :base09 "#ea9a97"
-;;               :base0A "#f6c177"
-;;               :base0B "#a3be8c"
-;;               :base0C "#9ccfd8"
-;;               :base0D "#569fba"
-;;               :base0E "#c4a7e7"
-;;               :base0F "#eb98c3"
-;;               :base10 "#47407d"
-;;               :base11 "#eb6f92"
-;;               :base12 "#a3be8c"
-;;               :base13 "#f6c177"
-;;               :base14 "#569fba"
-;;               :base15 "#c4a7e7"
-;;               :base16 "#9ccfd8"
-;;               :base17 "#e0def4"))
-  
-;;   (base16-theme-define 'base24-duskfox base24-duskfox-colors)
-  
-;;   (deftheme base24-nightfox)
-;;   (setq base24-nightfox-colors
-;;         (list :base00 "#192330"
-;;               :base01 "#212e3f"
-;;               :base02 "#29394f"
-;;               :base03 "#575860"
-;;               :base04 "#71839b"
-;;               :base05 "#cdcecf"
-;;               :base06 "#aeafb0"
-;;               :base07 "#e4e4e5"
-;;               :base08 "#c94f6d"
-;;               :base09 "#f4a261"
-;;               :base0A "#dbc074"
-;;               :base0B "#81b29a"
-;;               :base0C "#63cdcf"
-;;               :base0D "#719cd6"
-;;               :base0E "#9d79d6"
-;;               :base0F "#d67ad2"
-;;               :base10 "#575860"
-;;               :base11 "#c94f6d"
-;;               :base12 "#81b29a"
-;;               :base13 "#dbc074"
-;;               :base14 "#719cd6"
-;;               :base15 "#9d79d6"
-;;               :base16 "#63cdcf"
-;;               :base17 "#cdcecf"))
-  
-;;   (base16-theme-define 'base24-nightfox base24-nightfox-colors)
-;;   (enable-theme 'base24-nightfox))
-
 (add-to-list 'custom-theme-load-path "~/.emacs.d/themes/")
 (load-theme 'noctalia t)
-
-;; (use-package nano-theme
-;;   :ensure (:host github :repo "rougier/nano-theme")
-;;   :init
-;;   (setq nano-fonts-use nil)              ;; keep MapleMono NF, don't force Roboto
-;;   (setq nano-window-divider-show t)      ;; subtle dividers between windows
-;;   :config
-;;   (load-theme 'nano-dark t)
-
-;;   ;; Convenience: cycle between nano-light and nano-dark.
-;;   (defun cashmere/nano-toggle-theme ()
-;;     "Toggle between `nano-light' and `nano-dark'."
-;;     (interactive)
-;;     (let ((dark-active (member 'nano-dark custom-enabled-themes)))
-;;       (mapc #'disable-theme custom-enabled-themes)
-;;       (load-theme (if dark-active 'nano-light 'nano-dark) t)))
-
-;;   ;; Soften a few faces that nano leaves a bit too plain.
-;;   (with-eval-after-load 'org
-;;     (set-face-attribute 'org-document-title nil :height 1.4 :weight 'light)
-;;     (set-face-attribute 'org-level-1 nil :height 1.2 :weight 'medium)
-;;     (set-face-attribute 'org-level-2 nil :height 1.1 :weight 'medium)
-;;     (set-face-attribute 'org-level-3 nil :height 1.05 :weight 'medium)))
 
 (use-package dirvish
   :ensure t
@@ -4056,7 +3378,6 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
       "Y"   'pass-copy-field
       "e"   'pass-edit
       "a"   'pass-insert
-      "g"   'pass-update-buffer
       "G"   'pass-insert-generated
       "o"   'pass-otp-options
       "r"   'pass-rename
@@ -4154,8 +3475,8 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
 
   "b" '(:ignore t :wk "buffer/bookmarks")
   "bb" '(consult-bookmark :wk "display current bookmarks")
-  "ba" '(ibuffer :wk "ibuffer")
-  "bi" '(projectile-ibuffer :wk "ibuffer project")
+  "bi" '(ibuffer :wk "ibuffer")
+  "bp" '(projectile-ibuffer :wk "ibuffer project")
   "bd" '(bookmark-delete :wk "delete bookmark")
   "bk" '(kill-current-buffer :wk "kill buffer")
   "bs" '(bookmark-set :wk "save bookmark")
@@ -4428,8 +3749,8 @@ date) and the dired header are never skipped."
   "c" '(my/centered-cursor :wk "center cursor")
   "f" '(dirvish :wk "file manager")
   "r" '(async-shell-command :wk "run async")
-  "t" '(projectile-run-vterm :wk "terminal")
-  "e" '(eshell :wk "eshell")
+  "t" '(ghostel-project :wk "terminal (project)")
+  "T" '(ghostel-list-buffers :wk "terminal (switch)")
   "z" '(golden-ratio-mode :wk "zoom/golden ratio")
   "o" '(my/global-olivetti-mode :wk "center buffer")
   "s" '(my-org-sidecar-left :wk "org sidecar"))
@@ -4469,14 +3790,14 @@ date) and the dired header are never skipped."
 ;;     (message "No region active")))
 
 (use-package elfeed
-  :ensure t
+  :ensure (:host github :repo "emacs-elfeed/elfeed" :branch "main")
   :defer t
   :custom
   (elfeed-db-directory "~/.emacs.d/elfeed")
   :config
   (setq elfeed-search-filter "@2-weeks-ago +unread"
         elfeed-search-title-max-width 110)
-  
+  (setq elfeed-use-libxml 't)
   (add-hook 'elfeed-search-mode-hook #'elfeed-update)
   
   (setq elfeed-search-sort-function
@@ -4507,16 +3828,6 @@ date) and the dired header are never skipped."
   :after elfeed
   :config
   (elfeed-goodies/setup))
-
-(use-package shrface
-  :ensure t
-  :after elfeed
-  :config
-  (shrface-basic)
-  (shrface-trial)
-  (shrface-default-keybindings)
-  (setq shrface-href-versatile t
-        shrface-bullets-bullet-list '("◉" "○" "✸" "✿")))
 
 (with-eval-after-load 'elfeed
   (require 'shrface)
@@ -4617,7 +3928,8 @@ date) and the dired header are never skipped."
   (shrface-href-versatile t)
   :config
   (shrface-basic)
-  (shrface-trial))
+  (shrface-trial)
+  (shrface-default-keybindings))
 
 (use-package shr-tag-pre-highlight
   :ensure (:host github :repo "xuchunyang/shr-tag-pre-highlight.el")
@@ -4866,5 +4178,80 @@ opening another file in same project does not re-notify."
 
 (use-package el-fetch
   :ensure t)
+
+(use-package ghostel
+  :ensure t
+  :custom
+  (ghostel-shell "xonsh")
+  :config
+  (evil-define-key 'normal ghostel-mode-map
+    (kbd "g t") #'ghostel-next
+    (kbd "g T") #'ghostel-previous
+    (kbd "g n") #'ghostel
+    (kbd "g b") #'ghostel-list-buffers)
+  (advice-add 'enable-theme :after
+              (lambda (&rest _)
+                (when (fboundp 'ghostel-sync-theme)
+                  (ghostel-sync-theme)))))
+
+(use-package evil-ghostel
+  :ensure (:host github :repo "dakra/ghostel"
+           :files ("extensions/evil-ghostel/*.el"))
+  :after (ghostel evil)
+  :hook (ghostel-mode . evil-ghostel-mode))
+
+(use-package vui
+  :ensure (:host github :repo "d12frosted/vui.el" :files ("*.el")))
+
+(add-to-list 'load-path (expand-file-name "~/garden/lisp/"))
+(setq garden-directory (expand-file-name "~/garden/"))
+(require 'garden-core)
+(garden-auto-index-mode 1)
+(autoload 'garden "garden-dashboard" nil t)
+(autoload 'garden-sidecar "garden-dashboard" nil t)
+(autoload 'garden-connect "garden-connect" nil t)
+(autoload 'garden-connect-pick "garden-connect" nil t)
+(autoload 'garden-player "garden-player" nil t)
+
+(autoload 'denote-capf-setup "denote-capf" nil t)
+(add-hook 'org-mode-hook #'denote-capf-setup)
+(autoload 'garden-publish "garden-publish" nil t)
+(autoload 'garden-publish-all "garden-publish" nil t)
+(autoload 'garden-publish-wiki "garden-publish" nil t)
+(autoload 'garden-publish-blog "garden-publish" nil t)
+(autoload 'garden-publish-deploy "garden-publish" nil t)
+
+(defun my/easysession-restore-services ()
+  "Re-launch process-backed apps (mu4e, ERC) after a session is loaded."
+  (unless (and (fboundp 'mu4e-running-p) (mu4e-running-p))
+    (mu4e t))
+  (unless (and (fboundp 'erc-buffer-list) (erc-buffer-list))
+    (run-irc)))
+
+(use-package easysession
+  :ensure t
+  :demand t
+  :custom
+  (easysession-save-interval (* 10 60))
+  :config
+  (add-hook 'easysession-after-load-hook #'my/easysession-restore-services)
+  (easysession-setup))
+
+(my-local-leader
+  "e"  '(:wk "easy session" :ignore 't)
+  "ew" '(easysession-switch-to :wk "switch / create")
+  "es" '(easysession-save :wk "save")
+  "el" '(easysession-load :wk "load")
+  "eg" '(easysession-switch-to-and-restore-geometry :wk "switch + geometry")
+  "er" '(easysession-rename :wk "rename")
+  "ed" '(easysession-delete :wk "delete")
+  "ee" '(easysession-edit :wk "edit")
+  "eR" '(easysession-reset :wk "reset to default")
+  "em" '(easysession-save-mode :wk "toggle auto-save"))
+
+(use-package sops
+  :ensure (:type git :host github :repo "djgoku/sops")
+  :init
+  (global-sops-mode 1))
 
 (provide 'init)

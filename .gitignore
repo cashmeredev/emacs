@@ -64,3 +64,15 @@ dirvish/thumbnails
 /eaf/
 *.md
 /elpaca
+
+# Per-host runtime/session state (savehist, recentf, places, bookmarks, clocks, timers)
+/triples.db
+/tmr-timers.eld
+/easysession/
+/eww-bookmarks/
+/bookmarks-*.eld
+/places-*.eld
+/projectile-bookmarks-*.eld
+/recentf-*.eld
+/savehist-*.el
+/org-clock-save-*.el
