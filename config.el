@@ -22,55 +22,6 @@
 (setq kept-new-versions             5)
 (setq kept-old-versions             5)
 
-;;; Daemon detection — determines which daemon we're running as.
-;;; Start Emacs with: emacs --fg-daemon=hub   (persistent: IRC, mail, agenda)
-;;;                   emacs --fg-daemon=work  (restartable: code, projects)
-;;;                   emacs                   (standalone, loads everything)
-
-(defvar my/daemon-name
-  (let ((d (daemonp)))
-    (cond
-     ((stringp d) d)       ; named daemon: "hub" or "work"
-     (d           "work")  ; unnamed daemon (--daemon without name) → treat as work
-     (t           nil)))   ; standalone emacs
-  "Name of the current Emacs daemon, or nil for standalone.")
-
-(defun my/hub-p ()
-  "Return non-nil when running as the hub daemon."
-  (equal my/daemon-name "hub"))
-
-(defun my/work-p ()
-  "Return non-nil when running as the work daemon."
-  (equal my/daemon-name "work"))
-
-(defun my/standalone-p ()
-  "Return non-nil when running standalone (not as daemon)."
-  (null my/daemon-name))
-
-(defun my/load-for-hub-p ()
-  "Return non-nil if hub packages should be loaded (hub or standalone)."
-  (or (my/hub-p) (my/standalone-p)))
-
-(defun my/load-for-work-p ()
-  "Return non-nil if work packages should be loaded (work or standalone)."
-  (or (my/work-p) (my/standalone-p)))
-
-;; Per-daemon state files to avoid conflicts between hub and work daemons
-(when my/daemon-name
-  (let ((suffix (concat "-" my/daemon-name)))
-    (setq recentf-save-file
-          (expand-file-name (concat "recentf" suffix ".eld") user-emacs-directory))
-    (setq savehist-file
-          (expand-file-name (concat "savehist" suffix ".el") user-emacs-directory))
-    (setq save-place-file
-          (expand-file-name (concat "places" suffix ".eld") user-emacs-directory))
-    (setq bookmark-default-file
-          (expand-file-name (concat "bookmarks" suffix ".eld") user-emacs-directory))
-    (setq projectile-known-projects-file
-          (expand-file-name (concat "projectile-bookmarks" suffix ".eld") user-emacs-directory))
-    (setq org-clock-persist-file
-          (expand-file-name (concat "org-clock-save" suffix ".el") user-emacs-directory))))
-
 (use-package emacs
   :ensure nil
   :custom
@@ -150,6 +101,7 @@
   ;; (set-frame-parameter (selected-frame) 'alpha-background 80)
   ;; (add-to-list 'default-frame-alist '(alpha-background . 80))
   (global-hl-line-mode 1) ;; Highlight the current line
+  (add-hook 'org-mode-hook (lambda () (setq-local global-hl-line-mode nil))) ;; hl-line repaints wipe kitty-graphics scaled headings
   (global-auto-revert-mode 1) ;; Enable global auto-revert mode to keep buffers up to date with their corresponding files.
   (setq-default indent-tabs-mode nil)
   (recentf-mode 1) ;; Enable tracking of recently opened files.
@@ -185,27 +137,41 @@
   :type 'boolean
   :group 'appearance)
 
-;; (setq wl-copy-process nil)
-;; (defun wl-copy (text)
-;;   (setq wl-copy-process (make-process :name "wl-copy"
-;;                                       :buffer nil
-;;                                       :command '("wl-copy" "-f" "-n")
-;;                                       :connection-type 'pipe
-;;                                       :noquery t))
-;;   (process-send-string wl-copy-process text)
-;;   (process-send-eof wl-copy-process))
-;; (defun wl-paste ()
-;;   (if (and wl-copy-process (process-live-p wl-copy-process))
-;;       nil ; should return nil if we're the current paste owner
-;;       (shell-command-to-string "wl-paste -n | tr -d \r")))
-;; (setq interprogram-cut-function 'wl-copy)
-;; (setq interprogram-paste-function 'wl-paste)
+(defun my/compilation-buffer-p (buffer-name _action)
+  "Match any compilation-derived buffer (compile, grep, …) for display."
+  (with-current-buffer buffer-name
+    (derived-mode-p 'compilation-mode)))
+
+(defun my/compile-or-recompile ()
+  "Recompile with the last command if a compilation ran before, else prompt."
+  (interactive)
+  (if (get-buffer "*compilation*")
+      (recompile)
+    (call-interactively #'compile)))
+
+(defun my/focus-async-shell-window (window)
+  "Focus the async-shell window and make q bury it without killing the process."
+  (select-window window)
+  (with-current-buffer (window-buffer window)
+    (evil-local-set-key 'normal (kbd "q") #'quit-window)
+    (evil-local-set-key 'motion (kbd "q") #'quit-window)
+    (evil-normal-state)))
 
 (use-package window
   :ensure nil
   :custom
   (display-buffer-alist
    '(
+     (my/compilation-buffer-p
+      (display-buffer-reuse-window display-buffer-below-selected)
+      (window-height . 0.3)
+      (body-function . select-window))
+
+     ("\\*Async Shell Command\\*"
+      (display-buffer-reuse-window display-buffer-below-selected)
+      (window-height . 0.3)
+      (body-function . my/focus-async-shell-window))
+
      ("\\*\\(Backtrace\\|Warnings\\|Compile-Log\\|[Hh]elp\\|Messages\\|Bookmark List\\|Occur\\)\\*"
       (display-buffer-in-side-window)
       (window-height . 0.25)
@@ -481,24 +447,6 @@ Temporarily disables notifications during the fetch."
       "C-k" 'erc-previous-command
       "C-j" 'erc-next-command)))
 
-;; Auto-start ERC in hub daemon on first frame
-(when (my/hub-p)
-  (defun my/hub-auto-start-erc (&optional _frame)
-    "Auto-connect ERC when first hub frame is created."
-    (run-irc)
-    (remove-hook 'server-after-make-frame-hook #'my/hub-auto-start-erc))
-  (add-hook 'server-after-make-frame-hook #'my/hub-auto-start-erc))
-
-;; (use-package lambda-themes
-;;   :ensure (:host github :repo "lambda-emacs/lambda-themes")
-;;   :custom
-;;   (lambda-themes-set-italic-comments t)
-;;   (lambda-themes-set-italic-keywords t)
-;;   (lambda-themes-set-variable-pitch t) 
-;;   (lambda-themes-set-theme 'light)
-;;   :config
-;;   (load-theme 'lambda-light))
-
 (defvar my/centered-cursor-enabled nil)
 
 (defun my/centered-cursor ()
@@ -580,11 +528,18 @@ Temporarily disables notifications during the fetch."
 
 (use-package clipetty
   :ensure t
-  :hook (after-init . global-clipetty-mode))
-
-;; (use-package kkp
-;;   :ensure t
-;;   :hook (tty-setup . global-kkp-mode))
+  :after evil
+  :config
+  (setq interprogram-cut-function nil)
+  (defun my/evil-yank-to-clipboard (_beg _end &optional _type register _yank-handler)
+    (when (and (not register)
+               (memq this-command '(evil-yank evil-yank-line)))
+      (let ((text (car kill-ring)))
+        (when (stringp text)
+          (if (display-graphic-p)
+              (gui-select-text text)
+            (clipetty-cut #'ignore text))))))
+  (advice-add 'evil-yank :after #'my/evil-yank-to-clipboard))
 
 (use-package isearch
   :ensure nil                                  ;; This is built-in, no need to fetch it.
@@ -928,12 +883,6 @@ Temporarily disables notifications during the fetch."
   (setq eldoc-box-max-pixel-height 600))
 
 
-;; (use-package eldoc-box
-;;   :ensure t
-;;   :config
-;;   ;; (setq eldoc-box-at-point-position-function #'eldoc-box--default-at-point-position-function)
-;;   (setq eldoc-box-help-at-point-mode t))
-
 (use-package flymake
   :ensure nil          ;; This is built-in, no need to fetch it.
   :defer t
@@ -1071,26 +1020,12 @@ Temporarily disables notifications during the fetch."
 
 
 
-;; (add-to-list 'load-path "~/render-org.el")
-;; (require 'render-org)
-;; (add-hook 'org-mode-hook #'render-org-mode)
-
-;; ;; Markdown support
-;; (require 'render-markdown)
-;; (add-hook 'markdown-mode-hook #'render-markdown-mode)
-
-;; ;; SVG scaled headings via kitty-graphics
-;; (setq render-org-heading-gfx-enabled 'nil)
-;; ;; (setq render-org-heading-gfx-scales '(1.25 1.15 1.05 1.0 1.0 1.0))
-;; ;; (setq render-org-heading-gfx-font-family "MapleMono NF")
-
 (use-package kitty-graphics
   :ensure nil
-  :load-path "/home/cashmere/projects/kitty-graphics"
+  :load-path "/home/cashmere/projects/kgfx-wt-bugsweep"
   :demand t
   :custom
   (kitty-gfx-enable-video t)
-  (kitty-gfx-debug nil)
   (kitty-gfx-shr-scale 'fit)
   (kitty-gfx-shr-fit-width 0.6)
   (kitty-gfx-shr-fit-height 20)
@@ -1168,32 +1103,6 @@ Temporarily disables notifications during the fetch."
 (use-package ob-async
   :ensure t
   :after org)
-
-(use-package jupyter
-  :ensure t
-  :defer t
-  :commands (jupyter-run-repl jupyter-connect-repl)
-  :init
-  ;; lazy: kein :after org, kein emacs-zmq native build beim startup.
-  ;; jupyter laedt erst wenn ein jupyter-* src block ausgefuehrt wird.
-  (with-eval-after-load 'org
-    (setq org-babel-default-header-args:jupyter-python
-          '((:async . "yes")
-            (:session . "py")
-            (:kernel . "python3")
-            (:results . "raw drawer")))
-    (advice-add 'org-babel-get-src-block-info :around
-                (lambda (orig &rest a)
-                  (let ((info (apply orig a)))
-                    (when (and info
-                               (stringp (nth 0 info))
-                               (string-prefix-p "jupyter-" (nth 0 info))
-                               (not (featurep 'jupyter)))
-                      (require 'jupyter)
-                      (org-babel-do-load-languages
-                       'org-babel-load-languages
-                       (append org-babel-load-languages '((jupyter . t)))))
-                    info)))))
 
 (with-eval-after-load 'org
   (defun org-babel-execute:just (body params)
@@ -1519,35 +1428,6 @@ Skips capture tasks and projects."
     (insert "\n* Meeting: ")))
 
 ;; capture templates are merged in the org-capture section below
-
-(use-package org-noter
-  :ensure t
-  :defer t)
-
-(use-package nov
-  :ensure t
-  :mode ("\\.epub\\'" . nov-mode))
-
-(use-package yequake
-  :ensure t
-  :custom
-  (yequake-frames
-   '(("org-capture"
-      (buffer-fns . (yequake-org-capture))
-      (width . 0.75)
-      (height . 0.5)
-      (frame-parameters . ((name . "org-capture")
-                           (undecorated . t)
-                           (skip-taskbar . t)
-                           (sticky . t))))
-     ("emacs-everywhere"
-      (buffer-fns . (emacs-everywhere))
-      (width . 0.75)
-      (height . 0.5)
-      (frame-parameters . ((name . "emacs-everywhere")
-                           (undecorated . t)
-                           (skip-taskbar . t)
-                           (sticky . t)))))))
 
 (defun my/org-capture-denote-deadline ()
   (let* ((context (read-string "Task with deadline: "))
@@ -2307,12 +2187,6 @@ Timers that expired while Emacs was closed fire immediately."
   (corfu-history-mode)
   (corfu-popupinfo-mode))
 
-(use-package corfu-terminal
-  :ensure t
-  :after corfu
-  :config
-  (corfu-terminal-mode +1))
-
 (use-package cape
   :ensure t
   ;; Bind prefix keymap providing all Cape commands under a mnemonic key.
@@ -2360,17 +2234,6 @@ Timers that expired while Emacs was closed fire immediately."
           "\\`\\*elpaca-log\\*\\'"
           "\\`\\*Native-compile-Log\\*\\'"
           "\\`\\*Async-native-compile-log\\*\\'")))
-
-;; (use-package treesit-auto
-;;   :ensure t
-;;   :defer t
-;;   :custom
-;;   (treesit-auto-install 'prompt)
-;;   :init
-;;   (delete 'org treesit-auto-langs)
-;;   :config
-;;   (treesit-auto-add-to-auto-mode-alist 'all)
-;;   (global-treesit-auto-mode t))
 
 (use-package embark
   :ensure t
@@ -2427,13 +2290,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (setq eglot-ignored-server-capabilities 
         '(:inlayhintprovider :documenthighlightprovider)))
 
-
-
-;; (use-package eglot-booster
-;;   :ensure (:repo "https://github.com/jdtsmith/eglot-booster")
-;;   :after eglot
-;;   :config	(eglot-booster-mode))
-
 (use-package typst-ts-mode
   :ensure t
   :mode "\\.typ\\'"
@@ -2486,14 +2342,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
             (lambda ()
               (pyvenv-mode 1))))
 
-;; (use-package elm-mode
-;;   :ensure t
-;;   :mode  "\\.elm\\'"
-;;   :hook (elm-mode . eglot-ensure)
-;;   :config
-;;   (with-eval-after-load 'eglot-server-programs
-;; 	'(elm-mode . ("elm-language-server"))))
-
 (use-package rust-ts-mode
   :ensure nil
   :mode "\\.rs\\'"
@@ -2504,14 +2352,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
                  '(rust-ts-mode .
                    ("rust-analyzer" :initializationOptions 
                     (:check (:command "clippy")))))))
-
-;; (use-package rustic
-;;   :ensure t
-;;   :config
-;;   (setq rustic-format-on-save nil)
-;;   (setq rustic-lsp-client nil)
-;;   :custom
-;;   (rustic-cargo-use-last-stored-arguments t))
 
 (use-package js
   :ensure nil
@@ -2547,28 +2387,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
                  '(web-mode . ("rass" "vuetail")))))
-
-(use-package mint-mode
-  :ensure (:host github :repo "creatorrr/emacs-mint-mode")
-  :mode "\\.mint\\'"
-  :hook (mint-mode . eglot-ensure)
-  :config
-  (with-eval-after-load 'eglot
-    (add-to-list 'eglot-server-programs
-                 '(mint-mode . ("mint" "tool" "ls")))))
-
-;; (use-package nushell-mode
-;;   :ensure nil
-;;   :mode "\\.nu\\'")
-
-;; (use-package nushell-ts-babel
-;;   :ensure (:host github :repo "herbertjones/nushell-ts-babel")
-;;   :after org
-;;   :config
-;;   (org-babel-do-load-languages
-;;    'org-babel-load-languages
-;;    (append org-babel-load-languages
-;;            '((nushell . t)))))
 
 (use-package xonsh-mode
   :ensure (:host github :repo "seanfarley/xonsh-mode")
@@ -2696,23 +2514,6 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
 
   (add-hook 'bash-ts-mode-hook #'sh-mode-setup))
 
-(use-package jinja2-mode
-  :ensure t
-  :defer t)
-
-(use-package protobuf-mode
-  :ensure (:host github :repo "protocolbuffers/protobuf"
-           :files ("editors/protobuf-mode.el"))
-  :mode ("\\.proto\\'" . protobuf-mode))
-
-(use-package janet-mode
-  :mode "\\.janet\\'"
-  :ensure t
-  :config
-  (with-eval-after-load 'eglot
-  (add-to-list 'eglot-server-programs
-               '(janet-mode . ("janet-lsp")))))
-
 (use-package just-mode
   :ensure t
   :mode ("[Jj]ustfile\\'" "\\.just\\'")
@@ -2778,18 +2579,6 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
        '((side . left)
          (window-width . 0.25)
          (slot . 0))))))
-
-;; (use-package visual-fill-column
-;;   :ensure t
-;;   :hook ((text-mode . visual-line-mode)        ;; Soft-Wrapping aktivieren
-;;          (text-mode . visual-fill-column-mode)) ;; Das Zentrieren aktivieren
-;;   :custom
-;;   (visual-fill-column-width 110)      ;; Maximale Breite des Textes (statt 0.67 relativ)
-;;   (visual-fill-column-center-text nil)
-;;   (visual-fill-column-enable-sensible-window-split t)
-;;   :config
-;;   (when (display-graphic-p)
-;;     (setq-default visual-fill-column-center-text t)))
 
 (use-package hl-todo
   :ensure (:host github :repo "tarsius/hl-todo")
@@ -2869,14 +2658,12 @@ so the working-tree diff stays visible until the user explicitly stages."
   (setq evil-want-keybinding nil)
   (setq evil-want-C-u-delete t)
   (setq evil-want-C-u-scroll t)
-  (setq evil-undo-system 'undo-tree)
+  (setq evil-undo-system 'undo-redo)
   (setq evil-split-window-below t)
   (setq evil-vsplit-window-right t)
   (setq evil-paste-from-register nil)
   :config
   (evil-mode 1)
-  (define-key evil-normal-state-map "u" 'undo-tree-undo)
-  (define-key evil-normal-state-map (kbd "C-r") 'undo-tree-redo)
   (evil-set-initial-state 'help-mode 'emacs)
   (evil-set-initial-state 'messages-buffer-mode 'normal)
   (evil-set-initial-state 'dired-mode 'normal)
@@ -2893,26 +2680,6 @@ so the working-tree diff stays visible until the user explicitly stages."
     (eldoc-doc-buffer t)))
 
 (define-key evil-normal-state-map (kbd "K") #'my/eldoc-and-jump)
-
-;; (setq select-enable-clipboard nil)
-;; (setq select-enable-primary nil)
-
-;; (evil-define-operator my/evil-yank-to-clipboard (beg end type register yank-handler)
-;;   :move-point nil
-;;   :repeat nil
-;;   (interactive "<R><x><y>")
-;;   (let ((select-enable-clipboard t))
-;;     (evil-yank beg end type register yank-handler)))
-
-;; (defun my/evil-paste-from-clipboard ()
-;;   (interactive)
-;;   (let ((select-enable-clipboard t))
-;;     (evil-paste-before 1 ?+)))
-
-;; (general-def '(normal visual) 'override
-;;   :prefix "SPC"
-;;   "yy" 'my/evil-yank-to-clipboard
-;;   "yp" 'my/evil-paste-from-clipboard)
 
 (use-package smartparens
   :ensure t
@@ -3033,21 +2800,6 @@ so the working-tree diff stays visible until the user explicitly stages."
   (require 'flash-evil)
   (flash-evil-setup t)
 
-  (defun my/flash-visual-extend (orig match)
-    (if (and match
-             (bound-and-true-p evil-local-mode)
-             (eq evil-state 'visual))
-        (let* ((origin (point))
-               (mpos (flash-match-pos-value match))
-               (forward (and mpos (>= mpos origin)))
-               (flash-jump-position (if forward 'end 'start)))
-          (prog1 (funcall orig match)
-            (when (and forward (not (bolp)) (> (point) (point-min)))
-              (backward-char))))
-      (funcall orig match)))
-
-  (advice-add 'flash-jump-to-match :around #'my/flash-visual-extend)
-
   ;; Restore ; and , after flash-char overwrites them
   ;; ; is used as prefix for prev-navigation (;b, ;d)
   ;; , is the local leader
@@ -3059,20 +2811,9 @@ so the working-tree diff stays visible until the user explicitly stages."
   (require 'flash-isearch)
   (flash-isearch-mode 1))
 
-(use-package undo-tree
-  :defer t
-  :ensure t
-  :hook (after-init . global-undo-tree-mode)
-  :init
-  (setq undo-tree-visualizer-timestamps t
-        undo-tree-visualizer-diff t
-        undo-tree-auto-save-history t
-        undo-tree-history-directory-alist '(("." . "~/.emacs.d/undo-tree-history/"))
-        undo-limit 800000
-        undo-strong-limit 12000000
-        undo-outer-limit 120000000)
-  :config
-  (setq undo-tree-mode-lighter ""))
+(setq undo-limit 800000
+      undo-strong-limit 12000000
+      undo-outer-limit 120000000)
 
 (use-package rainbow-delimiters
   :defer t
@@ -3157,15 +2898,17 @@ so the working-tree diff stays visible until the user explicitly stages."
 		punch-show-git-info nil
 		punch-show-buffer-position t
 		punch-show-column-info t
+		punch-show-erc-info nil
         punch-line-music-max-length 80
 		punch-line-modal-divider-style 'block
 		punch-line-section-backgrounds 'auto
+		punch-line-glyph-style 'nerd
 		punch-show-weather-info t
 		punch-weather-longitude "10.41"
 		punch-weather-latitude "53.25"
-		punch-cpu-usage t
-		punch-show-processes-info t
-        punch-line-music-info t)
+		punch-cpu-usage nil
+		punch-show-processes-info nil
+        punch-line-music-info nil)
   (punch-line-mode 1))
 
 (use-package adaptive-wrap
@@ -3184,15 +2927,22 @@ so the working-tree diff stays visible until the user explicitly stages."
 
 (defvar cashmere/font-height 160)
 
-  (set-face-attribute 'default nil
-    :family "MapleMono NF"                                                                                           
-    :height 180
-    :font (font-spec                                                                                                 
-           :family "MapleMono NF"                                                                                    
-           :features '(cv04 ss05 zero)))
+(defun cashmere/set-fonts (&optional frame)
+  "Apply the MapleMono faces, but only on graphical frames.
+Runs per-frame so a TTY-only daemon never touches fonts while GUI frames
+created later still get them."
+  (when (display-graphic-p frame)
+    (set-face-attribute 'default frame
+                        :family "MapleMono NF"
+                        :height 180
+                        :font (font-spec
+                               :family "MapleMono NF"
+                               :features '(cv04 ss05 zero)))
+    (set-face-attribute 'fixed-pitch frame :family "MapleMono NF" :weight 'regular)
+    (set-face-attribute 'variable-pitch frame :family "MapleMono NF" :weight 'regular :height 1.1)))
 
-(set-face-attribute 'fixed-pitch nil :family "MapleMono NF" :weight 'regular)
-(set-face-attribute 'variable-pitch nil :family "MapleMono NF" :weight 'regular :height 1.1)
+(add-hook 'server-after-make-frame-hook #'cashmere/set-fonts)
+(cashmere/set-fonts)
 
 (use-package mixed-pitch
   :ensure t
@@ -3255,15 +3005,6 @@ so the working-tree diff stays visible until the user explicitly stages."
             (cl-remove-if (lambda (d)
                             (memq d '(image gif video video-mtn)))
                           dirvish-preview-dispatchers)))))
-
-;; (use-package tramp-hlo
-;;     :ensure (:host github :repo "jsadusk/tramp-hlo")
-;;     :config
-;;     (tramp-hlo-setup))
-
-(add-to-list 'load-path "/home/cashmere/.emacs.d/tramp-rpc/lisp")
-(require 'tramp-rpc)
-
 
 (use-package zoxide
   :ensure t) 
@@ -3541,6 +3282,8 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "w L" '(buf-move-right :wk "Buffer move right")
 
   "c" '(:ignore t :wk "code")
+  "cc" '(my/compile-or-recompile :wk "compile / recompile")
+  "cC" '(compile :wk "compile (new command)")
   "ca" '(eglot-code-actions :wk "code actions")
   "cr" '(eglot-rename :wk "lsp rename")
   "cf" '(eglot-format :wk "format buffer")
@@ -3555,7 +3298,6 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "x" '(org-capture :wk "capture")
 
   ";" '(embark-act :wk "embark")
-  "u" '(undo-tree-visualize :wk "undo tree")
   "P" '(consult-yank-from-kill-ring :wk "paste history")
 
   "t" '(:ignore t :wk "treesitter")
@@ -3642,16 +3384,6 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "n" '(org-toggle-narrow-to-subtree :wk "narrow"))
 
 (evil-define-key 'normal org-mode-map (kbd "RET") 'org-open-at-point)
-
-;; jinja2-mode-map
-(my-leader
-  :keymaps 'jinja2-mode-map
-  "m" '(:wk "insert" :ignore)
-  "mv" '(jinja2-insert-var :wk "var")
-  "mt" '(jinja2-insert-tag :wk "tag")
-  "mc" '(jinja2-insert-comment :wk "comment")
-  
-  "mf" '(fill-paragraph :wk "fill paragraph"))
 
 (my-leader
   :keymaps '(rust-ts-mode-map)
@@ -3748,6 +3480,7 @@ date) and the dired header are never skipped."
   "a" '(org-agenda :wk "org agenda")
   "c" '(my/centered-cursor :wk "center cursor")
   "f" '(dirvish :wk "file manager")
+  "m" '(mu4e :wk "mu4e")
   "r" '(async-shell-command :wk "run async")
   "t" '(ghostel-project :wk "terminal (project)")
   "T" '(ghostel-list-buffers :wk "terminal (switch)")
@@ -3757,37 +3490,6 @@ date) and the dired header are never skipped."
 
 (global-set-key (kbd "C-=") 'text-scale-increase)
 (global-set-key (kbd "C--") 'text-scale-decrease)
-
-;; (defun my/evil-delete-to-blackhole (orig-fn beg end &optional type register &rest args)
-;;   (apply orig-fn beg end type ?_ args))
-
-;; (advice-add 'evil-delete :around 'my/evil-delete-to-blackhole)
-
-;; (my-leader
-;;   "y" '(my/yank-to-clipboard :wk "clipboard" :ignore t)
-;;   "yy" '(my/yank-to-clipboard :wk "yank to clipboard")
-;;   "yp" '(my/paste-from-clipboard :wk "paste from clipboard"))
-
-;; (defun my/yank-to-clipboard ()
-;;   (interactive)
-;;   (if (region-active-p)
-;;       (let ((select-enable-clipboard t))
-;;         (kill-ring-save (region-beginning) (region-end))
-;;         (message "Yanked to clipboard"))
-;;     (message "No region active")))
-
-;; (defun my/paste-from-clipboard ()
-;;   (interactive)
-;;   (let ((select-enable-clipboard t))
-;;     (yank)))
-
-;; (defun my/delete-to-clipboard ()
-;;   (interactive)
-;;   (if (region-active-p)
-;;       (let ((select-enable-clipboard t))
-;;         (kill-region (region-beginning) (region-end))
-;;         (message "Deleted to clipboard"))
-;;     (message "No region active")))
 
 (use-package elfeed
   :ensure (:host github :repo "emacs-elfeed/elfeed" :branch "main")
@@ -4076,14 +3778,6 @@ date) and the dired header are never skipped."
   :config
   (setq denote-project-notes-identifier '(project stayem)))
 
-(use-package emacs-everywhere
-  :ensure t)
-
-;; (profiler-start 'cpu)
-;; (org-agenda nil "c")
-;; (profiler-report)
-;; (profiler-stop)
-
 (use-package arrow
   :ensure t
   :elpaca (arrow :host github :repo "vmargb/arrow.el")
@@ -4211,7 +3905,7 @@ opening another file in same project does not re-notify."
 (autoload 'garden-sidecar "garden-dashboard" nil t)
 (autoload 'garden-connect "garden-connect" nil t)
 (autoload 'garden-connect-pick "garden-connect" nil t)
-(autoload 'garden-player "garden-player" nil t)
+;; (autoload 'garden-player "garden-player" nil t)
 
 (autoload 'denote-capf-setup "denote-capf" nil t)
 (add-hook 'org-mode-hook #'denote-capf-setup)
@@ -4222,11 +3916,16 @@ opening another file in same project does not re-notify."
 (autoload 'garden-publish-deploy "garden-publish" nil t)
 
 (defun my/easysession-restore-services ()
-  "Re-launch process-backed apps (mu4e, ERC) after a session is loaded."
-  (unless (and (fboundp 'mu4e-running-p) (mu4e-running-p))
-    (mu4e t))
-  (unless (and (fboundp 'erc-buffer-list) (erc-buffer-list))
-    (run-irc)))
+  (run-with-idle-timer
+   1 nil
+   (lambda ()
+     (unless (and (fboundp 'mu4e-running-p) (mu4e-running-p))
+       (mu4e t))))
+  (run-with-idle-timer
+   2 nil
+   (lambda ()
+     (unless (and (fboundp 'erc-buffer-list) (erc-buffer-list))
+       (run-irc)))))
 
 (use-package easysession
   :ensure t
@@ -4234,7 +3933,7 @@ opening another file in same project does not re-notify."
   :custom
   (easysession-save-interval (* 10 60))
   :config
-  (add-hook 'easysession-after-load-hook #'my/easysession-restore-services)
+  ;; (add-hook 'easysession-after-load-hook #'my/easysession-restore-services)
   (easysession-setup))
 
 (my-local-leader

@@ -48,13 +48,22 @@
 ;; Install use-package support
 (elpaca (elpaca-use-package :wait t)
   (elpaca-use-package-mode)
-  (setq elpaca-use-package-by-default t))
+  (setq elpaca-use-package-by-default t
+        use-package-compute-statistics t))
 
 ;; Install org before tangling config.org
 (elpaca (org :wait t))
 
 ;; Shadow built-in transient with newer version before magit loads
 (elpaca (transient :wait t))
+
+;; Startup profiling: benchmark-init records require/load wallclock so the
+;; tangled config.el load below is fully measured. Inspect afterwards with
+;; M-x benchmark-init/show-durations-tree (or use-package-report for use-package).
+(elpaca (benchmark-init :wait t)
+  (require 'benchmark-init)
+  (benchmark-init/activate))
+(add-hook 'elpaca-after-init-hook #'benchmark-init/deactivate)
 
 ;; Load config: tangle only when org is newer than the tangled .el.
 ;; Saves the entire org parse on hot starts.
