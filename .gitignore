@@ -65,6 +65,19 @@ dirvish/thumbnails
 *.md
 /elpaca
 
+# Per-host local package development overrides (see config.org "local packages")
+/local.el
+
+# Downloaded eca binary + archive (large, per-host)
+/eca/
+
+# persp-mode session autosave state
+/workspaces/
+
+# tramp-rpc server binaries (per-host build artifacts); keep the lisp sources
+/tramp-rpc/*/
+!/tramp-rpc/lisp/
+
 # Per-host runtime/session state (savehist, recentf, places, bookmarks, clocks, timers)
 /triples.db
 /tmr-timers.eld
@@ -76,3 +89,5 @@ dirvish/thumbnails
 /recentf-*.eld
 /savehist-*.el
 /org-clock-save-*.el
+/org-clock-save.el
+/elfeed/index

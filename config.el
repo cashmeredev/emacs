@@ -22,6 +22,22 @@
 (setq kept-new-versions             5)
 (setq kept-old-versions             5)
 
+(eval-and-compile
+  (defvar my/local-packages nil
+    "Alist of (PACKAGE . DIRECTORY) loaded from a local checkout.
+Set per-host in the gitignored `local.el'.")
+
+  (load (locate-user-emacs-file "local.el") 'noerror 'nomessage)
+
+  (defun my/package-recipe (package remote)
+    "Elpaca `:ensure' recipe for PACKAGE.
+Return nil when PACKAGE is registered in `my/local-packages', so
+use-package loads it from `load-path'; otherwise return REMOTE."
+    (if (assq package my/local-packages) nil remote)))
+
+(dolist (entry my/local-packages)
+  (add-to-list 'load-path (expand-file-name (cdr entry))))
+
 (use-package emacs
   :ensure nil
   :custom
@@ -104,9 +120,10 @@
   (add-hook 'org-mode-hook (lambda () (setq-local global-hl-line-mode nil))) ;; hl-line repaints wipe kitty-graphics scaled headings
   (global-auto-revert-mode 1) ;; Enable global auto-revert mode to keep buffers up to date with their corresponding files.
   (setq-default indent-tabs-mode nil)
-  (recentf-mode 1) ;; Enable tracking of recently opened files.
-  (savehist-mode 1) ;; Enable saving of command history.
-  (save-place-mode 1) ;; Enable saving the place in files for easier return.
+  (when (daemonp)
+    (recentf-mode 1) ;; Enable tracking of recently opened files.
+    (savehist-mode 1) ;; Enable saving of command history.
+    (save-place-mode 1)) ;; Enable saving the place in files for easier return.
   (winner-mode 1) ;; Enable winner mode to easily undo window configuration changes.
   (xterm-mouse-mode 1) ;; Enable mouse support in terminal mode.
   (file-name-shadow-mode 1) ;; Enable shadowing of filenames for clarity.
@@ -258,6 +275,11 @@
              :port 6699
              :nick "cashmere"
              :user "cashmere/ergo@emacs"
+             :password pw)
+    (erc-tls :server "bouncer.cashmere.rs"
+             :port 6699
+             :nick "cashmere"
+             :user "cashmere/mansion@emacs"
              :password pw)))
 
 (use-package erc
@@ -531,14 +553,15 @@ Temporarily disables notifications during the fetch."
   :after evil
   :config
   (setq interprogram-cut-function nil)
+  (defun my/send-to-clipboard (text)
+    (when (stringp text)
+      (if (display-graphic-p)
+          (gui-select-text text)
+        (clipetty-cut #'ignore text))))
   (defun my/evil-yank-to-clipboard (_beg _end &optional _type register _yank-handler)
     (when (and (not register)
                (memq this-command '(evil-yank evil-yank-line)))
-      (let ((text (car kill-ring)))
-        (when (stringp text)
-          (if (display-graphic-p)
-              (gui-select-text text)
-            (clipetty-cut #'ignore text))))))
+      (my/send-to-clipboard (car kill-ring))))
   (advice-add 'evil-yank :after #'my/evil-yank-to-clipboard))
 
 (use-package isearch
@@ -866,6 +889,11 @@ Temporarily disables notifications during the fetch."
   ;; Runs only on first invocation — not at Emacs startup.
   (claude-code-ide-emacs-tools-setup))
 
+(use-package eca
+  :ensure t
+  :config
+  (setopt evil-collection-eca-maps 't))
+
 (use-package eldoc
   :ensure nil
   :config
@@ -983,7 +1011,10 @@ Temporarily disables notifications during the fetch."
   (add-hook 'org-mode-hook (lambda () (electric-indent-local-mode -1)))
 
 
-  (add-to-list 'font-lock-extra-managed-props 'display)
+  (add-hook 'org-mode-hook
+            (lambda ()
+              (setq-local font-lock-extra-managed-props
+                          (cons 'display font-lock-extra-managed-props))))
   (font-lock-add-keywords 'org-mode
                           `(("^.*?\( \)\(:[[:alnum:]_@#%:]+:\)$"
                              (1 `(face nil
@@ -1021,8 +1052,8 @@ Temporarily disables notifications during the fetch."
 
 
 (use-package kitty-graphics
-  :ensure nil
-  :load-path "/home/cashmere/projects/kgfx-wt-bugsweep"
+  :ensure `,(my/package-recipe 'kitty-graphics
+              '(:host github :repo "cashmeredev/kitty-graphics.el" :branch "testing"))
   :demand t
   :custom
   (kitty-gfx-enable-video t)
@@ -1428,6 +1459,10 @@ Skips capture tasks and projects."
     (insert "\n* Meeting: ")))
 
 ;; capture templates are merged in the org-capture section below
+
+(with-eval-after-load 'eglot
+  (add-to-list 'eglot-server-programs
+               '(org-mode . ("harper-ls" "--stdio"))))
 
 (defun my/org-capture-denote-deadline ()
   (let* ((context (read-string "Task with deadline: "))
@@ -2003,7 +2038,24 @@ Works on the base filename (without extension), e.g. matches \"-agenda\", \":age
   :ensure t
   :defer t
   :config
-  (setq denote-menu-title-column-width 60))
+  (setq denote-menu-title-column-width 60)
+
+  (defun denote-menu-export-to-dired ()
+    "Switch to a plain Dired buffer listing the filtered *Denotes* files.
+Bypasses dirvish's `dired-noselect' advice: dirvish keys session
+buffers by directory only, so it would reuse the existing buffer
+for `denote-directory' and silently drop the file-list filter."
+    (interactive)
+    (if-let* ((paths (denote-menu--entries-to-paths))
+              (default-directory (denote-directory)))
+        (pop-to-buffer-same-window
+         (unwind-protect
+             (progn
+               (advice-remove 'dired-noselect 'dirvish-dired-noselect-a)
+               (dired-noselect (cons default-directory paths)))
+           (when (bound-and-true-p dirvish-override-dired-mode)
+             (advice-add 'dired-noselect :around 'dirvish-dired-noselect-a))))
+      (user-error "No files to export"))))
 
 (use-package denote-org
     :ensure t)
@@ -2283,12 +2335,14 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (setq eglot-report-progress nil)
   (setq jsonrpc-default-request-timeout 10)
   
-  (add-hook 'eglot-managed-mode-hook 
-            (lambda () 
+  (add-hook 'eglot-managed-mode-hook
+            (lambda ()
               (eglot-inlay-hints-mode -1)))
-  
-  (setq eglot-ignored-server-capabilities 
-        '(:inlayhintprovider :documenthighlightprovider)))
+
+  (setq eglot-code-action-indications '(eldoc-hint))
+
+  (setq eglot-ignored-server-capabilities
+        '(:inlayHintProvider :documentHighlightProvider)))
 
 (use-package typst-ts-mode
   :ensure t
@@ -2557,7 +2611,26 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
   (define-advice olivetti-set-window
       (:around (orig win) my/skip-minibuffer)
     (unless (window-minibuffer-p win)
-      (funcall orig win))))
+      (funcall orig win)))
+  (defun my/olivetti-rebalance (&rest _)
+    (dolist (win (get-buffer-window-list nil nil 'visible))
+      (when (buffer-local-value 'olivetti-mode (window-buffer win))
+        (olivetti-set-window win))))
+  (with-eval-after-load 'diff-hl-margin
+    (advice-add 'diff-hl-margin-local-mode :after #'my/olivetti-rebalance)
+    (advice-add 'diff-hl-margin-ensure-visible :after #'my/olivetti-rebalance)))
+
+(use-package diff-hl
+  :ensure t
+  :hook ((prog-mode text-mode conf-mode) . diff-hl-mode)
+  :custom
+  (diff-hl-margin-symbols-alist
+   '((insert . "┃") (delete . "▁") (change . "┃")
+     (unknown . "?") (ignored . " ")))
+  :config
+  (diff-hl-flydiff-mode 1)
+  (unless (display-graphic-p)
+    (diff-hl-margin-mode 1)))
 
 (defun my-org-sidecar-left ()
   "Pick an org-mode buffer via consult and display it as a left sidecar."
@@ -3034,8 +3107,14 @@ still require a restart since elpaca queues run at init time."
              (float-time (time-since start)))))
 
 (setq-default olivetti-body-width 100)
+(defun my/olivetti-suitable-buffer-p ()
+  (and (buffer-file-name)
+       (not (minibufferp))
+       (not (derived-mode-p 'special-mode))
+       (not (string-prefix-p " " (buffer-name)))))
+
 (define-globalized-minor-mode my/global-olivetti-mode olivetti-mode
- (lambda () (olivetti-mode 1)))
+  (lambda () (when (my/olivetti-suitable-buffer-p) (olivetti-mode 1))))
 ;; (my/centered-cursor)
 ;; (my/global-olivetti-mode)
 
@@ -3099,11 +3178,326 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
 (with-eval-after-load 'embark
   (advice-add 'embark-export :after #'my/embark-export-auto-wgrep))
 
+(use-package persp-mode
+  :ensure t
+  :demand t
+  :init
+  (setq persp-keymap-prefix nil)
+  :config
+  (defvar my/workspaces-master "master")
+  (defvar my/workspace-last nil)
+  (defvar my/workspaces-on-switch-project 'non-empty)
+  (defvar my/workspace-switch-project-function #'projectile-find-file)
+
+  (setq persp-autokill-buffer-on-remove 'kill-weak
+        persp-reset-windows-on-nil-window-conf nil
+        persp-nil-hidden t
+        persp-auto-save-fname "autosave"
+        persp-save-dir (file-name-concat user-emacs-directory "workspaces/")
+        persp-set-last-persp-for-new-frames t
+        persp-switch-to-added-buffer nil
+        persp-add-buffer-on-after-change-major-mode t
+        persp-kill-foreign-buffer-behaviour 'kill
+        persp-remove-buffers-from-nil-persp-behaviour nil
+        persp-auto-resume-time 1.0
+        persp-auto-save-opt 1
+        uniquify-buffer-name-style nil)
+
+  (add-to-list 'persp-filter-save-buffers-functions
+               (lambda (buffer)
+                 (with-current-buffer buffer
+                   (memq major-mode '(eat-mode vterm-mode term-mode shell-mode eshell-mode ghostel-mode)))))
+
+  (defface my/workspace-tab-selected '((t (:inherit highlight)))
+    "Active workspace tab." :group 'persp-mode)
+  (defface my/workspace-tab '((t (:inherit default)))
+    "Inactive workspace tab." :group 'persp-mode)
+
+  (defun my/workspace-current-name ()
+    (safe-persp-name (get-current-persp)))
+  (defun my/workspace-names ()
+    (cl-remove persp-nil-name persp-names-cache :count 1))
+  (defun my/workspace-protected-p (name)
+    (equal name persp-nil-name))
+  (defun my/workspace-exists-p (name)
+    (member name (my/workspace-names)))
+  (defun my/workspace-fallback-buffer ()
+    (get-buffer-create "*scratch*"))
+  (defun my/workspace-buffer-list (&optional persp)
+    (persp-buffers (or persp (get-current-persp))))
+
+  (defun my/workspace-switch (name &optional create)
+    (unless (my/workspace-exists-p name)
+      (if create
+          (persp-add-new name)
+        (user-error "No workspace named '%s'" name)))
+    (let ((old (my/workspace-current-name)))
+      (unless (equal old name)
+        (setq my/workspace-last
+              (if (my/workspace-protected-p old) my/workspaces-master old))
+        (persp-frame-switch name))))
+
+  (defun my/workspace-switch-to-index (index)
+    (let ((name (nth index (my/workspace-names))))
+      (if name
+          (progn (my/workspace-switch name) (my/workspace-display))
+        (user-error "No workspace #%d" (1+ index)))))
+
+  (defun my/workspace--tabline ()
+    (let ((current (my/workspace-current-name))
+          (i 0))
+      (mapconcat
+       (lambda (name)
+         (setq i (1+ i))
+         (propertize (format " [%d] %s " i name)
+                     'face (if (equal current name)
+                               'my/workspace-tab-selected
+                             'my/workspace-tab)))
+       (my/workspace-names)
+       " ")))
+
+  (defun my/workspace-display ()
+    (interactive)
+    (let (message-log-max)
+      (message "%s" (my/workspace--tabline))))
+
+  (defun my/workspace-new (&optional name)
+    (interactive)
+    (let ((name (or name
+                    (read-string "New workspace: "
+                                 (format "#%d" (1+ (length (my/workspace-names))))))))
+      (when (my/workspace-protected-p name)
+        (user-error "Reserved workspace name"))
+      (when (my/workspace-exists-p name)
+        (user-error "Workspace '%s' already exists" name))
+      (my/workspace-switch name t)
+      (switch-to-buffer (my/workspace-fallback-buffer))
+      (my/workspace-display)))
+
+  (defun my/workspace-rename (new-name)
+    (interactive (list (read-string "Rename workspace to: " (my/workspace-current-name))))
+    (when (my/workspace-protected-p (my/workspace-current-name))
+      (user-error "Can't rename this workspace"))
+    (persp-rename new-name (get-current-persp))
+    (my/workspace-display))
+
+  (defun my/workspace-kill (&optional name)
+    (interactive)
+    (let* ((name (or name (my/workspace-current-name)))
+           (others (remove name (my/workspace-names))))
+      (when (my/workspace-protected-p name)
+        (user-error "Can't kill this workspace"))
+      (if (null others)
+          (progn
+            (my/workspace-switch my/workspaces-master t)
+            (unless (equal name my/workspaces-master)
+              (persp-kill name)))
+        (when (equal name (my/workspace-current-name))
+          (my/workspace-switch
+           (if (my/workspace-exists-p my/workspace-last)
+               my/workspace-last
+             (car others))))
+        (persp-kill name))
+      (my/workspace-display)))
+
+  (defun my/workspace-kill-session ()
+    (interactive)
+    (when (yes-or-no-p "Clear all workspaces and buffers? ")
+      (let ((persp-autokill-buffer-on-remove t))
+        (dolist (n (my/workspace-names))
+          (unless (equal n my/workspaces-master)
+            (persp-kill n))))
+      (my/workspace-switch my/workspaces-master t)
+      (delete-other-windows)
+      (switch-to-buffer (my/workspace-fallback-buffer))
+      (my/workspace-display)))
+
+  (defun my/workspace-switch-to (name)
+    (interactive (list (completing-read "Switch to workspace: " (my/workspace-names))))
+    (my/workspace-switch name t)
+    (my/workspace-display))
+
+  (defun my/workspace-switch-to-final ()
+    (interactive)
+    (when-let* ((name (car (last (my/workspace-names)))))
+      (my/workspace-switch name)
+      (my/workspace-display)))
+
+  (defun my/workspace-other ()
+    (interactive)
+    (if (and my/workspace-last (my/workspace-exists-p my/workspace-last))
+        (progn (my/workspace-switch my/workspace-last) (my/workspace-display))
+      (user-error "No other workspace")))
+
+  (defun my/workspace-cycle (n)
+    (let* ((names (my/workspace-names))
+           (count (length names))
+           (index (cl-position (my/workspace-current-name) names :test #'equal)))
+      (if (or (null index) (= count 1))
+          (user-error "No other workspace")
+        (my/workspace-switch (nth (mod (+ index n) count) names))
+        (my/workspace-display))))
+
+  (defun my/workspace-switch-left ()
+    (interactive)
+    (my/workspace-cycle -1))
+  (defun my/workspace-switch-right ()
+    (interactive)
+    (my/workspace-cycle 1))
+
+  (defun my/workspace-save-session ()
+    (interactive)
+    (persp-save-state-to-file))
+  (defun my/workspace-load-session ()
+    (interactive)
+    (persp-load-state-from-file)
+    (my/workspace-display))
+
+  (defun my/workspace-close-window-or-workspace ()
+    (interactive)
+    (let ((delete-fn (if (featurep 'evil) #'evil-window-delete #'delete-window)))
+      (if (or (window-dedicated-p)
+              (my/workspace-protected-p (my/workspace-current-name))
+              (cdr (window-list)))
+          (funcall delete-fn)
+        (my/workspace-kill (my/workspace-current-name)))))
+
+  (defun my/workspace-init-main (&rest _)
+    (when persp-mode
+      (let (persp-before-switch-functions)
+        (unless (or (persp-get-by-name my/workspaces-master)
+                    (> (hash-table-count *persp-hash*) 2))
+          (persp-add-new my/workspaces-master))
+        (when (equal (my/workspace-current-name) persp-nil-name)
+          (persp-frame-switch my/workspaces-master)))))
+  (add-hook 'persp-mode-hook #'my/workspace-init-main)
+
+  (defun my/workspace-switch-to-project (&optional dir)
+    (let* ((dir (or dir default-directory))
+           (default-directory dir)
+           (name (projectile-project-name dir)))
+      (when persp-mode
+        (if (or (eq my/workspaces-on-switch-project t)
+                (my/workspace-protected-p (my/workspace-current-name))
+                (my/workspace-buffer-list))
+            (progn
+              (my/workspace-switch name t)
+              (switch-to-buffer (my/workspace-fallback-buffer)))
+          (ignore-errors (persp-rename name (get-current-persp))))
+        (funcall my/workspace-switch-project-function))))
+  (with-eval-after-load 'projectile
+    (setq projectile-switch-project-action #'my/workspace-switch-to-project))
+
+  (define-key persp-mode-map [remap delete-window]
+              #'my/workspace-close-window-or-workspace)
+  (with-eval-after-load 'evil
+    (define-key persp-mode-map [remap evil-window-delete]
+                #'my/workspace-close-window-or-workspace))
+
+  (defun my/workspace-restore-services (&rest _)
+    (run-with-idle-timer
+     1 nil
+     (lambda ()
+       (unless (and (fboundp 'mu4e-running-p) (mu4e-running-p))
+         (mu4e t)))))
+  (add-hook 'persp-after-load-state-functions #'my/workspace-restore-services)
+
+  (add-hook 'persp-filter-save-buffers-functions
+            (lambda (buf)
+              (with-current-buffer buf (derived-mode-p 'erc-mode))))
+
+  (run-with-timer (* 10 60) (* 10 60)
+                  (lambda () (when persp-mode (persp-save-state-to-file))))
+
+  (defun my/workspace--inhibit-erc-part (orig &rest args)
+    (let ((erc-kill-channel-hook nil)
+          (erc-kill-server-hook nil)
+          (erc-kill-buffer-hook nil))
+      (apply orig args)))
+  (advice-add 'my/workspace-kill :around #'my/workspace--inhibit-erc-part)
+  (advice-add 'my/workspace-kill-session :around #'my/workspace--inhibit-erc-part)
+
+  (when (daemonp) (persp-mode 1)))
+
+(with-eval-after-load 'consult
+  (defvar my/workspace-consult-source
+    (list :name     "Workspace"
+          :narrow   ?w
+          :category 'buffer
+          :face     'consult-buffer
+          :history  'buffer-name-history
+          :state    #'consult--buffer-state
+          :default  t
+          :items
+          (lambda ()
+            (consult--buffer-query
+             :predicate #'persp-contain-buffer-p
+             :sort 'visibility
+             :as #'buffer-name))))
+  (add-to-list 'consult-buffer-sources 'my/workspace-consult-source)
+  (consult-customize consult--source-buffer :default nil :narrow ?B))
+
+(with-eval-after-load 'ibuffer
+  (define-ibuffer-filter persp
+      "Limit to buffers in the current workspace."
+    (:description "current workspace")
+    (persp-contain-buffer-p buf)))
+
+(defun my/ibuffer-workspace ()
+  (interactive)
+  (ibuffer nil (format "*ibuffer: %s*" (my/workspace-current-name))
+           (list (cons 'persp t))))
+
+(my-leader
+  "TAB"     '(:ignore t :wk "workspace")
+  "TAB TAB" '(my/workspace-display :wk "display")
+  "TAB h"   '(enlight-open :wk "dashboard")
+  "TAB ."   '(my/workspace-switch-to :wk "switch to…")
+  "TAB `"   '(my/workspace-other :wk "last")
+  "TAB n"   '(my/workspace-new :wk "new")
+  "TAB r"   '(my/workspace-rename :wk "rename")
+  "TAB d"   '(my/workspace-kill :wk "delete")
+  "TAB x"   '(my/workspace-kill-session :wk "kill session")
+  "TAB s"   '(my/workspace-save-session :wk "save session")
+  "TAB l"   '(my/workspace-load-session :wk "load session")
+  "TAB ["   '(my/workspace-switch-left :wk "prev")
+  "TAB ]"   '(my/workspace-switch-right :wk "next")
+  "TAB 1"   '((lambda () (interactive) (my/workspace-switch-to-index 0)) :wk "1")
+  "TAB 2"   '((lambda () (interactive) (my/workspace-switch-to-index 1)) :wk "2")
+  "TAB 3"   '((lambda () (interactive) (my/workspace-switch-to-index 2)) :wk "3")
+  "TAB 4"   '((lambda () (interactive) (my/workspace-switch-to-index 3)) :wk "4")
+  "TAB 5"   '((lambda () (interactive) (my/workspace-switch-to-index 4)) :wk "5")
+  "TAB 6"   '((lambda () (interactive) (my/workspace-switch-to-index 5)) :wk "6")
+  "TAB 7"   '((lambda () (interactive) (my/workspace-switch-to-index 6)) :wk "7")
+  "TAB 8"   '((lambda () (interactive) (my/workspace-switch-to-index 7)) :wk "8")
+  "TAB 9"   '((lambda () (interactive) (my/workspace-switch-to-index 8)) :wk "9")
+  "TAB 0"   '(my/workspace-switch-to-final :wk "last"))
+
+(general-def '(normal motion)
+  "gt" 'my/workspace-switch-right
+  "gT" 'my/workspace-switch-left)
+
+(dotimes (i 9)
+  (general-define-key
+   :states '(normal visual)
+   :keymaps 'override
+   :prefix ","
+   (number-to-string (1+ i))
+   `(lambda () (interactive) (my/workspace-switch-to-index ,i))))
+(general-define-key
+ :states '(normal visual)
+ :keymaps 'override
+ :prefix ","
+ "0" #'my/workspace-switch-to-final)
+
 (use-package pass
   :ensure t
   :defer t
   :commands (pass)
   :config
+  (setq pass-view-font-lock-keywords
+        '(("\\(^[^:\t\n]+:\\) " 1 'font-lock-keyword-face)))
+
   (add-to-list 'display-buffer-alist
                '("\\*Pass.*\\*"
                  (display-buffer-full-frame)))
@@ -3216,7 +3610,7 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
 
   "b" '(:ignore t :wk "buffer/bookmarks")
   "bb" '(consult-bookmark :wk "display current bookmarks")
-  "bi" '(ibuffer :wk "ibuffer")
+  "bi" '(my/ibuffer-workspace :wk "ibuffer (workspace)")
   "bp" '(projectile-ibuffer :wk "ibuffer project")
   "bd" '(bookmark-delete :wk "delete bookmark")
   "bk" '(kill-current-buffer :wk "kill buffer")
@@ -3300,8 +3694,8 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   ";" '(embark-act :wk "embark")
   "P" '(consult-yank-from-kill-ring :wk "paste history")
 
-  "t" '(:ignore t :wk "treesitter")
-  "ts" '(flash-treesitter :wk "flash treesitter")
+  ;; "t" '(:ignore t :wk "treesitter")
+  ;; "ts" '(flash-treesitter :wk "flash treesitter")
 
 
   "e"   '(:ignore t :wk "eww/web")
@@ -3424,6 +3818,10 @@ date) and the dired header are never skipped."
   (forward-line (- arg))
   (dired-move-to-filename))
 
+(general-def 'normal dired-mode-map
+  "h" 'dired-up-directory
+  "l" 'dired-find-file)
+
 (general-def 'normal dirvish-mode-map
   "?" 'dirvish-dispatch
   "q" 'dirvish-quit
@@ -3456,6 +3854,14 @@ date) and the dired header are never skipped."
   "S" 'dirvish-relative-symlink
   "h" 'dirvish-hardlink)
 
+(defun my/dirvish-copy-to-clipboard (&rest _)
+  (my/send-to-clipboard (car kill-ring)))
+
+(dolist (fn '(dirvish-copy-file-path
+              dirvish-copy-file-name
+              dirvish-copy-file-true-path))
+  (advice-add fn :after #'my/dirvish-copy-to-clipboard))
+
 (defun my/eshell-clear ()
   (interactive)
   (eshell/clear-scrollback))
@@ -3481,6 +3887,7 @@ date) and the dired header are never skipped."
   "c" '(my/centered-cursor :wk "center cursor")
   "f" '(dirvish :wk "file manager")
   "m" '(mu4e :wk "mu4e")
+  "i" '(run-irc :wk "irc")
   "r" '(async-shell-command :wk "run async")
   "t" '(ghostel-project :wk "terminal (project)")
   "T" '(ghostel-list-buffers :wk "terminal (switch)")
@@ -3877,12 +4284,25 @@ opening another file in same project does not re-notify."
   :ensure t
   :custom
   (ghostel-shell "xonsh")
+  (ghostel-ssh-install-terminfo t)
   :config
+  (setq-default window-adjust-process-window-size-function
+                #'window-adjust-process-window-size-largest)
+  (add-to-list 'ghostel-tramp-shells '("rpc" login-shell))
   (evil-define-key 'normal ghostel-mode-map
     (kbd "g t") #'ghostel-next
     (kbd "g T") #'ghostel-previous
     (kbd "g n") #'ghostel
     (kbd "g b") #'ghostel-list-buffers)
+  (defun my/ghostel-transparent-buffer-face (fg _bg)
+    (unless (equal fg ghostel--face-cookie-fg-bg)
+      (when ghostel--face-cookie
+        (face-remap-remove-relative ghostel--face-cookie))
+      (setq ghostel--face-cookie
+            (face-remap-add-relative 'default :foreground fg))
+      (setq ghostel--face-cookie-fg-bg fg)))
+  (advice-add 'ghostel--set-buffer-face :override
+              #'my/ghostel-transparent-buffer-face)
   (advice-add 'enable-theme :after
               (lambda (&rest _)
                 (when (fboundp 'ghostel-sync-theme)
@@ -3894,17 +4314,20 @@ opening another file in same project does not re-notify."
   :after (ghostel evil)
   :hook (ghostel-mode . evil-ghostel-mode))
 
-(use-package vui
-  :ensure (:host github :repo "d12frosted/vui.el" :files ("*.el")))
+(when-let* ((garden-dir (expand-file-name
+                         (or (alist-get 'garden my/local-packages) "~/garden")))
+            ((file-directory-p garden-dir)))
+  (use-package vui
+    :ensure (:host github :repo "d12frosted/vui.el" :files ("*.el")))
 
-(add-to-list 'load-path (expand-file-name "~/garden/lisp/"))
-(setq garden-directory (expand-file-name "~/garden/"))
-(require 'garden-core)
-(garden-auto-index-mode 1)
-(autoload 'garden "garden-dashboard" nil t)
-(autoload 'garden-sidecar "garden-dashboard" nil t)
-(autoload 'garden-connect "garden-connect" nil t)
-(autoload 'garden-connect-pick "garden-connect" nil t)
+  (add-to-list 'load-path (expand-file-name "lisp/" garden-dir))
+  (setq garden-directory (file-name-as-directory garden-dir))
+  (require 'garden-core)
+  (garden-auto-index-mode 1)
+  (autoload 'garden "garden-dashboard" nil t)
+  (autoload 'garden-sidecar "garden-dashboard" nil t)
+  (autoload 'garden-connect "garden-connect" nil t)
+  (autoload 'garden-connect-pick "garden-connect" nil t))
 ;; (autoload 'garden-player "garden-player" nil t)
 
 (autoload 'denote-capf-setup "denote-capf" nil t)
@@ -3915,42 +4338,129 @@ opening another file in same project does not re-notify."
 (autoload 'garden-publish-blog "garden-publish" nil t)
 (autoload 'garden-publish-deploy "garden-publish" nil t)
 
-(defun my/easysession-restore-services ()
-  (run-with-idle-timer
-   1 nil
-   (lambda ()
-     (unless (and (fboundp 'mu4e-running-p) (mu4e-running-p))
-       (mu4e t))))
-  (run-with-idle-timer
-   2 nil
-   (lambda ()
-     (unless (and (fboundp 'erc-buffer-list) (erc-buffer-list))
-       (run-irc)))))
-
-(use-package easysession
-  :ensure t
-  :demand t
-  :custom
-  (easysession-save-interval (* 10 60))
-  :config
-  ;; (add-hook 'easysession-after-load-hook #'my/easysession-restore-services)
-  (easysession-setup))
-
-(my-local-leader
-  "e"  '(:wk "easy session" :ignore 't)
-  "ew" '(easysession-switch-to :wk "switch / create")
-  "es" '(easysession-save :wk "save")
-  "el" '(easysession-load :wk "load")
-  "eg" '(easysession-switch-to-and-restore-geometry :wk "switch + geometry")
-  "er" '(easysession-rename :wk "rename")
-  "ed" '(easysession-delete :wk "delete")
-  "ee" '(easysession-edit :wk "edit")
-  "eR" '(easysession-reset :wk "reset to default")
-  "em" '(easysession-save-mode :wk "toggle auto-save"))
-
 (use-package sops
   :ensure (:type git :host github :repo "djgoku/sops")
   :init
   (global-sops-mode 1))
+
+(use-package tramp-rpc
+  :ensure (:host github :repo "ArthurHeymans/emacs-tramp-rpc")
+  :config
+  (setq tramp-rpc-deploy-git-build-policy 'release
+        tramp-rpc-controlmaster-persist 3600
+        tramp-rpc-direnv-cache-timeout 3600
+        tramp-rpc--cache-ttl 1800
+        tramp-rpc--cache-max-size 100000
+        remote-file-name-inhibit-locks t
+        tramp-verbose 1))
+
+(use-package difftastic
+  :ensure t
+  :defer t
+  :init
+  (difftastic-bindings-mode))
+
+(use-package magit-delta
+  :ensure t
+  :after magit
+  :init
+  (when (executable-find "delta")
+    (add-hook 'magit-mode-hook #'magit-delta-mode)))
+
+(use-package pretty-sha-path
+  :ensure t)
+
+(use-package grid
+  :ensure (:host github :repo "ichernyshovvv/grid.el")
+  :demand t)
+
+(use-package enlight
+  :ensure (:host github :repo "ichernyshovvv/enlight")
+  :demand t
+  :after grid
+  :config
+  (require 'enlight-menu)
+  (defface my/enlight-header
+    '((t (:inherit font-lock-keyword-face :weight bold)))
+    "Enlight banner face.")
+
+  (defvar my/enlight-banner
+    (propertize
+     "███████ ███    ███  █████   ██████ ███████
+██      ████  ████ ██   ██ ██      ██
+█████   ██ ████ ██ ███████ ██      ███████
+██      ██  ██  ██ ██   ██ ██           ██
+███████ ██      ██ ██   ██  ██████ ███████"
+     'face 'my/enlight-header))
+
+  (defun my/enlight-stats ()
+    (concat
+     (format "%d packages" (length (elpaca--queued)))
+     (when (bound-and-true-p after-init-time)
+       (format " · %s" (emacs-init-time "%.2fs")))
+     (format " · %s" (format-time-string "%a %d %b %H:%M"))))
+
+  (defun my/enlight-recent ()
+    (if (bound-and-true-p recentf-list)
+        (mapconcat
+         (lambda (f)
+           (let ((s (abbreviate-file-name f)))
+             (if (> (length s) 32)
+                 (concat "…" (substring s (- (length s) 31)))
+               s)))
+         (seq-take recentf-list 8)
+         "\n")
+      (propertize "no recent files" 'face 'shadow)))
+
+  (defun my/enlight-content ()
+    (concat
+     (grid-make-box `(:align center :width 80 :content ,my/enlight-banner))
+     "\n"
+     (grid-make-box `(:align center :width 80
+                     :content ,(propertize (my/enlight-stats) 'face 'shadow)))
+     "\n\n"
+     (grid-make-row
+      (list
+       (grid-make-box
+        `(:width 40 :border t :padding 1
+          :content ,(enlight-menu
+                     '(("Quick actions"
+                        ("Agenda"           (org-agenda nil "d") "a")
+                        ("Recent file"      consult-recent-file "r")
+                        ("Switch project"   projectile-switch-project "p")
+                        ("Find note"        denote-open-or-create "n")
+                        ("Journal entry"    denote-journal-new-or-existing-entry "j")
+                        ("Magit"            magit-status "g")
+                        ("Files"            dirvish "f")
+                        ("Mail"             mu4e "m")
+                        ("IRC"              run-irc "i")
+                        ("Switch workspace" my/workspace-switch-to "w")
+                        ("Restore session"  my/workspace-load-session "S"))))))
+       "  "
+       (grid-make-box
+        `(:width 38 :border t :padding 1
+          :content ,(concat (propertize "Recent files\n\n" 'face 'enlight-menu-section)
+                            (my/enlight-recent)))))))))
+
+(defun my/enlight-refresh (&rest _)
+  (enlight--update 'enlight-content (my/enlight-content)))
+(advice-add 'enlight :before #'my/enlight-refresh)
+
+(defun my/session-exists-p ()
+  (file-exists-p (file-name-concat persp-save-dir persp-auto-save-fname)))
+
+(setq initial-buffer-choice
+      (lambda ()
+        (if (and (fboundp 'enlight) (not (my/session-exists-p)))
+            (enlight)
+          (get-buffer-create "*scratch*"))))
+
+(add-hook 'elpaca-after-init-hook
+          (lambda ()
+            (when (and (fboundp 'enlight-open) (not (my/session-exists-p)))
+              (enlight-open))))
+
+(with-eval-after-load 'evil
+  (evil-set-initial-state 'enlight-mode 'emacs))
 
 (provide 'init)

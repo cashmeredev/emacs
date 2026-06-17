@@ -1,0 +1,14 @@
+;;; -*- lexical-binding: t -*-
+
+;; Per-host local package development overrides. Copy this file to
+;; `local.el' (gitignored) on a machine where you want to load a package
+;; from a local checkout instead of its remote source. See the "local
+;; packages" section in config.org.
+;;
+;; Each entry maps a package symbol to the directory of its checkout. The
+;; directory is added to `load-path' and the package is loaded in place,
+;; so uncommitted edits are live after a reload/restart.
+
+(setq my/local-packages
+      '((kitty-graphics . "~/code/kitty-graphics.el")
+        (garden         . "~/garden")))
