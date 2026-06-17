@@ -1052,8 +1052,7 @@ Temporarily disables notifications during the fetch."
 
 
 (use-package kitty-graphics
-  :ensure `,(my/package-recipe 'kitty-graphics
-              '(:host github :repo "cashmeredev/kitty-graphics.el" :branch "testing"))
+  :ensure (:host github :repo "cashmeredev/kitty-graphics.el")
   :demand t
   :custom
   (kitty-gfx-enable-video t)
@@ -2963,26 +2962,32 @@ so the working-tree diff stays visible until the user explicitly stages."
 (use-package hide-mode-line
   :ensure t)
 
-(use-package punch-line
-  :ensure (:host github :repo "cashmeredev/punch-line")
+(use-package svg-line
+  :ensure (:host nil :repo "ssh://git.cashmere.rs/svg-line.git"
+                 :branch "feat/tty-kitty-modeline")
   :config
-  (setq punch-line-left-separator "  "
-        punch-line-right-separator "  "
-		punch-show-git-info nil
-		punch-show-buffer-position t
-		punch-show-column-info t
-		punch-show-erc-info nil
-        punch-line-music-max-length 80
-		punch-line-modal-divider-style 'block
-		punch-line-section-backgrounds 'auto
-		punch-line-glyph-style 'nerd
-		punch-show-weather-info t
-		punch-weather-longitude "10.41"
-		punch-weather-latitude "53.25"
-		punch-cpu-usage nil
-		punch-show-processes-info nil
-        punch-line-music-info nil)
-  (punch-line-mode 1))
+  (require 'svg-line-segments)
+  (setq svg-line-weather-latitude "53.25"
+        svg-line-weather-longitude "10.41")
+  (svg-line-weather-mode 1)
+
+  (svg-line-define 'cashmere-mode-line
+    :target 'mode-line
+    :layout 'lines
+    :active #'mode-line-window-selected-p
+    :background (lambda () (face-background 'mode-line nil t))
+    :foreground (lambda () (face-foreground 'mode-line nil t))
+    :inactive-background (lambda () (face-background 'mode-line-inactive nil t))
+    :inactive-foreground (lambda () (face-foreground 'mode-line-inactive nil t))
+    :content
+    (lambda ()
+      (list (cons (list #'svg-line-segment-evil " "
+                        #'svg-line-segment-buffer #'svg-line-segment-vc)
+                  (list #'svg-line-segment-weather #'svg-line-segment-battery
+                        #'svg-line-segment-position "  "
+                        #'svg-line-segment-major-mode)))))
+
+  (svg-line-activate 'cashmere-mode-line))
 
 (use-package adaptive-wrap
   :ensure t

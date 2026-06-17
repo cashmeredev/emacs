@@ -17,7 +17,26 @@
                    nushell-ts-mode offlineimap org-modern pdf-tools
                    ultra-scroll))
  '(safe-local-variable-values
-   '((eglot-server-programs
+   '((eval let ((host (car (split-string (system-name) "\\."))))
+           (setq-local eglot-workspace-configuration
+                       `(:nixd
+                         (:nixpkgs
+                          (:expr
+                           ,(format
+                             "(import ./.).nixosConfigurations.%s.pkgs"
+                             host))
+                          :formatting (:command ["nixfmt"]) :options
+                          (:nixos
+                           (:expr
+                            ,(format
+                              "(import ./.).nixosConfigurations.%s.options"
+                              host))
+                           :home-manager
+                           (:expr
+                            ,(format
+                              "(import ./.).nixosConfigurations.%s.options.home-manager.users.type.getSubOptions []"
+                              host)))))))
+     (eglot-server-programs
       ((python-ts-mode python-mode) "rass" "--" "ty" "server" "--"
        "ruff" "server"))
      (eglot-server-programs (nix-mode "devenv" "lsp"))

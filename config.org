@@ -1230,8 +1230,7 @@ Only activates when running in a Kitty terminal (not in GUI Emacs).
 
 #+begin_src emacs-lisp
 (use-package kitty-graphics
-  :ensure `,(my/package-recipe 'kitty-graphics
-              '(:host github :repo "cashmeredev/kitty-graphics.el" :branch "testing"))
+  :ensure (:host github :repo "cashmeredev/kitty-graphics.el")
   :demand t
   :custom
   (kitty-gfx-enable-video t)
@@ -3618,7 +3617,7 @@ Native =undo-redo= (via =evil-undo-system='undo-redo=); just raise the undo limi
   :ensure t)
 #+end_src
 
-** punch-line
+** COMMENT punch-line
 
 #+begin_src emacs-lisp
 (use-package punch-line
@@ -3641,6 +3640,37 @@ Native =undo-redo= (via =evil-undo-system='undo-redo=); just raise the undo limi
 		punch-show-processes-info nil
         punch-line-music-info nil)
   (punch-line-mode 1))
+#+end_src
+
+** svg-line
+
+#+begin_src emacs-lisp
+(use-package svg-line
+  :ensure (:host nil :repo "ssh://git.cashmere.rs/svg-line.git"
+                 :branch "feat/tty-kitty-modeline")
+  :config
+  (require 'svg-line-segments)
+  (setq svg-line-weather-latitude "53.25"
+        svg-line-weather-longitude "10.41")
+  (svg-line-weather-mode 1)
+
+  (svg-line-define 'cashmere-mode-line
+    :target 'mode-line
+    :layout 'lines
+    :active #'mode-line-window-selected-p
+    :background (lambda () (face-background 'mode-line nil t))
+    :foreground (lambda () (face-foreground 'mode-line nil t))
+    :inactive-background (lambda () (face-background 'mode-line-inactive nil t))
+    :inactive-foreground (lambda () (face-foreground 'mode-line-inactive nil t))
+    :content
+    (lambda ()
+      (list (cons (list #'svg-line-segment-evil " "
+                        #'svg-line-segment-buffer #'svg-line-segment-vc)
+                  (list #'svg-line-segment-weather #'svg-line-segment-battery
+                        #'svg-line-segment-position "  "
+                        #'svg-line-segment-major-mode)))))
+
+  (svg-line-activate 'cashmere-mode-line))
 #+end_src
 
 * soph
