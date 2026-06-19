@@ -1157,7 +1157,6 @@ terminal backend.
         org-special-ctrl-a/e               t
         org-insert-heading-respect-content t)
 
-  (add-hook 'org-mode-hook 'variable-pitch-mode)
   ;; (add-hook 'org-mode-hook 'org-indent-mode)
   (add-hook 'org-mode-hook 'visual-line-mode)
   (add-hook 'org-mode-hook (lambda () (electric-indent-local-mode -1)))
@@ -2812,6 +2811,28 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (put 'eglot-workspace-configuration 'safe-local-variable #'listp)
 #+end_src
 
+** c3-ts-mode
+
+Not on MELPA, so installed straight from GitHub. The tree-sitter grammar is built on first load via =treesit-install-language-grammar= (needs =cc= / =gcc= on PATH), and eglot drives the =c3-lsp= server. On NixOS install =c3c=, =c3-lsp= and =gcc=.
+
+#+begin_src emacs-lisp
+(use-package c3-ts-mode
+  :ensure (:host github :repo "c3lang/c3-ts-mode")
+  :mode (("\\.c3\\'" . c3-ts-mode)
+         ("\\.c3i\\'" . c3-ts-mode)
+         ("\\.c3t\\'" . c3-ts-mode))
+  :hook (c3-ts-mode . eglot-ensure)
+  :init
+  (add-to-list 'treesit-language-source-alist
+               '(c3 "https://github.com/c3lang/tree-sitter-c3"))
+  :config
+  (unless (treesit-language-available-p 'c3)
+    (treesit-install-language-grammar 'c3))
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 '(c3-ts-mode . ("c3-lsp")))))
+#+end_src
+
 ** python-ts-mode
 
 Because I have to and not want to.
@@ -3146,7 +3167,7 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
 #+begin_src emacs-lisp
 (use-package olivetti
   :ensure t
-  :hook (org-mode . olivetti-mode)
+  ;; :hook (org-mode . olivetti-mode)  ; no auto-center in org buffers
   :custom
   (olivetti-style nil)  ; Use window margins (fringes disabled in early-init)
   (olivetti-margin-width 10)  ; No side margins
@@ -3168,6 +3189,11 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
     (dolist (win (get-buffer-window-list nil nil 'visible))
       (when (buffer-local-value 'olivetti-mode (window-buffer win))
         (olivetti-set-window win))))
+  (defun my/olivetti-hide-continuation-glyph ()
+    (let ((dt (or buffer-display-table (make-display-table))))
+      (set-display-table-slot dt 'wrap (if olivetti-mode ?\s nil))
+      (setq buffer-display-table dt)))
+  (add-hook 'olivetti-mode-hook #'my/olivetti-hide-continuation-glyph)
   (with-eval-after-load 'diff-hl-margin
     (advice-add 'diff-hl-margin-local-mode :after #'my/olivetti-rebalance)
     (advice-add 'diff-hl-margin-ensure-visible :after #'my/olivetti-rebalance)))
@@ -3294,7 +3320,11 @@ so the working-tree diff stays visible until the user explicitly stages."
   :hook
   (prog-mode . indent-guide-mode)  ;; Activate indent-guide in programming modes.
   :config
-  (setq indent-guide-char "│"))    ;; Set the character used for the indent guide.
+  (setq indent-guide-char "│")    ;; Set the character used for the indent guide.
+  (define-advice indent-guide-show (:around (orig) my/guard-stale-window)
+    (when (and (eq (window-buffer) (current-buffer))
+               (<= (window-start) (point-max)))
+      (funcall orig))))
 #+end_src
 
 * keybindings
@@ -3698,22 +3728,17 @@ Runs per-frame so a TTY-only daemon never touches fonts while GUI frames
 created later still get them."
   (when (display-graphic-p frame)
     (set-face-attribute 'default frame
-                        :family "MapleMono NF"
-                        :height 180
+                        :family "IosevkaTerm NF"
+                        :height 200
                         :font (font-spec
-                               :family "MapleMono NF"
-                               :features '(cv04 ss05 zero)))
-    (set-face-attribute 'fixed-pitch frame :family "MapleMono NF" :weight 'regular)
-    (set-face-attribute 'variable-pitch frame :family "MapleMono NF" :weight 'regular :height 1.1)))
+                               :family "IosevkaTerm NF"
+                               ;; :features '(cv04 ss05 zero)
+                               ))
+    (set-face-attribute 'fixed-pitch frame :family "IosevkaTerm NF" :weight 'regular)
+    (set-face-attribute 'variable-pitch frame :family "IosevkaTerm NF" :weight 'regular :height 1.1)))
 
 (add-hook 'server-after-make-frame-hook #'cashmere/set-fonts)
 (cashmere/set-fonts)
-
-(use-package mixed-pitch
-  :ensure t
-  :defer t
-  :hook ((org-mode   . mixed-pitch-mode)
-         (LaTeX-mode . mixed-pitch-mode)))
 #+end_src
 
 * essentials
@@ -3733,7 +3758,7 @@ created later still get them."
 
 #+begin_src emacs-lisp
 (add-to-list 'custom-theme-load-path "~/.emacs.d/themes/")
-(load-theme 'noctalia t)
+(load-theme 'tinty t)
 #+end_src
 
 * dirvish
@@ -4315,7 +4340,8 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   :config
   ;; (setq golden-ratio-auto-scale t)
   ;; (golden-ratio-mode 1)
-)
+  (setq golden-ratio-exclude-buffer-names '(" *which-key*"))
+  (setq golden-ratio-exclude-buffer-regexp '("\\`\\*eldoc")))
 #+end_src
 
 * pdf-tools

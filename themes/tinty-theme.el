@@ -1,4 +1,4 @@
-;;; noctalia-theme.el --- Noctalia theme for Emacs -*- lexical-binding: t -*-
+;;; tinty-theme.el --- Noctalia theme for Emacs -*- lexical-binding: t -*-
 
 
 ;; Copyright (C) 2025
@@ -16,61 +16,61 @@
 
 ;;; Code:
 
-(deftheme noctalia "Noctalia theme with proper color contrast.")
+(deftheme tinty "Noctalia theme with proper color contrast.")
 
 (let* (;; Core surface colors
-       (bg "#eef1f5")
-       (fg "#192330")
-       (surface "#eef1f5")
-       (on-surface "#192330")
-       (on-surface-variant "#29394f")
-       (surface-variant "#d5dce4")
-       (surface-container "#d5dce4")
-       (surface-container-low "#e1e6ec")
-       (surface-container-lowest "#e9ecf1")
-       (surface-container-high "#c9d2dc")
-       (surface-container-highest "#bcc7d4")
+       (bg "#161616")
+       (fg "#f2f4f8")
+       (surface "#161616")
+       (on-surface "#f2f4f8")
+       (on-surface-variant "#dde1e6")
+       (surface-variant "#262626")
+       (surface-container "#262626")
+       (surface-container-low "#262626")
+       (surface-container-lowest "#161616")
+       (surface-container-high "#78a9ff")
+       (surface-container-highest "#78a9ff")
 
        ;; Accent colors (always readable on surface)
-       (primary "#4a78b0")
-       (secondary "#5a8f70")
-       (tertiary "#7654b8")
-       (err "#b33a58")
+       (primary "#33b1ff")
+       (secondary "#42be65")
+       (tertiary "#be95ff")
+       (err "#ee5396")
 
        ;; Container colors (for BACKGROUNDS only, never as foreground text)
-       (primary-container "#cad5e2")
-       (secondary-container "#bfddcb")
-       (tertiary-container "#d5cde4")
-       (err-container "#dec1c8")
+       (primary-container "#78a9ff")
+       (secondary-container "#78a9ff")
+       (tertiary-container "#78a9ff")
+       (err-container "#78a9ff")
 
        ;; On-color text (for text ON accent backgrounds)
-       (on-primary "#eef1f5")
-       (on-secondary "#eef1f5")
-       (on-tertiary "#eef1f5")
-       (on-err "#eef1f5")
+       (on-primary "#161616")
+       (on-secondary "#161616")
+       (on-tertiary "#161616")
+       (on-err "#161616")
 
        ;; On-container text (for text on container backgrounds)
-       (on-primary-container "#172536")
-       (on-secondary-container "#1e2f25")
-       (on-tertiary-container "#211636")
-       (on-err-container "#3a131c")
+       (on-primary-container "#f2f4f8")
+       (on-secondary-container "#f2f4f8")
+       (on-tertiary-container "#f2f4f8")
+       (on-err-container "#f2f4f8")
 
        ;; Outline colors
-       (outline-color "#71839b")
-       (outline-variant "#9eaabb")
+       (outline-color "#525252")
+       (outline-variant "#525252")
 
        ;; Shadow
-       (shadow "#d5dce4")
+       (shadow "#000000")
 
        ;; Auto-lightness variants: lighten in dark mode, darken in light mode
        ;; Used for heading levels 5-7, rainbow delimiters 5-7, terminal variants
-       (primary-variant "#7ea0c9")
-       (secondary-variant "#84b297")
-       (tertiary-variant "#533887")
-       (err-variant "#cf6b83"))
+       (primary-variant "#33b1ff")
+       (secondary-variant "#42be65")
+       (tertiary-variant "#be95ff")
+       (err-variant "#ee5396"))
 
   (custom-theme-set-faces
-   'noctalia
+   'tinty
 
    ;; === Basic faces ===
    `(default ((t (:background ,bg :foreground ,fg))))
@@ -1238,5 +1238,5 @@
   (add-to-list 'custom-theme-load-path
                (file-name-as-directory (file-name-directory load-file-name))))
 
-(provide-theme 'noctalia)
-;;; noctalia-theme.el ends here
+(provide-theme 'tinty)
+;;; tinty-theme.el ends here
