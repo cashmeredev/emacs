@@ -52,7 +52,7 @@
         use-package-compute-statistics t))
 
 ;; Install org before tangling config.org
-(elpaca (org :wait t))
+(elpaca (org :ref "release_9.8.5" :depth nil :wait t))
 
 ;; Shadow built-in transient with newer version before magit loads
 (elpaca (transient :wait t))
