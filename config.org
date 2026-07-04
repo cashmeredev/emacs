@@ -33,34 +33,31 @@
 
 * local packages
 
-Per-host development overrides.  Any package registered in the gitignored =local.el= is loaded from a local checkout on =load-path= instead of its remote source, so I can hack on it in place (for example =kitty-graphics.el= on its =testing= branch) while =config.org= stays identical across every machine.
+Per-host development overrides.  Any package registered in the gitignored =local.el= is loaded from a local checkout on =load-path= instead of its remote source, so I can hack on it in place (for example =kitty-graphics.el= on its =testing= branch) while =config.org= stays identical across every machine.  No per-package recipe wrapper is needed: an =:around= advice on the elpaca =:ensure= normalizer rewrites the recipe to =nil= for anything in =my/local-packages=, so the =use-package= forms downstream use the plain =:ensure (:host github :repo "...")= they always have and =local.el= overrides.
 
-=local.el= is loaded inside =eval-and-compile= so the choice is consistent whether =config.el= runs as source or native-compiled.  After editing it, re-tangle/reload (or restart) so the native-compiled =config.el= picks up the new decision.  A minimal =local.el= looks like:
+=local.el= is loaded inside =eval-and-compile= so the advice sees the same =my/local-packages= whether =config.el= runs as source or native-compiled.  After editing =local.el=, re-evaluate the file (or restart) so the new override takes effect.  A minimal =local.el= looks like:
 
 #+begin_example
 ;;; -*- lexical-binding: t -*-
 (setq my/local-packages
-      '((kitty-graphics . "~/code/kitty-graphics.el")))
+      '((kitty-graphics . "~/code/kitty-graphics")))
 #+end_example
-
-The definitions live in =eval-and-compile= because =my/package-recipe= is called while a =:ensure= recipe is expanded, which happens at native-compile time as well as at load time.
 
 #+begin_src emacs-lisp
 (eval-and-compile
   (defvar my/local-packages nil
     "Alist of (PACKAGE . DIRECTORY) loaded from a local checkout.
 Set per-host in the gitignored `local.el'.")
-
-  (load (locate-user-emacs-file "local.el") 'noerror 'nomessage)
-
-  (defun my/package-recipe (package remote)
-    "Elpaca `:ensure' recipe for PACKAGE.
-Return nil when PACKAGE is registered in `my/local-packages', so
-use-package loads it from `load-path'; otherwise return REMOTE."
-    (if (assq package my/local-packages) nil remote)))
+  (load (locate-user-emacs-file "local.el") 'noerror 'nomessage))
 
 (dolist (entry my/local-packages)
   (add-to-list 'load-path (expand-file-name (cdr entry))))
+
+(defun my/elpaca-skip-local (orig name _keyword args)
+  (if (assq name my/local-packages)
+      nil
+    (funcall orig name _keyword args)))
+(advice-add 'use-package-normalize/:ensure :around #'my/elpaca-skip-local)
 #+end_src
 
 * emacs
@@ -94,7 +91,6 @@ use-package loads it from `load-path'; otherwise return REMOTE."
   (use-dialog-box nil) ;; Disable dialog boxes in favor of minibuffer prompts.
   (use-short-answers t) ;; Use short answers in prompts for quicker responses (y instead of yes)
   (warning-minimum-level :emergency) ;; Set the minimum level of warnings to display.
-
   :hook ;; Add hooks to enable specific features in certain modes.
   (prog-mode . display-line-numbers-mode)
   (org-mode . display-line-numbers-mode)
@@ -323,7 +319,11 @@ Selects the compilation window so the cursor lands in it."
      ("mansion"
       :server "bouncer.cashmere.rs" :port 6699 :tls t
       :nick "cashmere"
-      :username "cashmere/mansion@emacs")))
+      :username "cashmere/mansion@emacs")
+     ("bitlbee"
+      :server "bouncer.cashmere.rs" :port 6699 :tls t
+      :nick "cashmere"
+      :username "cashmere/bitlbee@emacs")))
   (clatter-flyspell-enable nil)
   (clatter-format-strip-only t)
   (clatter-message-order 'oldest-first)
@@ -378,7 +378,7 @@ Selects the compilation window so the cursor lands in it."
   (interactive)
   (let ((pw (my/soju-password)))
     (setq my/clatter-inhibit-popup t)
-    (dolist (net '("libera" "ergo" "mansion"))
+    (dolist (net '("libera" "ergo" "mansion" "bitlbee"))
       (clatter-connect net :password pw))
     (run-at-time 8 nil (lambda () (setq my/clatter-inhibit-popup nil)))))
 #+end_src
@@ -632,9 +632,10 @@ Defined early so later =with-eval-after-load 'general= callbacks find =my-leader
   (general-evil-setup)
 
   (general-create-definer my-leader
-    :states '(normal visual)
+    :states '(normal visual insert)
     :keymaps 'override
-    :prefix "SPC")
+    :prefix "SPC"
+    :non-normal-prefix "M-SPC")
 
   (general-create-definer my-local-leader
     :states '(normal visual)
@@ -778,9 +779,9 @@ Defined early so later =with-eval-after-load 'general= callbacks find =my-leader
     ;; 2026-06-23: replaced claude-code-ide bindings with pi-coding-agent under `a'.
     ;; pi-coding-agent only exposes 3 user-facing commands, so the prefix is intentionally sparse.
     (my-leader
-      "aa" '(pi-coding-agent :wk "start")
-      "at" '(pi-coding-agent-toggle :wk "toggle")
-      "ao" '(pi-coding-agent-open-session-file :wk "open session")))
+      "aa" '(agent-shell :wk "start")
+      "at" '(agent-shell-toggle :wk "toggle")
+      "am" '(agent-shell-help-menu :wk "open session")))
 
   :config
   ;; Runs only on first invocation — not at Emacs startup.
@@ -804,6 +805,28 @@ Defined early so later =with-eval-after-load 'general= callbacks find =my-leader
   :commands (pi-coding-agent
              pi-coding-agent-toggle
              pi-coding-agent-open-session-file))
+#+end_src
+
+** agent-shell
+
+let's give agent-shell another try
+
+#+begin_src emacs-lisp
+(defun my/agent-shell-autoscroll (&rest _)
+  (dolist (win (get-buffer-window-list (current-buffer) 'visible))
+    (set-window-point win (point-max))))
+
+(use-package agent-shell
+  :ensure t
+  :bind (:map agent-shell-mode-map
+              ("RET" . newline)
+              ("M-RET" . shell-maker-submit))
+  :config
+  (advice-add 'shell-maker-submit :after #'my/agent-shell-autoscroll)
+  (setq agent-shell-anthropic-claude-environment
+        (agent-shell-make-environment-variables
+         "ANTHROPIC_BASE_URL" "https://api.minimax.io/anthropic"
+         "ANTHROPIC_AUTH_TOKEN" (password-store-get "minimax")))) 
 #+end_src
 
 * eldoc
@@ -842,7 +865,6 @@ Defined early so later =with-eval-after-load 'general= callbacks find =my-leader
 (use-package flycheck
   :ensure t
   :config
-  (setq flycheck-global-modes '(not org-mode))
   (setq flycheck-display-errors-function nil)
   (add-hook 'after-init-hook #'global-flycheck-mode))
 #+end_src
@@ -890,6 +912,17 @@ Defined early so later =with-eval-after-load 'general= callbacks find =my-leader
 (use-package sideline-flycheck
   :ensure t
   :hook (flycheck-mode . sideline-flycheck-setup))
+#+end_src
+
+** flycheck-vale
+
+#+begin_src emacs-lisp
+;; (use-package flycheck-vale
+;;   :ensure t
+;;   :after flycheck
+;;   :demand t
+;;   :config
+;;   (flycheck-vale-setup))
 #+end_src
 
 * xref
@@ -1070,6 +1103,41 @@ Only activates when running in a Kitty terminal (not in GUI Emacs).
      (sed . t)
      (screen . t)
      (eshell . t))))
+#+end_src
+
+
+#+begin_src emacs-lisp
+(with-eval-after-load 'org
+  (defun my/org-babel-tangle-targets-missing-p (&optional buffer)
+    "Return non-nil if any :tangle target of BUFFER is missing.
+BUFFER defaults to the current buffer."
+    (with-current-buffer (or buffer (current-buffer))
+      (when (and (buffer-file-name) (derived-mode-p 'org-mode))
+        (require 'ob-tangle)
+        (let* ((default-directory (file-name-directory (buffer-file-name)))
+               (targets (mapcar #'car (org-babel-tangle-collect-blocks)))
+               missing)
+          (dolist (file targets)
+            (unless (or missing (file-exists-p file))
+              (setq missing t)))
+          missing))))
+
+  (defun my/org-babel-tangle-if-missing (&optional org-file target-file lang)
+    "Tangle only if a target file is missing.
+When called interactively with no arguments, check all :tangle
+targets in the current buffer and run `org-babel-tangle' only if
+at least one target is missing.
+
+When called non-interactively, tangle ORG-FILE to TARGET-FILE
+only if TARGET-FILE does not exist.  Optional LANG restricts
+tangling to source blocks of that language."
+    (interactive)
+    (if (or org-file target-file lang)
+        (unless (file-exists-p target-file)
+          (org-babel-tangle-file org-file target-file lang))
+      (if (my/org-babel-tangle-targets-missing-p)
+          (org-babel-tangle)
+        (message "All tangle targets already exist; skipping")))))
 #+end_src
 
 ** ob-async
@@ -2406,6 +2474,7 @@ markdown-mode moved before eca — see section before eca block
    ("M-." . embark-dwim)
    ("C-h B" . embark-bindings)
    :map minibuffer-local-map
+   ("C-c C-a" . embark-act-all)
    ("C-c C-e" . embark-export)
    ("C-c C-o" . embark-collect))
   :init
@@ -2555,6 +2624,7 @@ Not on MELPA, so installed straight from GitHub. The tree-sitter grammar is buil
   :hook (c3-ts-mode . eglot-ensure)
   :custom
   (c3-ts-mode-indent-offset 2)
+  (setq treesit-font-lock-level 4)
   :init
   (add-to-list 'treesit-language-source-alist
                '(c3 "https://github.com/c3lang/tree-sitter-c3"))
@@ -2650,24 +2720,6 @@ Uses built-in tree-sitter modes for =.ts= and =.tsx= files.
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
                  '((typescript-ts-mode tsx-ts-mode) . ("rass" "--" "typescript-language-server" "--stdio" "--" "vscode-eslint-language-server" "--stdio")))))
-#+end_src
-
-*** web-mode (Vue)
-
-#+begin_src emacs-lisp
-(use-package web-mode
-  :ensure t
-  :mode "\\.vue\\'"
-  :hook (web-mode . eglot-ensure)
-  :config
-  (setq web-mode-markup-indent-offset 2)
-  (setq web-mode-css-indent-offset 2)
-  (setq web-mode-code-indent-offset 2)
-  (setq web-mode-style-padding 2)
-  (setq web-mode-script-padding 2)
-  (with-eval-after-load 'eglot
-    (add-to-list 'eglot-server-programs
-                 '(web-mode . ("rass" "vuetail")))))
 #+end_src
 
 ** Xonsh
@@ -2792,7 +2844,7 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
   (add-hook 'ob-async-pre-execute-src-block-hook my/ob-xonsh-installer))
 #+end_src
 
-** Go mode
+** COMMENT Go mode
 
 #+begin_src emacs-lisp
 (use-package go-mode
@@ -2880,7 +2932,7 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
 
 * terminals
 
-** eat
+** COMMENT eat
 
 #+begin_src emacs-lisp
 (use-package eat
@@ -2948,7 +3000,7 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
     (diff-hl-margin-mode 1)))
 #+end_src
 
-* shackle
+* COMMENT shackle
 
 #+begin_src emacs-lisp
 (defun my-org-sidecar-left ()
@@ -3424,14 +3476,14 @@ Runs per-frame so a TTY-only daemon never touches fonts while GUI frames
 created later still get them."
   (when (display-graphic-p frame)
     (set-face-attribute 'default frame
-                        :family "IosevkaTerm NF"
-                        :height 200
+                        :family "Maple Mono NF"
+                        :height 180
                         :font (font-spec
-                               :family "IosevkaTerm NF"
-                               ;; :features '(cv04 ss05 zero)
+                               :family "Maple Mono NF"
+                               :features '(cv04 ss05 zero)
                                ))
-    (set-face-attribute 'fixed-pitch frame :family "IosevkaTerm NF" :weight 'regular)
-    (set-face-attribute 'variable-pitch frame :family "IosevkaTerm NF" :weight 'regular :height 1.1)))
+    (set-face-attribute 'fixed-pitch frame :family "Maple Mono NF" :weight 'regular)
+    (set-face-attribute 'variable-pitch frame :family "Maple Mono NF" :weight 'regular :height 1.1)))
 
 (add-hook 'server-after-make-frame-hook #'cashmere/set-fonts)
 (cashmere/set-fonts)
@@ -4469,13 +4521,19 @@ date) and the dired header are never skipped."
              ((string> a-feed b-feed) nil)
              (t (string< a-title b-title)))))))
 
-(use-package elfeed-org
-  :ensure t
+(use-package elfeed-protocol
+  :ensure (:host github :repo "fasheng/elfeed-protocol")
   :after elfeed
   :custom
-  (rmh-elfeed-org-files (list "~/org/rss.org"))
+  (elfeed-protocol-work-with-others t)
+  (elfeed-protocol-enabled-protocols '(ttrss))
+  :init
+  (add-to-list 'elfeed-feeds
+               '("ttrss+https://cashmere@rss.cashmere.rs"
+                 :password (password-store-get "rss.cashmere.rs"))
+               :append)
   :config
-  (elfeed-org))
+  (elfeed-protocol-enable))
 
 (use-package elfeed-goodies
   :ensure t
@@ -4494,33 +4552,44 @@ date) and the dired header are never skipped."
                           shr-indentation 2
                           line-spacing 0.2)
               (shrface-mode 1))))
-
-(defun elfeed-export-from-index-to-csv (output-file)
-  (interactive "FExport CSV nach: ")
-  (require 'elfeed)
-  (require 'elfeed-db)
-  
-  (elfeed-db-load)
-  
-  (let ((entries (hash-table-values elfeed-db-entries)))
-    (with-temp-file output-file
-      (insert "id,title,link,date,feed,tags\n")
-      (dolist (entry entries)
-        (insert (format "\"%s\",\"%s\",\"%s\",%s,\"%s\",\"%s\"\n"
-                        (elfeed-entry-id entry)
-                        (replace-regexp-in-string "\"" "\"\"" (elfeed-entry-title entry))
-                        (elfeed-entry-link entry)
-                        (elfeed-entry-date entry)
-                        (elfeed-feed-title (elfeed-entry-feed entry))
-                        (mapconcat #'symbol-name (elfeed-entry-tags entry) " "))))
-      (message "Export abgeschlossen: %d Einträge" (length entries)))))
 #+end_src
 
 ** set default browser
 
 #+begin_src emacs-lisp
-(setq browse-url-browser-function 'browse-url-generic
+(setq browse-url-browser-function 'eww-browse-url
+      browse-url-secondary-browser-function 'browse-url-generic
       browse-url-generic-program "qutebrowser")
+#+end_src
+
+** browse-url no-frame guard
+
+#+begin_src emacs-lisp
+(defun my/browse-url-no-frame-guard (orig url &rest args)
+  "Around-advice for `browse-url' that resolves and calls the handler
+directly, bypassing the upstream `browse-url' body.
+
+Emacs 30+ unconditionally calls `(frame-parameter nil \\='display)`
+inside `browse-url' to set DISPLAY from the selected frame. That raises
+\"Frames are not in use or not initialized\" in daemon contexts, and
+in TUI-only setups the native-compiled frame access inside the subr
+can throw even when `(frame-live-p (selected-frame))' returns non-nil
+in the caller (the two checks diverge).
+
+For the handlers registered here (`eww-browse-url' is in-frame,
+`browse-url-generic' inherits DISPLAY from the daemon env) the DISPLAY
+reset is unnecessary, so do the handler resolution ourselves and skip
+`browse-url' entirely."
+  (interactive (browse-url-interactive-arg "URL: "))
+  (unless (called-interactively-p 'interactive)
+    (setq args (or args (list browse-url-new-window-flag))))
+  (let ((function (or (browse-url-select-handler url)
+                      browse-url-browser-function)))
+    (if (functionp function)
+        (apply function url args)
+      (error "No suitable browser for URL %s" url))))
+
+(advice-add 'browse-url :around #'my/browse-url-no-frame-guard)
 #+end_src
 
 * eww
@@ -4630,6 +4699,12 @@ date) and the dired header are never skipped."
 (use-package link-hint
   :ensure t
   :commands (link-hint-open-link link-hint-copy-link))
+
+(with-eval-after-load 'general
+  (general-def :states '(normal visual)
+    :keymaps '(eww-mode-map elfeed-show-mode-map elfeed-search-mode-map)
+    "f" #'link-hint-open-link
+    "F" #'link-hint-copy-link))
 #+end_src
 
 ** engine-mode — search engine shortcuts (C-x / …)
@@ -4767,16 +4842,6 @@ date) and the dired header are never skipped."
         (delete '(:eval mu4e-alert-mode-line) global-mode-string)))
 #+end_src
 
-* arrow.el
-
-#+begin_src emacs-lisp
-(use-package arrow
-  :ensure t
-  :elpaca (arrow :host github :repo "vmargb/arrow.el")
-  :config
-  (setq arrow-mode 1))
-#+end_src
-
 * colorful-mode
 
 #+begin_src emacs-lisp
@@ -4865,7 +4930,7 @@ opening another file in same project does not re-notify."
     (envrc-global-mode -1)))
 #+end_src
 
-* =tldr.el=
+* tldr.el
 
 #+begin_src emacs-lisp
 (use-package tldr
@@ -4930,6 +4995,19 @@ opening another file in same project does not re-notify."
   :hook (ghostel-mode . evil-ghostel-mode))
 #+end_src
 
+** inheritenv
+
+=ghostel-compile= spawns a fresh buffer that loses the calling buffer's =process-environment=. Since =envrc-mode= keeps the nix dev-shell env (=NIX_LDFLAGS= etc.) buffer-local, compiles would link against the wrong libraries. =inheritenv= makes the spawned buffer inherit it.
+
+#+begin_src emacs-lisp
+(use-package inheritenv
+  :ensure t
+  :after ghostel
+  :config
+  (inheritenv-add-advice 'ghostel-compile)
+  (inheritenv-add-advice 'ghostel-recompile))
+#+end_src
+
 * garden
 
 #+begin_src emacs-lisp
@@ -4945,17 +5023,20 @@ opening another file in same project does not re-notify."
   (garden-auto-index-mode 1)
   (autoload 'garden "garden-dashboard" nil t)
   (autoload 'garden-sidecar "garden-dashboard" nil t)
+  (autoload 'garden-search "garden-dashboard" nil t)
+  (autoload 'garden-fleet "garden-fleet" nil t)
   (autoload 'garden-connect "garden-connect" nil t)
-  (autoload 'garden-connect-pick "garden-connect" nil t))
-;; (autoload 'garden-player "garden-player" nil t)
-
-(autoload 'denote-capf-setup "denote-capf" nil t)
-(add-hook 'org-mode-hook #'denote-capf-setup)
-(autoload 'garden-publish "garden-publish" nil t)
-(autoload 'garden-publish-all "garden-publish" nil t)
-(autoload 'garden-publish-wiki "garden-publish" nil t)
-(autoload 'garden-publish-blog "garden-publish" nil t)
-(autoload 'garden-publish-deploy "garden-publish" nil t)
+  (autoload 'garden-connect-pick "garden-connect" nil t)
+  ;; (autoload 'garden-player "garden-player" nil t)
+  (autoload 'garden-publish "garden-publish" nil t)
+  (autoload 'garden-publish-all "garden-publish" nil t)
+  (autoload 'garden-publish-wiki "garden-publish" nil t)
+  (autoload 'garden-publish-blog "garden-publish" nil t)
+  (autoload 'garden-publish-deploy "garden-publish" nil t)
+  (autoload 'denote-capf-setup "denote-capf" nil t)
+  (with-eval-after-load 'denote-capf
+    (setq denote-capf-directories '("~/org/")))
+  (add-hook 'org-mode-hook #'denote-capf-setup))
 #+end_src
 
 ** garden-player
@@ -4964,8 +5045,8 @@ opening another file in same project does not re-notify."
 
 The buffer installs =garden-player-map= as a vim-like keymap (bindings live in =garden-player.el=, this is just the reference):
 
-| key   | action                                                       |
-|-------+--------------------------------------------------------------|
+| key | action                                                       |
+|-----+--------------------------------------------------------------|
 | =SPC= | play / pause                                                 |
 | =h=   | previous track                                               |
 | =l=   | next track                                                   |
@@ -4973,8 +5054,8 @@ The buffer installs =garden-player-map= as a vim-like keymap (bindings live in =
 | =k=   | cycle repeat mode: off → repeat-all → repeat-one             |
 | =s=   | reshuffle the queue                                          |
 | =n=   | search the library and play the pick next (no playlist made) |
-| =N=   | search the library and append the pick to the end           |
-| =/=   | same as =N=                                                  |
+| =N=   | search the library and append the pick to the end            |
+| =/=   | same as =N=                                                    |
 | =u=   | toggle between the starred library and the up-next queue     |
 | =f=   | favorite the current song                                    |
 | =r=   | radio: queue songs similar to the current one                |
@@ -5024,6 +5105,51 @@ Interactive commands: =garden-player= opens the player; =garden-player-play-next
 #+begin_src emacs-lisp
 (use-package pretty-sha-path
   :ensure t)
+#+end_src
+
+
+* COMMENT empv
+
+#+begin_src emacs-lisp
+(use-package empv
+  :ensure t
+  :defer t
+  :config
+  (setq empv-subsonic-url (password-store-get-field "navidrome" "url"))
+  (setq empv-subsonic-username (password-store-get-field "navidrome" "username"))
+  (setq empv-subsonic-password (password-store-get "navidrome"))
+
+  (defun my/empv-subsonic-starred-songs ()
+    "List every starred song in Navidrome and play the selected one."
+    (interactive)
+    (empv--subsonic-request
+     "getStarred2.view"
+     (empv--subsonic-result-handler "Starred song:")))
+
+  (defun my/empv-subsonic-starred-songs-urls ()
+    "Return a list of playable URLs for every starred song."
+    (thread-last
+      (empv--subsonic-request "getStarred2.view")
+      (alist-get 'results)
+      (seq-filter (lambda (item) (eq (alist-get 'kind item) 'song)))
+      (mapcar #'empv--subsonic-item-extract-url)))
+
+  (defun my/empv-subsonic-play-all-starred-songs ()
+    "Clear the playlist and play every starred song."
+    (interactive)
+    (if-let ((urls (my/empv-subsonic-starred-songs-urls)))
+        (empv-play urls)
+      (message "No starred songs found")))
+
+  (defun my/empv-subsonic-enqueue-all-starred-songs ()
+    "Append every starred song to the current playlist."
+    (interactive)
+    (if-let ((urls (my/empv-subsonic-starred-songs-urls)))
+        (empv-enqueue urls)
+      (message "No starred songs found")))
+
+  (with-eval-after-load 'embark
+    (empv-embark-initialize-extra-actions)))
 #+end_src
 
 * provide init
