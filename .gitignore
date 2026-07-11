@@ -102,3 +102,5 @@ dirvish/thumbnails
 /org-clock-save-*.el
 /org-clock-save.el
 /elfeed/index
+/org-persist/
+*.eld

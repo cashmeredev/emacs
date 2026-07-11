@@ -5047,10 +5047,22 @@ opening another file in same project does not re-notify."
   (ghostel-shell "xonsh")
   (ghostel-ssh-install-terminfo t)
   :config
+  ;; Ghostel's platform detector only knows darwin/linux; teach it FreeBSD
+  ;; so it can download the x86_64-freebsd release asset when the user
+  ;; first invokes a ghostel command.
+  (defun my/ghostel-module-platform-tag (orig)
+    (or (funcall orig)
+        (and (eq system-type 'berkeley-unix)
+             (let* ((raw-arch (car (split-string system-configuration "-")))
+                    (arch (pcase raw-arch
+                            ("amd64" "x86_64")
+                            ("arm64" "aarch64")
+                            (_ raw-arch))))
+               (format "%s-freebsd" arch)))))
+  (advice-add 'ghostel--module-platform-tag :around #'my/ghostel-module-platform-tag)
   (require 'ghostel-compile)
   (setq-default window-adjust-process-window-size-function
                 #'window-adjust-process-window-size-largest)
-  (add-to-list 'ghostel-tramp-shells '("rpc" login-shell))
   (evil-define-key 'normal ghostel-mode-map
     (kbd "g t") #'ghostel-next
     (kbd "g T") #'ghostel-previous
@@ -5134,21 +5146,6 @@ opening another file in same project does not re-notify."
   :ensure (:type git :host github :repo "djgoku/sops")
   :init
   (global-sops-mode 1))
-#+end_src
-
-* emacs-tramp
-
-#+begin_src emacs-lisp
-(use-package tramp-rpc
-  :ensure (:host github :repo "ArthurHeymans/emacs-tramp-rpc")
-  :config
-  (setq tramp-rpc-deploy-git-build-policy 'release
-        tramp-rpc-controlmaster-persist 3600
-        tramp-rpc-direnv-cache-timeout 3600
-        tramp-rpc--cache-ttl 1800
-        tramp-rpc--cache-max-size 100000
-        remote-file-name-inhibit-locks t
-        tramp-verbose 1))
 #+end_src
 
 * magit-delta

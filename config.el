@@ -743,6 +743,10 @@ Selects the compilation window so the cursor lands in it."
         (when (executable-find "delta")
           '("delta" "--no-gitconfig" "--color-only")))
 
+  ;; Work around agent-shell's `window-system' guard so clipboard images
+  ;; work in terminal Emacs (`emacs -nw').  The underlying save routine
+  ;; already shells out to wl-paste/xclip/pngpaste/powershell, none of
+  ;; which require a GUI frame.
   (defun my/agent-shell-send-clipboard-image-in-terminal (orig-fn &optional pick-shell)
     "Call ORIG-FN, but allow `agent-shell-send-clipboard-image' in terminal Emacs."
     (if (window-system)
@@ -1717,13 +1721,6 @@ Skips capture tasks and projects."
 (use-package ox-pandoc
   :ensure t
   :after org)
-
-(use-package ox-slidev
-  :ensure (:repo "https://dev.cashmere.rs/cashmere/ox-slidev"
-           :files (:defaults "templates"))
-  :after org
-  :config
-  (require 'org-slidev))
 
 (use-package denote
   :ensure t
@@ -4131,10 +4128,22 @@ opening another file in same project does not re-notify."
   (ghostel-shell "xonsh")
   (ghostel-ssh-install-terminfo t)
   :config
+  ;; Ghostel's platform detector only knows darwin/linux; teach it FreeBSD
+  ;; so it can download the x86_64-freebsd release asset when the user
+  ;; first invokes a ghostel command.
+  (defun my/ghostel-module-platform-tag (orig)
+    (or (funcall orig)
+        (and (eq system-type 'berkeley-unix)
+             (let* ((raw-arch (car (split-string system-configuration "-")))
+                    (arch (pcase raw-arch
+                            ("amd64" "x86_64")
+                            ("arm64" "aarch64")
+                            (_ raw-arch))))
+               (format "%s-freebsd" arch)))))
+  (advice-add 'ghostel--module-platform-tag :around #'my/ghostel-module-platform-tag)
   (require 'ghostel-compile)
   (setq-default window-adjust-process-window-size-function
                 #'window-adjust-process-window-size-largest)
-  (add-to-list 'ghostel-tramp-shells '("rpc" login-shell))
   (evil-define-key 'normal ghostel-mode-map
     (kbd "g t") #'ghostel-next
     (kbd "g T") #'ghostel-previous
@@ -4204,17 +4213,6 @@ opening another file in same project does not re-notify."
   :ensure (:type git :host github :repo "djgoku/sops")
   :init
   (global-sops-mode 1))
-
-(use-package tramp-rpc
-  :ensure (:host github :repo "ArthurHeymans/emacs-tramp-rpc")
-  :config
-  (setq tramp-rpc-deploy-git-build-policy 'release
-        tramp-rpc-controlmaster-persist 3600
-        tramp-rpc-direnv-cache-timeout 3600
-        tramp-rpc--cache-ttl 1800
-        tramp-rpc--cache-max-size 100000
-        remote-file-name-inhibit-locks t
-        tramp-verbose 1))
 
 (use-package magit-delta
   :ensure t
