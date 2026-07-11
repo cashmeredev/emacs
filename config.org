@@ -2023,19 +2023,6 @@ Org Backend exporter for typst templates written and configured in org mode.
   :after org)
 #+end_src
 
-** ox-slidev
-
-Org Backend exporter for Slidev presentations.
-
-#+begin_src emacs-lisp
-(use-package ox-slidev
-  :ensure (:repo "https://dev.cashmere.rs/cashmere/ox-slidev"
-           :files (:defaults "templates"))
-  :after org
-  :config
-  (require 'org-slidev))
-#+end_src
-
 * denote
 
 Denote is objectively the best note taking extension, which you could install. It has a very easy to parse file naming scheme and suports not only org files. It has also transclusion inclusive! if you are interested, then check it out yourself.
