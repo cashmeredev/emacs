@@ -26,17 +26,18 @@
   (defvar my/local-packages nil
     "Alist of (PACKAGE . DIRECTORY) loaded from a local checkout.
 Set per-host in the gitignored `local.el'.")
-
-  (load (locate-user-emacs-file "local.el") 'noerror 'nomessage)
-
-  (defun my/package-recipe (package remote)
-    "Elpaca `:ensure' recipe for PACKAGE.
-Return nil when PACKAGE is registered in `my/local-packages', so
-use-package loads it from `load-path'; otherwise return REMOTE."
-    (if (assq package my/local-packages) nil remote)))
+  (load (locate-user-emacs-file "local.el") 'noerror 'nomessage))
 
 (dolist (entry my/local-packages)
   (add-to-list 'load-path (expand-file-name (cdr entry))))
+
+(add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+
+(defun my/elpaca-skip-local (orig name _keyword args)
+  (if (assq name my/local-packages)
+      nil
+    (funcall orig name _keyword args)))
+(advice-add 'use-package-normalize/:ensure :around #'my/elpaca-skip-local)
 
 (use-package emacs
   :ensure nil
@@ -66,7 +67,6 @@ use-package loads it from `load-path'; otherwise return REMOTE."
   (use-dialog-box nil) ;; Disable dialog boxes in favor of minibuffer prompts.
   (use-short-answers t) ;; Use short answers in prompts for quicker responses (y instead of yes)
   (warning-minimum-level :emergency) ;; Set the minimum level of warnings to display.
-
   :hook ;; Add hooks to enable specific features in certain modes.
   (prog-mode . display-line-numbers-mode)
   (org-mode . display-line-numbers-mode)
@@ -114,10 +114,11 @@ use-package loads it from `load-path'; otherwise return REMOTE."
   (scroll-bar-mode -1)
   (add-to-list 'default-frame-alist '(vertical-scroll-bars . nil))
   (add-to-list 'default-frame-alist '(horizontal-scroll-bars . nil))
-  ;; (set-frame-parameter (selected-frame) 'alpha-background 80)
-  ;; (add-to-list 'default-frame-alist '(alpha-background . 80))
+  (set-frame-parameter (selected-frame) 'alpha-background 80)
+  (add-to-list 'default-frame-alist '(alpha-background . 80))
   (global-hl-line-mode 1) ;; Highlight the current line
   (add-hook 'org-mode-hook (lambda () (setq-local global-hl-line-mode nil))) ;; hl-line repaints wipe kitty-graphics scaled headings
+  (add-hook 'markdown-mode-hook (lambda () (setq-local global-hl-line-mode nil))) ;; same conflict for kitty-graphics markdown headings
   (global-auto-revert-mode 1) ;; Enable global auto-revert mode to keep buffers up to date with their corresponding files.
   (setq-default indent-tabs-mode nil)
   (when (daemonp)
@@ -160,11 +161,15 @@ use-package loads it from `load-path'; otherwise return REMOTE."
     (derived-mode-p 'compilation-mode)))
 
 (defun my/compile-or-recompile ()
-  "Recompile with the last command if a compilation ran before, else prompt."
+  "Recompile with the last command if a ghostel compilation ran before, else prompt.
+Selects the compilation window so the cursor lands in it."
   (interactive)
-  (if (get-buffer "*compilation*")
-      (recompile)
-    (call-interactively #'compile)))
+  (if (get-buffer ghostel-compile-buffer-name)
+      (ghostel-recompile)
+    (call-interactively #'ghostel-compile))
+  (let ((buffer (get-buffer ghostel-compile-buffer-name)))
+    (when buffer
+      (pop-to-buffer buffer))))
 
 (defun my/focus-async-shell-window (window)
   "Focus the async-shell window and make q bury it without killing the process."
@@ -252,8 +257,6 @@ use-package loads it from `load-path'; otherwise return REMOTE."
 
 (use-package async :ensure t)
 
-;; Always-available IRC entry points so `M-x run-irc` works from any daemon
-;; (hub, work, standalone). Calling `erc-tls` autoloads ERC on demand.
 (defun my/soju-password ()
   "Read the Soju bouncer password from the sops-nix secret."
   (string-trim
@@ -262,212 +265,84 @@ use-package loads it from `load-path'; otherwise return REMOTE."
       "/home/cashmere/.config/sops-nix/secrets/senpai_password")
      (buffer-string))))
 
+(use-package clatter
+  :ensure (:host github :repo "parenworks/clatter.el" :files ("*.el"))
+  :commands (clatter clatter-connect)
+  :custom
+  (clatter-networks
+   '(("libera"
+      :server "bouncer.cashmere.rs" :port 6699 :tls t
+      :nick "cashmere1337"
+      :username "cashmere/irc.libera.chat@emacs")
+     ("ergo"
+      :server "bouncer.cashmere.rs" :port 6699 :tls t
+      :nick "cashmere"
+      :username "cashmere/ergo@emacs")
+     ("mansion"
+      :server "bouncer.cashmere.rs" :port 6699 :tls t
+      :nick "cashmere"
+      :username "cashmere/mansion@emacs")
+     ("bitlbee"
+      :server "bouncer.cashmere.rs" :port 6699 :tls t
+      :nick "cashmere"
+      :username "cashmere/bitlbee@emacs")))
+  (clatter-flyspell-enable nil)
+  (clatter-format-strip-only t)
+  (clatter-message-order 'oldest-first)
+  (clatter-read-marker-enabled nil)
+  (clatter-chathistory-limit 1000)
+  :config
+  (require 'gnutls)
+  (clatter-setup)
+  (setq clatter-hl-keywords '("cashmere"))
+  (advice-add 'clatter-buffer-name :override #'my/clatter-buffer-name)
+  (add-hook 'clatter-mode-hook (lambda () (setq-local corfu-auto nil)))
+  (general-def 'normal clatter-mode-map
+    "gb" #'my/clatter-switch-buffer
+    "gH" #'clatter-chathistory-request
+    "gh" #'clatter-chathistory-more))
+
+(defun my/clatter-buffer-name (network target)
+  "Name clatter buffers by bare channel/query TARGET, server by NETWORK."
+  (if (string= target "*server*")
+      (format "*%s*" network)
+    target))
+
+(defun my/clatter-switch-buffer ()
+  "Switch to a clatter IRC buffer."
+  (interactive)
+  (let ((bufs (cl-remove-if-not
+               (lambda (b)
+                 (with-current-buffer b (derived-mode-p 'clatter-mode)))
+               (buffer-list))))
+    (if bufs
+        (switch-to-buffer
+         (completing-read "IRC buffer: " (mapcar #'buffer-name bufs) nil t))
+      (message "No clatter buffers."))))
+
+(defvar my/clatter-inhibit-popup nil
+  "When non-nil, clatter buffers are not auto-displayed by `display-buffer'.")
+
+(defun my/clatter-popup-suppressed-p (buf &rest _)
+  "Non-nil when BUF is a clatter buffer and popups are inhibited."
+  (and my/clatter-inhibit-popup
+       (get-buffer buf)
+       (with-current-buffer (get-buffer buf)
+         (derived-mode-p 'clatter-mode))))
+
+(add-to-list 'display-buffer-alist
+             '(my/clatter-popup-suppressed-p
+               display-buffer-no-window
+               (allow-no-window . t)))
+
 (defun run-irc ()
-  "Connect to all IRC networks via Soju bouncer."
+  "Connect to all IRC networks via the Soju bouncer, in the background."
   (interactive)
   (let ((pw (my/soju-password)))
-    (erc-tls :server "bouncer.cashmere.rs"
-             :port 6699
-             :nick "cashmere1337"
-             :user "cashmere/irc.libera.chat@emacs"
-             :password pw)
-    (erc-tls :server "bouncer.cashmere.rs"
-             :port 6699
-             :nick "cashmere"
-             :user "cashmere/ergo@emacs"
-             :password pw)
-    (erc-tls :server "bouncer.cashmere.rs"
-             :port 6699
-             :nick "cashmere"
-             :user "cashmere/mansion@emacs"
-             :password pw)))
-
-(use-package erc
-  :ensure nil
-  :defer t
-  :custom
-  ;; connection
-  (erc-nick "cashmere1337")
-  (erc-user-full-name "cashmere")
-
-  ;; behaviour
-  (erc-join-buffer 'buffer)
-  (erc-kill-buffer-on-part nil)
-  (erc-kill-queries-on-quit t)
-  (erc-kill-server-buffer-on-quit t)
-
-  ;; visuals
-  (erc-fill-function 'erc-fill-wrap)
-  (erc-timestamp-format "[%H:%M]")
-  (erc-timestamp-format-left "[%H:%M]")
-  (erc-timestamp-format-right "[%H:%M]")
-  (erc-hide-list '("JOIN" "PART" "QUIT" "NICK" "MODE"))
-  (erc-track-exclude-types '("JOIN" "PART" "QUIT" "NICK" "MODE" "324" "329" "332" "333" "353" "477"))
-  (erc-track-shorten-start 4)
-  (erc-track-visibility 'visible)
-
-  ;; prompt
-  (erc-prompt (lambda () (concat (buffer-name) ">")))
-
-  ;; modules
-  (erc-modules '(autojoin
-                 button
-                 completion
-                 fill
-                 irccontrols
-                 list
-                 match
-                 move-to-prompt
-                 netsplit
-                 networks
-                 nicks
-                 noncommands
-                 notifications
-                 readonly
-                 ring
-                 scrolltobottom
-                 stamp
-                 track))
-  :config
-  ;; highlight own nick
-  (setq erc-current-nick-highlight-type 'all)
-  (setq erc-keywords '("cashmere"))
-  (setq erc-pals '("cashmere"))
-
-  ;; nicks module (built-in nick coloring in Emacs 30)
-  (setq erc-nicks-contrast-range '(40 . 90))
-
-  ;; scrolltobottom -- keep input always at bottom
-  (setq erc-scrolltobottom-all t)
-  (erc-scrolltobottom-mode 1)
-
-  ;; fill-wrap -- modern chat-like wrapping
-  (setq erc-fill-wrap-align-prompt nil)
-  (setq erc-fill-static-center 14)
-
-  ;; track -- activity in modeline
-  (setq erc-track-position-in-mode-line t)
-
-  ;; keep large buffer for soju history replay
-  (setq erc-max-buffer-size 100000)
-
-  (erc-update-modules))
-
-(defvar my/consult-source-erc
-  (list :name "IRC"
-        :narrow ?i
-        :category 'buffer
-        :face 'erc-default-face
-        :state #'consult--buffer-state
-        :items (lambda ()
-                 (mapcar #'buffer-name
-                         (cl-remove-if-not
-                          (lambda (buf)
-                            (with-current-buffer buf
-                              (derived-mode-p 'erc-mode)))
-                          (buffer-list))))))
-
-(defun my/erc-switch-channel ()
-  "Switch to an ERC channel buffer via consult."
-  (interactive)
-  (consult-buffer (list my/consult-source-erc)))
-
-(defun my/erc-fetch-history (&optional count)
-  "Fetch COUNT previous messages from Soju via CHATHISTORY.
-Defaults to 1000 (soju max). With prefix arg, prompts for count.
-Temporarily disables notifications during the fetch."
-  (interactive "P")
-  (let ((target (erc-default-target)))
-    (if (not target)
-        (message "Not in a channel buffer.")
-      (let ((n (min (if count
-                       (read-number "Messages to fetch: " 1000)
-                     1000)
-                    1000)))
-        (erc-notifications-disable)
-        (erc-server-send (format "CHATHISTORY LATEST %s * %d" target n))
-        (run-at-time 5 nil #'erc-notifications-enable)))))
-
-(defun my/erc-quit-all ()
-  "Disconnect from IRC and kill all ERC buffers."
-  (interactive)
-  (erc-cmd-QUIT "bye")
-  (run-at-time 1 nil
-               (lambda ()
-                 (dolist (buf (buffer-list))
-                   (when (with-current-buffer buf (derived-mode-p 'erc-mode))
-                     (kill-buffer buf))))))
-
-(defun my/erc-reconnect ()
-  "Reconnect to the current ERC server."
-  (interactive)
-  (erc-cmd-RECONNECT))
-
-(defun my/erc-list-channels ()
-  "Request channel list from the current ERC server."
-  (interactive)
-  (erc-cmd-LIST))
-
-(defun persp-irc ()
-  "Switch to (or create) the IRC frame and show ERC buffers."
-  (interactive)
-  (let* ((erc-bufs (cl-remove-if-not
-                    (lambda (buf)
-                      (with-current-buffer buf
-                        (derived-mode-p 'erc-mode)))
-                    (buffer-list)))
-         (irc-frame (cl-find-if
-                     (lambda (f)
-                       (string= (frame-parameter f 'name) "irc"))
-                     (frame-list))))
-    (if irc-frame
-        (select-frame-set-input-focus irc-frame)
-      (select-frame-set-input-focus (make-frame '((name . "irc")))))
-    (if erc-bufs
-        (switch-to-buffer (car erc-bufs))
-      (letrec ((hook-fn (lambda ()
-                          (switch-to-buffer (current-buffer))
-                          (remove-hook 'erc-join-hook hook-fn))))
-        (add-hook 'erc-join-hook hook-fn))
-      (run-irc))))
-
-;; ERC keybindings and hooks — register from any daemon, since `run-irc`
-;; autoloads ERC even outside the hub daemon.
-(with-eval-after-load 'erc
-  (add-hook 'erc-mode-hook
-            (lambda ()
-              (setq-local scroll-margin 0)
-              (setq-local maximum-scroll-margin 0.0)
-              (setq-local corfu-auto nil)))
-
-  ;; Prevent accidental ERC buffer kills from parting channels
-  (add-hook 'kill-buffer-query-functions
-            (lambda ()
-              (if (and (derived-mode-p 'erc-mode)
-                       (erc-server-process-alive)
-                       (not (eq this-command 'my/erc-quit-all)))
-                  (yes-or-no-p
-                   (format "ERC buffer %s is connected. Really kill (will part channel)? "
-                           (buffer-name)))
-                t)))
-
-  (with-eval-after-load 'general
-    (general-def 'normal erc-mode-map
-      "q"   'quit-window
-      "Q"   'my/erc-quit-all
-      "gb"  'my/erc-switch-channel
-      "gn"  'erc-track-switch-buffer
-      "gH"  'my/erc-fetch-history
-      "go"  'erc-channel-names
-      "gj"  'erc-join-channel
-      "gl"  'my/erc-list-channels
-      "gr"  'my/erc-reconnect
-      "RET" 'erc-send-current-line)
-
-    (general-def '(normal insert) erc-mode-map
-      "M-n" 'erc-track-switch-buffer
-      "C-k" 'erc-previous-command
-      "C-j" 'erc-next-command)))
+    (setq my/clatter-inhibit-popup t)
+    (dolist (net '("libera" "ergo" "mansion" "bitlbee"))
+      (clatter-connect net :password pw))
+    (run-at-time 8 nil (lambda () (setq my/clatter-inhibit-popup nil)))))
 
 (defvar my/centered-cursor-enabled nil)
 
@@ -488,65 +363,6 @@ Temporarily disables notifications during the fetch."
             scroll-margin 99999)
       (setq my/centered-cursor-enabled t)
       (message "centered-cursor on"))))
-
-(use-package cursory
-  :ensure t
-  :demand t
-  :if (display-graphic-p)
-  :config
-  (setq cursory-presets
-        '((box
-           :cursor-color success ; will typically be green
-           :blink-cursor-interval 1.2)
-          (box-no-blink
-           :inherit box
-           :blink-cursor-mode -1)
-          (bar
-           :cursor-type (bar . 2)
-           :cursor-color error ; will typically be red
-           :blink-cursor-interval 0.8)
-          (bar-no-other-window
-           :inherit bar
-           :cursor-in-non-selected-windows nil)
-          (bar-no-blink
-           :inherit bar
-           :blink-cursor-mode -1)
-          (underscore
-           :cursor-color warning ; will typically be yellow
-           :cursor-type (hbar . 3)
-           :blink-cursor-interval 0.3
-           :blink-cursor-blinks 50)
-          (underscore-no-other-window
-           :inherit underscore
-           :cursor-in-non-selected-windows nil)
-          (underscore-thick
-           :inherit underscore
-           :cursor-type (hbar . 8)
-           :cursor-in-non-selected-windows (hbar . 3))
-          (t ; the default values
-           :cursor-color unspecified ; use the theme's original
-           :cursor-type box
-           :cursor-in-non-selected-windows hollow
-           :blink-cursor-mode 1
-           :blink-cursor-blinks 10
-           :blink-cursor-interval 0.2
-           :blink-cursor-delay 0.2)))
-
-  ;; I am using the default value of `cursory-latest-state-file'.
-
-  ;; Set last preset or fall back to desired style from
-  ;; `cursory-presets'.  Alternatively, use the function
-  ;; `cursory-set-last-or-fallback' (can be added to the
-  ;; `after-init-hook'.
-  (cursory-set-preset (or (cursory-restore-latest-preset) 'box))
-
-  ;; Persist configurations between Emacs sessions.  Also apply the
-  ;; :cursor-color again when swithcing to another theme.
-  (cursory-mode 1)
-  :bind
-  ;; We have to use the "point" mnemonic, because C-c c is often the
-  ;; suggested binding for `org-capture' and is the one I use as well.
-  ("C-c p" . cursory-set-preset))
 
 (use-package clipetty
   :ensure t
@@ -690,7 +506,7 @@ Temporarily disables notifications during the fetch."
             (or
              (mode . eca-chat-mode)))
 
-           ("ERC" (or (mode . erc-mode)))
+           ("IRC" (or (mode . clatter-mode)))
 
            ("Emacs" (or
                      (mode . emacs-lisp-mode)
@@ -730,9 +546,10 @@ Temporarily disables notifications during the fetch."
   (general-evil-setup)
 
   (general-create-definer my-leader
-    :states '(normal visual)
+    :states '(normal visual insert)
     :keymaps 'override
-    :prefix "SPC")
+    :prefix "SPC"
+    :non-normal-prefix "M-SPC")
 
   (general-create-definer my-local-leader
     :states '(normal visual)
@@ -810,7 +627,7 @@ Temporarily disables notifications during the fetch."
   (claude-code-ide-cli-path "claude")
   (claude-code-ide-cli-debug nil)
   ;; Terminal backend
-  (claude-code-ide-terminal-backend 'eat)
+  (claude-code-ide-terminal-backend 'ghostel)
 
   ;; Window placement — mirror eca on the right side so the two AI assistants
   ;; don't fight over the same slot
@@ -863,27 +680,13 @@ Temporarily disables notifications during the fetch."
 
   ;; Leader-key bindings (SPC a …) — defined pre-load so :commands autoloads fire.
   (with-eval-after-load 'general
+    ;; 2026-06-23: replaced claude-code-ide bindings with pi-coding-agent under `a'.
+    ;; pi-coding-agent only exposes 3 user-facing commands, so the prefix is intentionally sparse.
     (my-leader
-      "a"  '(:ignore t :wk "claude-code")
-      "aa" '(claude-code-ide :wk "start / toggle")
-      "am" '(claude-code-ide-menu :wk "transient menu")
-      "at" '(claude-code-ide-toggle :wk "toggle window")
-      "aT" '(claude-code-ide-toggle-recent :wk "toggle recent")
-      "ap" '(claude-code-ide-send-prompt :wk "send prompt")
-      "a@" '(claude-code-ide-insert-at-mentioned :wk "@mention region")
-      "ac" '(claude-code-ide-continue :wk "continue last")
-      "ar" '(claude-code-ide-resume :wk "resume session")
-      "as" '(claude-code-ide-switch-to-buffer :wk "switch buffer")
-      "al" '(claude-code-ide-list-sessions :wk "list sessions")
-      "aq" '(claude-code-ide-stop :wk "stop")
-      "a?" '(claude-code-ide-check-status :wk "check status")
-      "ad" '(claude-code-ide-show-debug :wk "show debug")
-      "aD" '(claude-code-ide-clear-debug :wk "clear debug"))
-
-    (my-leader 'visual
-      "a@" '(claude-code-ide-insert-at-mentioned :wk "@mention region")))
-
-  (global-set-key (kbd "C-c C-'") #'claude-code-ide-menu)
+      "aa" '(agent-shell :wk "start")
+      "at" '(agent-shell-toggle :wk "toggle")
+      "am" '(agent-shell-help-menu :wk "open session")
+      "ar" '(agent-shell-send-region :wk "send region")))
 
   :config
   ;; Runs only on first invocation — not at Emacs startup.
@@ -894,6 +697,85 @@ Temporarily disables notifications during the fetch."
   :config
   (setopt evil-collection-eca-maps 't))
 
+(use-package pi-coding-agent
+  :ensure t
+  :commands (pi-coding-agent
+             pi-coding-agent-toggle
+             pi-coding-agent-open-session-file))
+
+(defun my/agent-shell-autoscroll (&rest _)
+  (dolist (win (get-buffer-window-list (current-buffer) 'visible))
+    (when (>= (window-point win)
+              (save-excursion (goto-char (point-max)) (point)))
+      (set-window-point win (point-max)))))
+
+(defun my/agent-shell-display-buffer-rules ()
+  '(("\\*Kimi\\(?:\\*\\|:[^*]*\\*\\)"
+     (display-buffer-in-side-window)
+     (side . bottom)
+     (slot . 0)
+     (window-height . 0.33)
+     (dedicated . t)
+     (window-parameters . ((no-other-window . nil)
+                           (no-delete-other-windows . nil))))
+    ("\\*agent-shell-diff\\*"
+     (display-buffer-in-side-window)
+     (side . right)
+     (slot . 1)
+     (window-width . 0.5)
+     (dedicated . t)
+     (window-parameters . ((no-other-window . nil)
+                           (no-delete-other-windows . nil))))))
+
+(use-package agent-shell
+  :ensure t
+  :bind (:map agent-shell-mode-map
+              ("RET" . newline)
+              ("M-RET" . shell-maker-submit))
+  :config
+  (advice-add 'shell-maker-submit :after #'my/agent-shell-autoscroll)
+  (dolist (rule (my/agent-shell-display-buffer-rules))
+    (add-to-list 'display-buffer-alist rule)) 
+  (setq agent-shell-tool-use-expand-by-default nil)
+  (setq agent-shell-thought-process-expand-by-default nil)
+  (setq agent-shell-user-message-expand-by-default nil)
+  (setq agent-shell-diff-delta-command
+        (when (executable-find "delta")
+          '("delta" "--no-gitconfig" "--color-only")))
+
+  (defun my/agent-shell-send-clipboard-image-in-terminal (orig-fn &optional pick-shell)
+    "Call ORIG-FN, but allow `agent-shell-send-clipboard-image' in terminal Emacs."
+    (if (window-system)
+        (funcall orig-fn pick-shell)
+      (let* ((screenshots-dir (agent-shell--dot-subdir "screenshots"))
+             (image-path (agent-shell--save-clipboard-image
+                          :destination-dir screenshots-dir))
+             (shell-buffer (when pick-shell
+                             (agent-shell--read-shell-buffer
+                              :prompt "Send image to shell: "))))
+        (agent-shell-insert
+         :text (agent-shell--get-files-context :files (list image-path))
+         :shell-buffer shell-buffer))))
+  (advice-add 'agent-shell-send-clipboard-image :around
+              #'my/agent-shell-send-clipboard-image-in-terminal)
+
+  ;; Also let C-y / `agent-shell-yank-dwim' try the clipboard image first
+  ;; in terminal Emacs before falling back to plain text yank.
+  (defun my/agent-shell-yank-dwim-in-terminal (orig-fn &optional arg)
+    "Call ORIG-FN, but try clipboard image first in terminal Emacs."
+    (if (window-system)
+        (funcall orig-fn arg)
+      (if-let* ((screenshots-dir (agent-shell--dot-subdir "screenshots"))
+                (image-path (agent-shell--save-clipboard-image
+                             :destination-dir screenshots-dir
+                             :no-error t)))
+          (agent-shell-insert
+           :text (agent-shell--get-files-context :files (list image-path))
+           :shell-buffer (agent-shell--shell-buffer))
+        (funcall orig-fn arg))))
+  (advice-add 'agent-shell-yank-dwim :around
+              #'my/agent-shell-yank-dwim-in-terminal))
+
 (use-package eldoc
   :ensure nil
   :config
@@ -902,14 +784,6 @@ Temporarily disables notifications during the fetch."
   (setq eldoc-echo-area-display-truncation-message nil)
   :init
   (global-eldoc-mode))
-
-(use-package eldoc-box
-  :ensure t
-  :defer t
-  :config
-  (setq eldoc-box-max-pixel-width 800)
-  (setq eldoc-box-max-pixel-height 600))
-
 
 (use-package flymake
   :ensure nil          ;; This is built-in, no need to fetch it.
@@ -927,7 +801,6 @@ Temporarily disables notifications during the fetch."
 (use-package flycheck
   :ensure t
   :config
-  (setq flycheck-global-modes '(not org-mode))
   (setq flycheck-display-errors-function nil)
   (add-hook 'after-init-hook #'global-flycheck-mode))
 
@@ -959,6 +832,13 @@ Temporarily disables notifications during the fetch."
 (use-package sideline-flycheck
   :ensure t
   :hook (flycheck-mode . sideline-flycheck-setup))
+
+;; (use-package flycheck-vale
+;;   :ensure t
+;;   :after flycheck
+;;   :demand t
+;;   :config
+;;   (flycheck-vale-setup))
 
 (use-package xref
   :ensure nil)
@@ -998,6 +878,7 @@ Temporarily disables notifications during the fetch."
   (setq org-src-fontify-natively t
         org-src-tab-acts-natively t
         org-edit-src-content-indentation 0)
+  (add-to-list 'org-src-lang-modes '("nix" . nix-ts))
   (setq org-log-done                       t
         org-auto-align-tags                t
         org-tags-column                    -80
@@ -1005,7 +886,6 @@ Temporarily disables notifications during the fetch."
         org-special-ctrl-a/e               t
         org-insert-heading-respect-content t)
 
-  (add-hook 'org-mode-hook 'variable-pitch-mode)
   ;; (add-hook 'org-mode-hook 'org-indent-mode)
   (add-hook 'org-mode-hook 'visual-line-mode)
   (add-hook 'org-mode-hook (lambda () (electric-indent-local-mode -1)))
@@ -1061,39 +941,11 @@ Temporarily disables notifications during the fetch."
   (kitty-gfx-shr-fit-height 20)
   :hook (dired-mode . kitty-gfx-dired-auto-preview-mode)
   :config
+  (setq kitty-gfx-enable-browser t
+        kitty-gfx-casty-program "~/projects/casty/bin/casty.js"
+        kitty-gfx-casty-chrome "helium-browser")
+
   (kitty-graphics-setup))
-
-(use-package org-fancy-priorities
-  :ensure t
-  :hook
-  (org-mode . org-fancy-priorities-mode)
-  :config
-  (setq org-fancy-priorities-list '("⚡" "⬆" "⬇" "☕")))
-
-(setq org-priority-faces
-  '((?A . (:background "#e91e63" :foreground "#ffffff" :weight bold))
-    (?B . (:background "#ff9800" :foreground "#1a1a1a" :weight bold))
-    (?C . (:background "#2196f3" :foreground "#ffffff" :weight bold))
-    (?D . (:background "#795548" :foreground "#ffffff" :weight bold))))
-
-;; (setq org-agenda-start-on-weekday nil
-;;       org-agenda-block-separator  nil
-;;       org-agenda-remove-tags      t)
-
-;;   (setq org-agenda-skip-scheduled-if-done t
-;;         org-agenda-skip-deadline-if-done t
-;;         org-agenda-include-deadlines t
-;;         org-agenda-block-separator nil
-;;         org-agenda-compact-blocks t
-;;         org-agenda-start-day nil
-;;         org-agenda-span 1
-;;         org-agenda-start-on-weekday nil
-;;         org-agenda-hide-tags-regexp "task"
-;;         org-agenda-prefix-format
-;;         '((agenda . " %i %?-12t% s")
-;;           (todo . " %i ")
-;;           (tags . " %i ")
-;;           (search . " %i ")))
 
 (with-eval-after-load 'org
   (setq org-confirm-babel-evaluate nil)
@@ -1129,6 +981,38 @@ Temporarily disables notifications during the fetch."
      (sed . t)
      (screen . t)
      (eshell . t))))
+
+(with-eval-after-load 'org
+  (defun my/org-babel-tangle-targets-missing-p (&optional buffer)
+    "Return non-nil if any :tangle target of BUFFER is missing.
+BUFFER defaults to the current buffer."
+    (with-current-buffer (or buffer (current-buffer))
+      (when (and (buffer-file-name) (derived-mode-p 'org-mode))
+        (require 'ob-tangle)
+        (let* ((default-directory (file-name-directory (buffer-file-name)))
+               (targets (mapcar #'car (org-babel-tangle-collect-blocks)))
+               missing)
+          (dolist (file targets)
+            (unless (or missing (file-exists-p file))
+              (setq missing t)))
+          missing))))
+
+  (defun my/org-babel-tangle-if-missing (&optional org-file target-file lang)
+    "Tangle only if a target file is missing.
+When called interactively with no arguments, check all :tangle
+targets in the current buffer and run `org-babel-tangle' only if
+at least one target is missing.
+
+When called non-interactively, tangle ORG-FILE to TARGET-FILE
+only if TARGET-FILE does not exist.  Optional LANG restricts
+tangling to source blocks of that language."
+    (interactive)
+    (if (or org-file target-file lang)
+        (unless (file-exists-p target-file)
+          (org-babel-tangle-file org-file target-file lang))
+      (if (my/org-babel-tangle-targets-missing-p)
+          (org-babel-tangle)
+        (message "All tangle targets already exist; skipping")))))
 
 (use-package ob-async
   :ensure t
@@ -1216,7 +1100,6 @@ and convert it to Org using the pandoc utility."
        "pandoc -f markdown -t org --wrap=preserve" t t)
       (kill-region (point-min) (point-max)))
     (yank)))
-
 
 (with-eval-after-load 'org
   ;; Log state changes with timestamps
@@ -1408,102 +1291,61 @@ Skips capture tasks and projects."
     (goto-char (point-min))
     (search-forward "- Goal :: " nil t)))
 
+(defun my/org-capture-to-journal (heading)
+  (require 'denote-journal)
+  (denote-journal-new-or-existing-entry)
+  (goto-char (point-max))
+  (insert heading)
+  (current-buffer))
 
 (defun my/org-capture-timeblock-to-journal ()
-  "Capture function: jump to today's journal for a timeblock."
-  (require 'denote)
-  (require 'denote-journal)
-  (let* ((today (format-time-string "%Y-%m-%d"))
-         (journal-files (denote-directory-files "journal"))
-         (today-journal (seq-find
-                        (lambda (file)
-                          (string-match-p today (file-name-nondirectory file)))
-                        journal-files)))
-    (if today-journal
-        (find-file today-journal)
-      (denote-journal-new-or-existing-entry))
-    (goto-char (point-max))
-    (insert "\n* Timeblock\n")))
+  (my/org-capture-to-journal "\n* Timeblock\n"))
 
 (defun my/org-capture-recurring-to-journal ()
-  "Capture function: jump to today's journal for a recurring task."
-  (require 'denote)
-  (require 'denote-journal)
-  (let* ((today (format-time-string "%Y-%m-%d"))
-         (journal-files (denote-directory-files "journal"))
-         (today-journal (seq-find
-                        (lambda (file)
-                          (string-match-p today (file-name-nondirectory file)))
-                        journal-files)))
-    (if today-journal
-        (find-file today-journal)
-      (denote-journal-new-or-existing-entry))
-    (goto-char (point-max))
-    (insert "\n* Recurring\n")))
+  (my/org-capture-to-journal "\n* Recurring\n"))
 
 (defun my/org-capture-meeting-to-journal ()
-  "Capture function: jump to today's journal for a meeting note."
-  (require 'denote)
-  (require 'denote-journal)
-  (let* ((today (format-time-string "%Y-%m-%d"))
-         (journal-files (denote-directory-files "journal"))
-         (today-journal (seq-find
-                        (lambda (file)
-                          (string-match-p today (file-name-nondirectory file)))
-                        journal-files)))
-    (if today-journal
-        (find-file today-journal)
-      (denote-journal-new-or-existing-entry))
-    (goto-char (point-max))
-    (insert "\n* Meeting: ")))
-
-;; capture templates are merged in the org-capture section below
+  (my/org-capture-to-journal "\n* Meeting: "))
 
 (with-eval-after-load 'eglot
   (add-to-list 'eglot-server-programs
                '(org-mode . ("harper-ls" "--stdio"))))
 
-(defun my/org-capture-denote-deadline ()
-  (let* ((context (read-string "Task with deadline: "))
-         (deadline (org-read-date t nil nil "Deadline: "))
-         (file-name (denote nil '("agenda"))))
-    (find-file file-name)
-    (goto-char (point-min))
-    (forward-line 4)
-    (insert (format "\n* %s\nDEADLINE: <%s>\n\n" context deadline))
-    (current-buffer)))
-
-(defun my/org-capture-denote-scheduled ()
-  (let* ((context (read-string "Scheduled task: "))
-         (schedule (org-read-date t nil nil "Schedule: "))
-         (file-name (denote nil '("agenda"))))
-    (find-file file-name)
-    (goto-char (point-min))
-    (forward-line 4)
-    (insert (format "\n* %s\nSCHEDULED: <%s>\n\n" context schedule))
-    (current-buffer)))
-
-(defun my/org-capture-denote-task ()
+(defun my/org-capture-task-to-journal ()
   (let* ((context (read-string "Task: "))
          (todo-state (completing-read "TODO state: "
-                                      '("ACTIVE" "NEXT" "TODO" "WAIT")))
-         (file-name (denote nil '("agenda"))))
-    (find-file file-name)
-    (goto-char (point-min))
-    (forward-line 4)
-    (insert (format "\n* %s %s\n\n" todo-state context))
-    (point)))
+                                      '("ACTIVE" "NEXT" "TODO" "WAIT"))))
+    (my/org-capture-to-journal (format "\n* %s %s\n\n" todo-state context))))
+
+(defun my/org-capture-deadline-to-journal ()
+  (let* ((context (read-string "Task with deadline: "))
+         (deadline (org-read-date t nil nil "Deadline: ")))
+    (my/org-capture-to-journal (format "\n* %s\nDEADLINE: <%s>\n\n" context deadline))))
+
+(defun my/org-capture-scheduled-to-journal ()
+  "Capture a scheduled task into today's denote-journal file."
+  (let* ((context (read-string "Scheduled task: "))
+         (schedule (org-read-date t nil nil "Schedule: ")))
+    (my/org-capture-to-journal (format "\n* %s\nSCHEDULED: <%s>\n\n" context schedule))))
+
+(defun my/org-capture-float ()
+  (interactive)
+  (select-frame
+   (make-frame '((title . "org-capture")
+                 (width . 160)
+                 (height . 14))))
+  (org-capture))
 
 (with-eval-after-load 'org
   (setq org-capture-templates
         '(("t" "Task" plain
-           (function my/org-capture-denote-task)
+           (function my/org-capture-task-to-journal)
            "" :immediate-finish t :jump-to-captured t)
           ("d" "Deadline" plain
-           (function my/org-capture-denote-deadline)
+           (function my/org-capture-deadline-to-journal)
            "" :immediate-finish t :jump-to-captured t)
           ("s" "Scheduled" plain
-           (function my/org-capture-denote-scheduled)
+           (function my/org-capture-scheduled-to-journal)
            "" :immediate-finish t :jump-to-captured t)
           ("b" "Timeblock" plain
            (function my/org-capture-timeblock-to-journal)
@@ -1812,27 +1654,6 @@ Skips capture tasks and projects."
 (add-hook 'org-agenda-finalize-hook
           #'my/org-agenda-fix-block-spacing)
 
-(defun my/agenda-app ()
-  "Launch Emacs as a dedicated agenda kiosk.
-Opens the 'd' (Today) agenda view in a clean, distraction-free frame.
-Usage: emacs --eval '(my/agenda-app)' --no-splash"
-  (interactive)
-  (set-frame-name "Agenda")
-  (delete-other-windows)
-  (org-agenda nil "d")
-  (delete-other-windows)
-  (setq mode-line-format nil)
-  (menu-bar-mode -1)
-  (tool-bar-mode -1)
-  (scroll-bar-mode -1)
-  (when (bound-and-true-p tab-bar-mode)
-    (tab-bar-mode -1))
-  (when (find-font (font-spec :family "Lato"))
-    (buffer-face-set '(:family "Lato")))
-  (text-scale-increase 2)
-  (hide-mode-line-mode 1)
-  (winner-mode 1))
-
 (use-package org-contrib
   :ensure (:wait t))
 
@@ -1855,7 +1676,6 @@ Usage: emacs --eval '(my/agenda-app)' --no-splash"
   (setq org-download-method 'directory)
   (setq org-download-timestamp "%Y%m%d-%H%M%S_")
   (setq org-download-heading-lvl nil))
-
 
 ;; (setq org-publish-project-alist
 ;;       '(("wiki"
@@ -1912,7 +1732,7 @@ Usage: emacs --eval '(my/agenda-app)' --no-splash"
   (setq denote-rename-buffer-format "%t"
         denote-buffer-name-prefix ""
         denote-directory (expand-file-name "~/org/"))
-  (denote-rename-buffer-mode 1)) 
+  (denote-rename-buffer-mode 1))
 
 (use-package denote-agenda
   :ensure t
@@ -2091,11 +1911,6 @@ for `denote-directory' and silently drop the file-list filter."
   :ensure t
   )
 
-
-
-(use-package denote-explore
-  :ensure t)
-
 (use-package ox-gfm
   :ensure t)
 
@@ -2182,7 +1997,6 @@ Timers that expired while Emacs was closed fire immediately."
   (add-hook 'kill-emacs-hook #'my/tmr-save-timers)
   (add-hook 'emacs-startup-hook #'my/tmr-restore-timers))
 
-
 (use-package denote-merge
   :ensure (:host github :repo "protesilaos/denote-merge") ; not in any package archive
   ;; You can bind these to keys.  They are here so you can learn about them.
@@ -2196,6 +2010,27 @@ Timers that expired while Emacs was closed fire immediately."
     denote-merge-region-org-example
     denote-merge-region-markdown-quote
     denote-merge-region-markdown-fenced-block))
+
+(use-package denote-solo
+  :ensure (:host github :repo "pavlo/denote-solo")
+  :after denote
+  :config
+  (setq denote-solo-directories
+        '(("org"    . "~/org")
+          ("garden" . "~/garden"))
+        denote-solo-display-modeline nil)
+  (denote-solo-mode 1)
+
+  (defun my/denote-solo-sync-directory (&rest _)
+    (when-let* ((solo denote-solo--current-solo)
+                (path (denote-solo--directory-for-name solo)))
+      (setq-default denote-directory path)
+      (dolist (buf (buffer-list))
+        (with-current-buffer buf
+          (when (local-variable-p 'denote-directory)
+            (setq denote-directory path))))))
+
+  (advice-add 'denote-solo-switch :after #'my/denote-solo-sync-directory))
 
 (use-package which-key
   :ensure t
@@ -2231,7 +2066,7 @@ Timers that expired while Emacs was closed fire immediately."
   :custom
   (corfu-cycle t)
   (corfu-auto t)
-  (corfu-auto-delay 0.001)
+  (corfu-auto-delay 0.2)
   (corfu-auto-prefix 2)
   :init
   (global-corfu-mode)
@@ -2294,6 +2129,7 @@ Timers that expired while Emacs was closed fire immediately."
    ("M-." . embark-dwim)
    ("C-h B" . embark-bindings)
    :map minibuffer-local-map
+   ("C-c C-a" . embark-act-all)
    ("C-c C-e" . embark-export)
    ("C-c C-o" . embark-collect))
   :init
@@ -2332,16 +2168,16 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (setq eglot-connect-timeout 30)
   (setq eglot-events-buffer-size 0)
   (setq eglot-report-progress nil)
-  (setq jsonrpc-default-request-timeout 10)
+  (setq jsonrpc-default-request-timeout 10))
   
-  (add-hook 'eglot-managed-mode-hook
-            (lambda ()
-              (eglot-inlay-hints-mode -1)))
+  ;; (add-hook 'eglot-managed-mode-hook
+  ;;           (lambda ()
+  ;;             (eglot-inlay-hints-mode -1)))
 
-  (setq eglot-code-action-indications '(eldoc-hint))
+  ;; (setq eglot-code-action-indications '(eldoc-hint))
 
-  (setq eglot-ignored-server-capabilities
-        '(:inlayHintProvider :documentHighlightProvider)))
+  ;; (setq eglot-ignored-server-capabilities
+  ;;       '(:inlayHintProvider :documentHighlightProvider)))
 
 (use-package typst-ts-mode
   :ensure t
@@ -2371,6 +2207,42 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
                  '(nix-ts-mode . ("nixd")))))
 
 (put 'eglot-workspace-configuration 'safe-local-variable #'listp)
+
+(use-package c-ts-mode
+  :ensure nil
+  :mode (("\\.c\\'" . c-ts-mode)
+         ("\\.h\\'" . c-ts-mode))
+  :hook (c-ts-mode . eglot-ensure)
+  :custom
+  (c-ts-mode-indent-offset 2)
+  (c-ts-mode-indent-style 'k&r)
+  :config
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 '((c-ts-mode c-mode) .
+                   ("clangd"
+                    "--background-index"
+                    "--clang-tidy"
+                    "--header-insertion=never")))))
+
+(use-package c3-ts-mode
+  :ensure (:host github :repo "c3lang/c3-ts-mode")
+  :mode (("\\.c3\\'" . c3-ts-mode)
+         ("\\.c3i\\'" . c3-ts-mode)
+         ("\\.c3t\\'" . c3-ts-mode))
+  :hook (c3-ts-mode . eglot-ensure)
+  :custom
+  (c3-ts-mode-indent-offset 2)
+  (setq treesit-font-lock-level 4)
+  :init
+  (add-to-list 'treesit-language-source-alist
+               '(c3 "https://github.com/c3lang/tree-sitter-c3"))
+  :config
+  (unless (treesit-language-available-p 'c3)
+    (treesit-install-language-grammar 'c3))
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 '(c3-ts-mode . ("c3-lsp")))))
 
 (use-package python
   :ensure nil
@@ -2426,20 +2298,6 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
                  '((typescript-ts-mode tsx-ts-mode) . ("rass" "--" "typescript-language-server" "--stdio" "--" "vscode-eslint-language-server" "--stdio")))))
-
-(use-package web-mode
-  :ensure t
-  :mode "\\.vue\\'"
-  :hook (web-mode . eglot-ensure)
-  :config
-  (setq web-mode-markup-indent-offset 2)
-  (setq web-mode-css-indent-offset 2)
-  (setq web-mode-code-indent-offset 2)
-  (setq web-mode-style-padding 2)
-  (setq web-mode-script-padding 2)
-  (with-eval-after-load 'eglot
-    (add-to-list 'eglot-server-programs
-                 '(web-mode . ("rass" "vuetail")))))
 
 (use-package xonsh-mode
   :ensure (:host github :repo "seanfarley/xonsh-mode")
@@ -2514,28 +2372,6 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
 (with-eval-after-load 'ob-async
   (add-hook 'ob-async-pre-execute-src-block-hook my/ob-xonsh-installer))
 
-(use-package go-mode
-  :ensure t
-  :mode "\\.go\\'"
-  :hook (go-mode . eglot-ensure)
-  :config
-  (with-eval-after-load 'eglot
-    (add-to-list 'eglot-server-programs
-                 '(go-mode . ("gopls" :initializationOptions 
-                              (:staticcheck t
-                               :matcher "CaseSensitive"
-                               :usePlaceholders t)))))
-  
-  (defun go-mode-setup ()
-    (add-hook 'before-save-hook #'eglot-format-buffer -10 t)
-    (add-hook 'before-save-hook 
-              (lambda ()
-                (when (eglot-managed-p)
-                  (eglot-code-action-organize-imports nil t)))
-              nil t))
-  
-  (add-hook 'go-mode-hook #'go-mode-setup))
-
 (use-package json-ts-mode
   :ensure nil
   :mode "\\.json\\'"
@@ -2580,20 +2416,9 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
 ;;   :ensure t
 ;;   :after just-mode)
 
-(use-package eat
-  :ensure t
-  :custom
-  (eat-shell "xonsh")
-  (eat-kill-buffer-on-exit t)
-  (eat-enable-shell-prompt-annotation t)
-  (eat-term-name "xterm-256color")
-  :hook
-  (eshell-load . eat-eshell-mode)
-  (eshell-load . eat-eshell-visual-command-mode))
-
 (use-package olivetti
   :ensure t
-  :hook (org-mode . olivetti-mode)
+  ;; :hook (org-mode . olivetti-mode)  ; no auto-center in org buffers
   :custom
   (olivetti-style nil)  ; Use window margins (fringes disabled in early-init)
   (olivetti-margin-width 10)  ; No side margins
@@ -2615,6 +2440,11 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
     (dolist (win (get-buffer-window-list nil nil 'visible))
       (when (buffer-local-value 'olivetti-mode (window-buffer win))
         (olivetti-set-window win))))
+  (defun my/olivetti-hide-continuation-glyph ()
+    (let ((dt (or buffer-display-table (make-display-table))))
+      (set-display-table-slot dt 'wrap (if olivetti-mode ?\s nil))
+      (setq buffer-display-table dt)))
+  (add-hook 'olivetti-mode-hook #'my/olivetti-hide-continuation-glyph)
   (with-eval-after-load 'diff-hl-margin
     (advice-add 'diff-hl-margin-local-mode :after #'my/olivetti-rebalance)
     (advice-add 'diff-hl-margin-ensure-visible :after #'my/olivetti-rebalance)))
@@ -2630,27 +2460,6 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
   (diff-hl-flydiff-mode 1)
   (unless (display-graphic-p)
     (diff-hl-margin-mode 1)))
-
-(defun my-org-sidecar-left ()
-  "Pick an org-mode buffer via consult and display it as a left sidecar."
-  (interactive)
-  (let* ((bufs (cl-remove-if-not
-                (lambda (b)
-                  (with-current-buffer b
-                    (derived-mode-p 'org-mode)))
-                (buffer-list)))
-         (names (mapcar #'buffer-name bufs))
-         (choice (consult--read names
-                   :prompt "Org sidecar: "
-                   :sort nil
-                   :require-match t
-                   :category 'buffer)))
-    (when-let* ((buf (get-buffer choice)))
-      (display-buffer-in-side-window
-       buf
-       '((side . left)
-         (window-width . 0.25)
-         (slot . 0))))))
 
 (use-package hl-todo
   :ensure (:host github :repo "tarsius/hl-todo")
@@ -2715,13 +2524,23 @@ so the working-tree diff stays visible until the user explicitly stages."
 
 (add-hook 'after-save-hook #'my/auto-git-add-new-file)
 
+(defun my/magit-uncommit ()
+  "Undo the last commit, leaving its changes in the working tree, unstaged."
+  (interactive)
+  (magit-reset-mixed "HEAD^")
+  (message "Uncommitted HEAD^ — changes preserved, unstaged"))
+
 (use-package indent-guide
   :defer t
   :ensure t
   :hook
   (prog-mode . indent-guide-mode)  ;; Activate indent-guide in programming modes.
   :config
-  (setq indent-guide-char "│"))    ;; Set the character used for the indent guide.
+  (setq indent-guide-char "│")    ;; Set the character used for the indent guide.
+  (define-advice indent-guide-show (:around (orig) my/guard-stale-window)
+    (when (and (eq (window-buffer) (current-buffer))
+               (<= (window-start) (point-max)))
+      (funcall orig))))
 
 (use-package evil
   :ensure (:wait t)
@@ -2740,16 +2559,18 @@ so the working-tree diff stays visible until the user explicitly stages."
   (evil-set-initial-state 'messages-buffer-mode 'normal)
   (evil-set-initial-state 'dired-mode 'normal)
   (evil-set-initial-state 'ibuffer-mode 'normal)
-  (evil-set-initial-state 'erc-mode 'normal))
+  (evil-set-initial-state 'clatter-mode 'normal)
+  (define-key evil-insert-state-map (kbd "C-w") 'evil-window-map))
 
 (modify-syntax-entry ?_ "w")
 
 (defun my/eldoc-and-jump ()
   "Show documentation at point. Works in both GUI and terminal."
   (interactive)
-  (if (display-graphic-p)
-      (eldoc-box-help-at-point)
-    (eldoc-doc-buffer t)))
+  ;; (if (display-graphic-p)
+  ;;     (eldoc-box-help-at-point)
+  ;;   (eldoc-doc-buffer t))
+  (eldoc-doc-buffer t))
 
 (define-key evil-normal-state-map (kbd "K") #'my/eldoc-and-jump)
 
@@ -2959,35 +2780,51 @@ so the working-tree diff stays visible until the user explicitly stages."
   (read-key)                                         ;; Wait for the user to press any key.
   (kill-emacs))                                      ;; Close Emacs after installation is complete.
 
-(use-package hide-mode-line
-  :ensure t)
+(display-time-mode 1)
 
-(use-package svg-line
-  :ensure (:host nil :repo "ssh://git.cashmere.rs/svg-line.git"
-                 :branch "feat/tty-kitty-modeline")
+(defvar-local my/doom-modeline--buffer-title nil)
+
+(defun my/doom-modeline--update-title-cache ()
+  "Update the cached #+title for the current buffer."
+  (setq-local my/doom-modeline--buffer-title
+              (cadar (org-collect-keywords '("TITLE")))))
+
+(defun my/doom-modeline--buffer-title ()
+  "Return the cached #+title, computing it if necessary."
+  (unless (local-variable-p 'my/doom-modeline--buffer-title)
+    (my/doom-modeline--update-title-cache))
+  my/doom-modeline--buffer-title)
+
+(defun my/doom-modeline-set-buffer-title (&rest _)
+  "Override doom-modeline's cached file name with the Org #+title.
+If no TITLE keyword is found, leave doom-modeline's default name."
+  (when-let* ((title (my/doom-modeline--buffer-title)))
+    (setq doom-modeline--buffer-file-name
+          (propertize title
+                      'face 'doom-modeline-buffer-file
+                      'mouse-face 'mode-line-highlight
+                      'help-echo (concat (or buffer-file-truename (buffer-name))
+                                         "\nmouse-1: Previous buffer\nmouse-3: Next buffer")
+                      'local-map mode-line-buffer-identification-keymap))))
+
+(defun my/doom-modeline--invalidate-title-cache ()
+  "Invalidate the cached title so it gets recomputed on next update."
+  (kill-local-variable 'my/doom-modeline--buffer-title))
+
+(use-package doom-modeline
+  :ensure t
+  :init (doom-modeline-mode 1)
   :config
-  (require 'svg-line-segments)
-  (setq svg-line-weather-latitude "53.25"
-        svg-line-weather-longitude "10.41")
-  (svg-line-weather-mode 1)
-
-  (svg-line-define 'cashmere-mode-line
-    :target 'mode-line
-    :layout 'lines
-    :active #'mode-line-window-selected-p
-    :background (lambda () (face-background 'mode-line nil t))
-    :foreground (lambda () (face-foreground 'mode-line nil t))
-    :inactive-background (lambda () (face-background 'mode-line-inactive nil t))
-    :inactive-foreground (lambda () (face-foreground 'mode-line-inactive nil t))
-    :content
-    (lambda ()
-      (list (cons (list #'svg-line-segment-evil " "
-                        #'svg-line-segment-buffer #'svg-line-segment-vc)
-                  (list #'svg-line-segment-weather #'svg-line-segment-battery
-                        #'svg-line-segment-position "  "
-                        #'svg-line-segment-major-mode)))))
-
-  (svg-line-activate 'cashmere-mode-line))
+  (setq doom-modeline-hud t
+        doom-modeline-irc t
+        doom-modeline-irc-buffers nil
+        doom-modeline-mu4e t
+        doom-modeline-buffer-file-name-style 'relative-to-project
+        doom-modeline-buffer-encoding nil
+        doom-modeline-time t
+        doom-modeline-time-live-icon t)
+  (advice-add #'doom-modeline-update-buffer-file-name :after #'my/doom-modeline-set-buffer-title)
+  (add-hook 'before-save-hook #'my/doom-modeline--invalidate-title-cache))
 
 (use-package adaptive-wrap
   :ensure t
@@ -3011,22 +2848,17 @@ Runs per-frame so a TTY-only daemon never touches fonts while GUI frames
 created later still get them."
   (when (display-graphic-p frame)
     (set-face-attribute 'default frame
-                        :family "MapleMono NF"
+                        :family "Maple Mono NF"
                         :height 180
                         :font (font-spec
-                               :family "MapleMono NF"
-                               :features '(cv04 ss05 zero)))
-    (set-face-attribute 'fixed-pitch frame :family "MapleMono NF" :weight 'regular)
-    (set-face-attribute 'variable-pitch frame :family "MapleMono NF" :weight 'regular :height 1.1)))
+                               :family "Maple Mono NF"
+                               :features '(cv04 ss05 zero)
+                               ))
+    (set-face-attribute 'fixed-pitch frame :family "Maple Mono NF" :weight 'regular)
+    (set-face-attribute 'variable-pitch frame :family "Maple Mono NF" :weight 'regular :height 1.1)))
 
 (add-hook 'server-after-make-frame-hook #'cashmere/set-fonts)
 (cashmere/set-fonts)
-
-(use-package mixed-pitch
-  :ensure t
-  :defer t
-  :hook ((org-mode   . mixed-pitch-mode)
-         (LaTeX-mode . mixed-pitch-mode)))
 
 (use-package grip-mode
   :ensure t
@@ -3034,19 +2866,18 @@ created later still get them."
   (setq grip-command 'auto)) ;; auto, grip, go-grip or mdopen
 
 (add-to-list 'custom-theme-load-path "~/.emacs.d/themes/")
-(load-theme 'noctalia t)
+(load-theme 'tinty t)
 
 (use-package dirvish
-  :ensure t
+  :ensure (:host github :repo "latiagertrutis/dirvish" :branch "main")
   :init
   (dirvish-override-dired-mode)
 
   :custom
   (dirvish-quick-access-entries
-   '(("h" "~/" "Home")
-     ("d" "~/Downloads/" "Downloads")
-     ;; ("p" "~/projects/" "Projects")
-     ))
+   '(("h" "~/" "home")
+     ("d" "~/Downloads/" "downloads")
+     ("c" "~/.config/" "config")))
 
   (dirvish-reuse-session 'open)
   (dirvish-attributes '(file-size))
@@ -3085,7 +2916,7 @@ created later still get them."
                           dirvish-preview-dispatchers)))))
 
 (use-package zoxide
-  :ensure t) 
+  :ensure t)
 
 (use-package dired-rsync 
   :ensure t)
@@ -3183,6 +3014,14 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
 (with-eval-after-load 'embark
   (advice-add 'embark-export :after #'my/embark-export-auto-wgrep))
 
+(defun my/consult-fd-in (dir)
+  (interactive "DFind files in: ")
+  (consult-fd dir))
+
+(defun my/consult-ripgrep-in (dir)
+  (interactive "DGrep in: ")
+  (consult-ripgrep dir))
+
 (use-package persp-mode
   :ensure t
   :demand t
@@ -3204,8 +3043,8 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
         persp-add-buffer-on-after-change-major-mode t
         persp-kill-foreign-buffer-behaviour 'kill
         persp-remove-buffers-from-nil-persp-behaviour nil
-        persp-auto-resume-time 1.0
-        persp-auto-save-opt 1
+        persp-auto-resume-time -1
+        persp-auto-save-opt 0
         uniquify-buffer-name-style nil)
 
   (add-to-list 'persp-filter-save-buffers-functions
@@ -3379,7 +3218,6 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
 
   (defun my/workspace-switch-to-project (&optional dir)
     (let* ((dir (or dir default-directory))
-           (default-directory dir)
            (name (projectile-project-name dir)))
       (when persp-mode
         (if (or (eq my/workspaces-on-switch-project t)
@@ -3389,7 +3227,8 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
               (my/workspace-switch name t)
               (switch-to-buffer (my/workspace-fallback-buffer)))
           (ignore-errors (persp-rename name (get-current-persp))))
-        (funcall my/workspace-switch-project-function))))
+        (let ((default-directory dir))
+          (funcall my/workspace-switch-project-function)))))
   (with-eval-after-load 'projectile
     (setq projectile-switch-project-action #'my/workspace-switch-to-project))
 
@@ -3399,30 +3238,17 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
     (define-key persp-mode-map [remap evil-window-delete]
                 #'my/workspace-close-window-or-workspace))
 
-  (defun my/workspace-restore-services (&rest _)
-    (run-with-idle-timer
-     1 nil
-     (lambda ()
-       (unless (and (fboundp 'mu4e-running-p) (mu4e-running-p))
-         (mu4e t)))))
-  (add-hook 'persp-after-load-state-functions #'my/workspace-restore-services)
-
   (add-hook 'persp-filter-save-buffers-functions
             (lambda (buf)
-              (with-current-buffer buf (derived-mode-p 'erc-mode))))
+              (with-current-buffer buf (derived-mode-p 'clatter-mode))))
 
-  (run-with-timer (* 10 60) (* 10 60)
-                  (lambda () (when persp-mode (persp-save-state-to-file))))
-
-  (defun my/workspace--inhibit-erc-part (orig &rest args)
-    (let ((erc-kill-channel-hook nil)
-          (erc-kill-server-hook nil)
-          (erc-kill-buffer-hook nil))
+  (defun my/workspace--inhibit-irc-part (orig &rest args)
+    (cl-letf (((symbol-function 'clatter--on-kill-buffer) #'ignore))
       (apply orig args)))
-  (advice-add 'my/workspace-kill :around #'my/workspace--inhibit-erc-part)
-  (advice-add 'my/workspace-kill-session :around #'my/workspace--inhibit-erc-part)
+  (advice-add 'my/workspace-kill :around #'my/workspace--inhibit-irc-part)
+  (advice-add 'my/workspace-kill-session :around #'my/workspace--inhibit-irc-part)
 
-  (when (daemonp) (persp-mode 1)))
+  (persp-mode 1))
 
 (with-eval-after-load 'consult
   (defvar my/workspace-consult-source
@@ -3450,8 +3276,11 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
 
 (defun my/ibuffer-workspace ()
   (interactive)
-  (ibuffer nil (format "*ibuffer: %s*" (my/workspace-current-name))
-           (list (cons 'persp t))))
+  (let ((name (my/workspace-current-name)))
+    (if (equal name my/workspaces-master)
+        (ibuffer nil "*ibuffer: master*")
+      (ibuffer nil (format "*ibuffer: %s*" name)
+               (list (cons 'persp t))))))
 
 (my-leader
   "TAB"     '(:ignore t :wk "workspace")
@@ -3551,7 +3380,8 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   :config
   ;; (setq golden-ratio-auto-scale t)
   ;; (golden-ratio-mode 1)
-)
+  (setq golden-ratio-exclude-buffer-names '(" *which-key*"))
+  (setq golden-ratio-exclude-buffer-regexp '("\\`\\*eldoc")))
 
 (use-package pdf-tools
   :ensure nil
@@ -3588,10 +3418,13 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
           :wk "find file/switch project")
   "sp" '(consult-projectile :wk "search project")
   "ss" '(consult-line :wk "search project")
+  "sd" '(my/consult-ripgrep-in :wk "grep in dir")
+  "sf" '(my/consult-fd-in :wk "find file in dir")
   "/" '(consult-ripgrep :wk "search project")
   "." '(find-file :wk "find file")
   "," '(consult-buffer :wk "switch buffer")
   ":" (lambda () (interactive) (execute-extended-command nil))
+  "u" '(universal-argument :wk "universal argument")
 
   "d" '(:ignore t :wk "denote")
   "dj" '(denote-journal-new-or-existing-entry :wk "journal")
@@ -3603,6 +3436,7 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "dl" '(denote-link-or-create t :wk "Link Note")
   "dn" '(denote t :wk "Create a new note")
   "dr" '(denote-rename-file t :wk "Rename Note")
+  "ds" '(denote-solo-switch :wk "switch silo")
   "dtl" '(tmr-list-timers :wk "list timer")
   "dtt" '(tmr :wk "set timer")
 
@@ -3649,6 +3483,7 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "gt" '(eglot-find-typeDefinition :wk "go to type definition")
   "gr" '(xref-find-references :wk "find references")
   "gs" '(magit-file-stage :wk "stage file")
+  "gu" '(my/magit-uncommit :wk "uncommit (keep & unstage)")
   "gb" '(vc-annotate :wk "blame")
   "gT" '(my/code-todos-harvest :wk "harvest code TODOs")
 
@@ -3656,6 +3491,7 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "os" '(my/snip-upload :wk "snip buffer/region")
   "oS" '(my/snip-upload-file :wk "snip file")
   "op" '(pass :wk "pass")
+  "ot" '(ghostel :wk "ghostel")
 
   "h" '(:ignore t :wk "help")
   "hm" '(describe-mode :wk "mode")
@@ -3681,8 +3517,8 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "w L" '(buf-move-right :wk "Buffer move right")
 
   "c" '(:ignore t :wk "code")
-  "cc" '(my/compile-or-recompile :wk "compile / recompile")
-  "cC" '(compile :wk "compile (new command)")
+  "cc" '(my/compile-or-recompile :wk "compile")
+  "cC" '(ghostel-compile :wk "recompile")
   "ca" '(eglot-code-actions :wk "code actions")
   "cr" '(eglot-rename :wk "lsp rename")
   "cf" '(eglot-format :wk "format buffer")
@@ -3728,17 +3564,19 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
         (call-interactively 'flash-evil-jump)))))
 
 (general-def '(normal visual operator) 'override
+  :predicate '(not (derived-mode-p 'mu4e-main-mode 'mu4e-headers-mode
+                                    'mu4e-view-mode 'mu4e-compose-mode))
   "s" 'my/s-key-dispatch)
 
 
 (general-def 'normal 'override
   "K" 'my/eldoc-and-jump
-  "'d" 'flycheck-next-error
-  ";d" 'flycheck-previous-error
+  "]d" 'flycheck-next-error
+  "[d" 'flycheck-previous-error
   "]c" 'diff-hl-next-hunk
   "[c" 'diff-hl-previous-hunk
-  "'b" 'switch-to-next-buffer
-  ";b" 'switch-to-prev-buffer
+  "]b" 'switch-to-next-buffer
+  "[b" 'switch-to-prev-buffer
   "]t" 'tab-next
   "[t" 'tab-previous
   "P" 'consult-yank-from-kill-ring
@@ -3767,6 +3605,7 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "mC" '(org-capture :wk "capture")
 
   "mc" '(:wk "set" :ignore)
+  "mk" '(kitty-gfx-org-heading-sizes :wk "kgfx headlines")
   "mcd" '(org-deadline :wk "deadline")
   "mcs" '(org-schedule :wk "schedule")
   "mce" '(org-set-effort :wk "effort")
@@ -3929,13 +3768,19 @@ date) and the dired header are never skipped."
              ((string> a-feed b-feed) nil)
              (t (string< a-title b-title)))))))
 
-(use-package elfeed-org
-  :ensure t
+(use-package elfeed-protocol
+  :ensure (:host github :repo "fasheng/elfeed-protocol")
   :after elfeed
   :custom
-  (rmh-elfeed-org-files (list "~/org/rss.org"))
+  (elfeed-protocol-work-with-others t)
+  (elfeed-protocol-enabled-protocols '(ttrss))
+  :init
+  (add-to-list 'elfeed-feeds
+               '("ttrss+https://cashmere@rss.cashmere.rs"
+                 :password (password-store-get "rss.cashmere.rs"))
+               :append)
   :config
-  (elfeed-org))
+  (elfeed-protocol-enable))
 
 (use-package elfeed-goodies
   :ensure t
@@ -3955,28 +3800,35 @@ date) and the dired header are never skipped."
                           line-spacing 0.2)
               (shrface-mode 1))))
 
-(defun elfeed-export-from-index-to-csv (output-file)
-  (interactive "FExport CSV nach: ")
-  (require 'elfeed)
-  (require 'elfeed-db)
-  
-  (elfeed-db-load)
-  
-  (let ((entries (hash-table-values elfeed-db-entries)))
-    (with-temp-file output-file
-      (insert "id,title,link,date,feed,tags\n")
-      (dolist (entry entries)
-        (insert (format "\"%s\",\"%s\",\"%s\",%s,\"%s\",\"%s\"\n"
-                        (elfeed-entry-id entry)
-                        (replace-regexp-in-string "\"" "\"\"" (elfeed-entry-title entry))
-                        (elfeed-entry-link entry)
-                        (elfeed-entry-date entry)
-                        (elfeed-feed-title (elfeed-entry-feed entry))
-                        (mapconcat #'symbol-name (elfeed-entry-tags entry) " "))))
-      (message "Export abgeschlossen: %d Einträge" (length entries)))))
-
-(setq browse-url-browser-function 'browse-url-generic
+(setq browse-url-browser-function 'eww-browse-url
+      browse-url-secondary-browser-function 'browse-url-generic
       browse-url-generic-program "qutebrowser")
+
+(defun my/browse-url-no-frame-guard (orig url &rest args)
+  "Around-advice for `browse-url' that resolves and calls the handler
+directly, bypassing the upstream `browse-url' body.
+
+Emacs 30+ unconditionally calls `(frame-parameter nil \\='display)`
+inside `browse-url' to set DISPLAY from the selected frame. That raises
+\"Frames are not in use or not initialized\" in daemon contexts, and
+in TUI-only setups the native-compiled frame access inside the subr
+can throw even when `(frame-live-p (selected-frame))' returns non-nil
+in the caller (the two checks diverge).
+
+For the handlers registered here (`eww-browse-url' is in-frame,
+`browse-url-generic' inherits DISPLAY from the daemon env) the DISPLAY
+reset is unnecessary, so do the handler resolution ourselves and skip
+`browse-url' entirely."
+  (interactive (browse-url-interactive-arg "URL: "))
+  (unless (called-interactively-p 'interactive)
+    (setq args (or args (list browse-url-new-window-flag))))
+  (let ((function (or (browse-url-select-handler url)
+                      browse-url-browser-function)))
+    (if (functionp function)
+        (apply function url args)
+      (error "No suitable browser for URL %s" url))))
+
+(advice-add 'browse-url :around #'my/browse-url-no-frame-guard)
 
 (use-package eww
   :ensure nil
@@ -4060,6 +3912,12 @@ date) and the dired header are never skipped."
 (use-package link-hint
   :ensure t
   :commands (link-hint-open-link link-hint-copy-link))
+
+(with-eval-after-load 'general
+  (general-def :states '(normal visual)
+    :keymaps '(eww-mode-map elfeed-show-mode-map elfeed-search-mode-map)
+    "f" #'link-hint-open-link
+    "F" #'link-hint-copy-link))
 
 (use-package engine-mode
   :ensure t
@@ -4184,18 +4042,6 @@ date) and the dired header are never skipped."
   (setq global-mode-string
         (delete '(:eval mu4e-alert-mode-line) global-mode-string)))
 
-(use-package denote-project-notes
-  :ensure t
-  :after org
-  :config
-  (setq denote-project-notes-identifier '(project stayem)))
-
-(use-package arrow
-  :ensure t
-  :elpaca (arrow :host github :repo "vmargb/arrow.el")
-  :config
-  (setq arrow-mode 1))
-
 (use-package colorful-mode
   ;; :diminish
   :ensure t ; Optional
@@ -4276,12 +4122,6 @@ opening another file in same project does not re-notify."
   (setq eshell-command-aliases-list
         '(("nh-switch" "nh os switch --quiet $*"))))
 
-(use-package eshell-atuin
-  :ensure t
-  :after eshell
-  :config
-  (eshell-atuin-mode))
-
 (use-package el-fetch
   :ensure t)
 
@@ -4291,6 +4131,7 @@ opening another file in same project does not re-notify."
   (ghostel-shell "xonsh")
   (ghostel-ssh-install-terminfo t)
   :config
+  (require 'ghostel-compile)
   (setq-default window-adjust-process-window-size-function
                 #'window-adjust-process-window-size-largest)
   (add-to-list 'ghostel-tramp-shells '("rpc" login-shell))
@@ -4317,7 +4158,16 @@ opening another file in same project does not re-notify."
   :ensure (:host github :repo "dakra/ghostel"
            :files ("extensions/evil-ghostel/*.el"))
   :after (ghostel evil)
+  :custom
+  (evil-ghostel-escape 'evil)
   :hook (ghostel-mode . evil-ghostel-mode))
+
+(use-package inheritenv
+  :ensure t
+  :after ghostel
+  :config
+  (inheritenv-add-advice 'ghostel-compile)
+  (inheritenv-add-advice 'ghostel-recompile))
 
 (when-let* ((garden-dir (expand-file-name
                          (or (alist-get 'garden my/local-packages) "~/garden")))
@@ -4331,17 +4181,24 @@ opening another file in same project does not re-notify."
   (garden-auto-index-mode 1)
   (autoload 'garden "garden-dashboard" nil t)
   (autoload 'garden-sidecar "garden-dashboard" nil t)
+  (autoload 'garden-search "garden-dashboard" nil t)
+  (autoload 'garden-fleet "garden-fleet" nil t)
   (autoload 'garden-connect "garden-connect" nil t)
-  (autoload 'garden-connect-pick "garden-connect" nil t))
-;; (autoload 'garden-player "garden-player" nil t)
+  (autoload 'garden-connect-pick "garden-connect" nil t)
+  (autoload 'garden-publish "garden-publish" nil t)
+  (autoload 'garden-publish-all "garden-publish" nil t)
+  (autoload 'garden-publish-wiki "garden-publish" nil t)
+  (autoload 'garden-publish-blog "garden-publish" nil t)
+  (autoload 'garden-publish-deploy "garden-publish" nil t)
+  (autoload 'denote-capf-setup "denote-capf" nil t)
+  (with-eval-after-load 'denote-capf
+    (setq denote-capf-directories '("~/org/")))
+  (add-hook 'org-mode-hook #'denote-capf-setup)
 
-(autoload 'denote-capf-setup "denote-capf" nil t)
-(add-hook 'org-mode-hook #'denote-capf-setup)
-(autoload 'garden-publish "garden-publish" nil t)
-(autoload 'garden-publish-all "garden-publish" nil t)
-(autoload 'garden-publish-wiki "garden-publish" nil t)
-(autoload 'garden-publish-blog "garden-publish" nil t)
-(autoload 'garden-publish-deploy "garden-publish" nil t)
+  (defun my/denote-capf-tab-in-insert ()
+    (when (featurep 'evil)
+      (evil-local-set-key 'insert (kbd "TAB") #'indent-for-tab-command)))
+  (add-hook 'org-mode-hook #'my/denote-capf-tab-in-insert))
 
 (use-package sops
   :ensure (:type git :host github :repo "djgoku/sops")
@@ -4359,12 +4216,6 @@ opening another file in same project does not re-notify."
         remote-file-name-inhibit-locks t
         tramp-verbose 1))
 
-(use-package difftastic
-  :ensure t
-  :defer t
-  :init
-  (difftastic-bindings-mode))
-
 (use-package magit-delta
   :ensure t
   :after magit
@@ -4373,99 +4224,57 @@ opening another file in same project does not re-notify."
     (add-hook 'magit-mode-hook #'magit-delta-mode)))
 
 (use-package pretty-sha-path
-  :ensure t)
-
-(use-package grid
-  :ensure (:host github :repo "ichernyshovvv/grid.el")
-  :demand t)
-
-(use-package enlight
-  :ensure (:host github :repo "ichernyshovvv/enlight")
-  :demand t
-  :after grid
+  :ensure t
   :config
-  (require 'enlight-menu)
-  (defface my/enlight-header
-    '((t (:inherit font-lock-keyword-face :weight bold)))
-    "Enlight banner face.")
+  (setopt global-pretty-sha-path-mode 't))
 
-  (defvar my/enlight-banner
-    (propertize
-     "███████ ███    ███  █████   ██████ ███████
-██      ████  ████ ██   ██ ██      ██
-█████   ██ ████ ██ ███████ ██      ███████
-██      ██  ██  ██ ██   ██ ██           ██
-███████ ██      ██ ██   ██  ██████ ███████"
-     'face 'my/enlight-header))
+(use-package pulsar
+  :ensure t
+  :config
+  (setq pulsar-pulse t)
+  (setq pulsar-delay 0.025)
+  (setq pulsar-iterations 10)
+  (setq pulsar-face 'evil-ex-lazy-highlight)
+  (setq pulsar-tty-color "white")
 
-  (defun my/enlight-stats ()
-    (concat
-     (format "%d packages" (length (elpaca--queued)))
-     (when (bound-and-true-p after-init-time)
-       (format " · %s" (emacs-init-time "%.2fs")))
-     (format " · %s" (format-time-string "%a %d %b %H:%M"))))
+  (let ((orig-face-background (symbol-function 'face-background)))
+    (defun my/pulsar--create-pulse (locus face)
+      "Like `pulsar--create-pulse' but with a smarter TTY colour fallback."
+      (let ((common-fn (lambda (locus face)
+                         (let ((pulse-flag t)
+                               (pulse-delay pulsar-delay)
+                               (pulse-iterations pulsar-iterations)
+                               (overlay (make-overlay (car locus) (cdr locus))))
+                           (overlay-put overlay 'pulse-delete t)
+                           (overlay-put overlay 'window (frame-selected-window))
+                           (pulse-momentary-highlight-overlay overlay face)))))
+        (if (display-graphic-p)
+            (funcall common-fn locus face)
+          (cl-letf (((symbol-function 'face-background)
+                     (lambda (f &optional frame inherit)
+                       (let ((bg (funcall orig-face-background f frame inherit)))
+                         (cond
+                          ((and (eq f 'default) (null bg))
+                           (or (frame-parameter frame 'background-color)
+                               (if (eq (frame-parameter frame 'background-mode) 'light)
+                                   "white"
+                                 "black")))
+                          ((null bg) pulsar-tty-color)
+                          (t bg))))))
+            (funcall common-fn locus face))))))
+  (advice-add 'pulsar--create-pulse :override #'my/pulsar--create-pulse)
 
-  (defun my/enlight-recent ()
-    (if (bound-and-true-p recentf-list)
-        (mapconcat
-         (lambda (f)
-           (let ((s (abbreviate-file-name f)))
-             (if (> (length s) 32)
-                 (concat "…" (substring s (- (length s) 31)))
-               s)))
-         (seq-take recentf-list 8)
-         "\n")
-      (propertize "no recent files" 'face 'shadow)))
+  (add-to-list 'pulsar-pulse-functions 'evil-scroll-down)
+  (add-to-list 'pulsar-pulse-functions 'flymake-goto-next-error)
+  (add-to-list 'pulsar-pulse-functions 'flymake-goto-prev-error)
+  (add-to-list 'pulsar-pulse-functions 'evil-yank)
+  (add-to-list 'pulsar-pulse-functions 'evil-yank-line)
+  (add-to-list 'pulsar-pulse-functions 'evil-delete)
+  (add-to-list 'pulsar-pulse-functions 'evil-delete-line)
+  (add-to-list 'pulsar-pulse-functions 'evil-jump-item)
+  (add-to-list 'pulsar-pulse-functions 'diff-hl-next-hunk)
+  (add-to-list 'pulsar-pulse-functions 'diff-hl-previous-hunk)
 
-  (defun my/enlight-content ()
-    (concat
-     (grid-make-box `(:align center :width 80 :content ,my/enlight-banner))
-     "\n"
-     (grid-make-box `(:align center :width 80
-                     :content ,(propertize (my/enlight-stats) 'face 'shadow)))
-     "\n\n"
-     (grid-make-row
-      (list
-       (grid-make-box
-        `(:width 40 :border t :padding 1
-          :content ,(enlight-menu
-                     '(("Quick actions"
-                        ("Agenda"           (org-agenda nil "d") "a")
-                        ("Recent file"      consult-recent-file "r")
-                        ("Switch project"   projectile-switch-project "p")
-                        ("Find note"        denote-open-or-create "n")
-                        ("Journal entry"    denote-journal-new-or-existing-entry "j")
-                        ("Magit"            magit-status "g")
-                        ("Files"            dirvish "f")
-                        ("Mail"             mu4e "m")
-                        ("IRC"              run-irc "i")
-                        ("Switch workspace" my/workspace-switch-to "w")
-                        ("Restore session"  my/workspace-load-session "S"))))))
-       "  "
-       (grid-make-box
-        `(:width 38 :border t :padding 1
-          :content ,(concat (propertize "Recent files\n\n" 'face 'enlight-menu-section)
-                            (my/enlight-recent)))))))))
-
-(defun my/enlight-refresh (&rest _)
-  (enlight--update 'enlight-content (my/enlight-content)))
-(advice-add 'enlight :before #'my/enlight-refresh)
-
-(defun my/session-exists-p ()
-  (file-exists-p (file-name-concat persp-save-dir persp-auto-save-fname)))
-
-(setq initial-buffer-choice
-      (lambda ()
-        (if (and (fboundp 'enlight) (not (my/session-exists-p)))
-            (enlight)
-          (get-buffer-create "*scratch*"))))
-
-(add-hook 'elpaca-after-init-hook
-          (lambda ()
-            (when (and (fboundp 'enlight-open) (not (my/session-exists-p)))
-              (enlight-open))))
-
-(with-eval-after-load 'evil
-  (evil-set-initial-state 'enlight-mode 'emacs))
+  (pulsar-global-mode))
 
 (provide 'init)

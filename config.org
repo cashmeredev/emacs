@@ -33,10 +33,6 @@
 
 * local packages
 
-Per-host development overrides.  Any package registered in the gitignored =local.el= is loaded from a local checkout on =load-path= instead of its remote source, so I can hack on it in place (for example =kitty-graphics.el= on its =testing= branch) while =config.org= stays identical across every machine.  No per-package recipe wrapper is needed: an =:around= advice on the elpaca =:ensure= normalizer rewrites the recipe to =nil= for anything in =my/local-packages=, so the =use-package= forms downstream use the plain =:ensure (:host github :repo "...")= they always have and =local.el= overrides.
-
-=local.el= is loaded inside =eval-and-compile= so the advice sees the same =my/local-packages= whether =config.el= runs as source or native-compiled.  After editing =local.el=, re-evaluate the file (or restart) so the new override takes effect.  A minimal =local.el= looks like:
-
 #+begin_example
 ;;; -*- lexical-binding: t -*-
 (setq my/local-packages
@@ -52,6 +48,8 @@ Set per-host in the gitignored `local.el'.")
 
 (dolist (entry my/local-packages)
   (add-to-list 'load-path (expand-file-name (cdr entry))))
+
+(add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
 
 (defun my/elpaca-skip-local (orig name _keyword args)
   (if (assq name my/local-packages)
@@ -138,8 +136,8 @@ Set per-host in the gitignored `local.el'.")
   (scroll-bar-mode -1)
   (add-to-list 'default-frame-alist '(vertical-scroll-bars . nil))
   (add-to-list 'default-frame-alist '(horizontal-scroll-bars . nil))
-  ;; (set-frame-parameter (selected-frame) 'alpha-background 80)
-  ;; (add-to-list 'default-frame-alist '(alpha-background . 80))
+  (set-frame-parameter (selected-frame) 'alpha-background 80)
+  (add-to-list 'default-frame-alist '(alpha-background . 80))
   (global-hl-line-mode 1) ;; Highlight the current line
   (add-hook 'org-mode-hook (lambda () (setq-local global-hl-line-mode nil))) ;; hl-line repaints wipe kitty-graphics scaled headings
   (add-hook 'markdown-mode-hook (lambda () (setq-local global-hl-line-mode nil))) ;; same conflict for kitty-graphics markdown headings
@@ -287,6 +285,8 @@ Selects the compilation window so the cursor lands in it."
       (when gls
         (setq insert-directory-program gls)))))
 #+end_src
+
+* async
 
 #+begin_src emacs-lisp
 (use-package async :ensure t)
@@ -781,7 +781,8 @@ Defined early so later =with-eval-after-load 'general= callbacks find =my-leader
     (my-leader
       "aa" '(agent-shell :wk "start")
       "at" '(agent-shell-toggle :wk "toggle")
-      "am" '(agent-shell-help-menu :wk "open session")))
+      "am" '(agent-shell-help-menu :wk "open session")
+      "ar" '(agent-shell-send-region :wk "send region")))
 
   :config
   ;; Runs only on first invocation — not at Emacs startup.
@@ -814,7 +815,27 @@ let's give agent-shell another try
 #+begin_src emacs-lisp
 (defun my/agent-shell-autoscroll (&rest _)
   (dolist (win (get-buffer-window-list (current-buffer) 'visible))
-    (set-window-point win (point-max))))
+    (when (>= (window-point win)
+              (save-excursion (goto-char (point-max)) (point)))
+      (set-window-point win (point-max)))))
+
+(defun my/agent-shell-display-buffer-rules ()
+  '(("\\*Kimi\\(?:\\*\\|:[^*]*\\*\\)"
+     (display-buffer-in-side-window)
+     (side . bottom)
+     (slot . 0)
+     (window-height . 0.33)
+     (dedicated . t)
+     (window-parameters . ((no-other-window . nil)
+                           (no-delete-other-windows . nil))))
+    ("\\*agent-shell-diff\\*"
+     (display-buffer-in-side-window)
+     (side . right)
+     (slot . 1)
+     (window-width . 0.5)
+     (dedicated . t)
+     (window-parameters . ((no-other-window . nil)
+                           (no-delete-other-windows . nil))))))
 
 (use-package agent-shell
   :ensure t
@@ -823,10 +844,51 @@ let's give agent-shell another try
               ("M-RET" . shell-maker-submit))
   :config
   (advice-add 'shell-maker-submit :after #'my/agent-shell-autoscroll)
-  (setq agent-shell-anthropic-claude-environment
-        (agent-shell-make-environment-variables
-         "ANTHROPIC_BASE_URL" "https://api.minimax.io/anthropic"
-         "ANTHROPIC_AUTH_TOKEN" (password-store-get "minimax")))) 
+  (dolist (rule (my/agent-shell-display-buffer-rules))
+    (add-to-list 'display-buffer-alist rule)) 
+  (setq agent-shell-tool-use-expand-by-default nil)
+  (setq agent-shell-thought-process-expand-by-default nil)
+  (setq agent-shell-user-message-expand-by-default nil)
+  (setq agent-shell-diff-delta-command
+        (when (executable-find "delta")
+          '("delta" "--no-gitconfig" "--color-only")))
+
+  ;; Work around agent-shell's `window-system' guard so clipboard images
+  ;; work in terminal Emacs (`emacs -nw').  The underlying save routine
+  ;; already shells out to wl-paste/xclip/pngpaste/powershell, none of
+  ;; which require a GUI frame.
+  (defun my/agent-shell-send-clipboard-image-in-terminal (orig-fn &optional pick-shell)
+    "Call ORIG-FN, but allow `agent-shell-send-clipboard-image' in terminal Emacs."
+    (if (window-system)
+        (funcall orig-fn pick-shell)
+      (let* ((screenshots-dir (agent-shell--dot-subdir "screenshots"))
+             (image-path (agent-shell--save-clipboard-image
+                          :destination-dir screenshots-dir))
+             (shell-buffer (when pick-shell
+                             (agent-shell--read-shell-buffer
+                              :prompt "Send image to shell: "))))
+        (agent-shell-insert
+         :text (agent-shell--get-files-context :files (list image-path))
+         :shell-buffer shell-buffer))))
+  (advice-add 'agent-shell-send-clipboard-image :around
+              #'my/agent-shell-send-clipboard-image-in-terminal)
+
+  ;; Also let C-y / `agent-shell-yank-dwim' try the clipboard image first
+  ;; in terminal Emacs before falling back to plain text yank.
+  (defun my/agent-shell-yank-dwim-in-terminal (orig-fn &optional arg)
+    "Call ORIG-FN, but try clipboard image first in terminal Emacs."
+    (if (window-system)
+        (funcall orig-fn arg)
+      (if-let* ((screenshots-dir (agent-shell--dot-subdir "screenshots"))
+                (image-path (agent-shell--save-clipboard-image
+                             :destination-dir screenshots-dir
+                             :no-error t)))
+          (agent-shell-insert
+           :text (agent-shell--get-files-context :files (list image-path))
+           :shell-buffer (agent-shell--shell-buffer))
+        (funcall orig-fn arg))))
+  (advice-add 'agent-shell-yank-dwim :around
+              #'my/agent-shell-yank-dwim-in-terminal))
 #+end_src
 
 * eldoc
@@ -1063,6 +1125,10 @@ Only activates when running in a Kitty terminal (not in GUI Emacs).
   (kitty-gfx-shr-fit-height 20)
   :hook (dired-mode . kitty-gfx-dired-auto-preview-mode)
   :config
+  (setq kitty-gfx-enable-browser t
+        kitty-gfx-casty-program "~/projects/casty/bin/casty.js"
+        kitty-gfx-casty-chrome "helium-browser")
+
   (kitty-graphics-setup))
 #+end_src
 
@@ -1477,55 +1543,22 @@ Skips capture tasks and projects."
 *** org-capture helpers
 
 #+begin_src emacs-lisp
-(defun my/org-capture-timeblock-to-journal ()
-  "Capture function: jump to today's journal for a timeblock."
-  (require 'denote)
+(defun my/org-capture-to-journal (heading)
   (require 'denote-journal)
-  (let* ((today (format-time-string "%Y-%m-%d"))
-         (journal-files (denote-directory-files "journal"))
-         (today-journal (seq-find
-                        (lambda (file)
-                          (string-match-p today (file-name-nondirectory file)))
-                        journal-files)))
-    (if today-journal
-        (find-file today-journal)
-      (denote-journal-new-or-existing-entry))
-    (goto-char (point-max))
-    (insert "\n* Timeblock\n")))
+  (denote-journal-new-or-existing-entry)
+  (goto-char (point-max))
+  (insert heading)
+  (current-buffer))
+
+(defun my/org-capture-timeblock-to-journal ()
+  (my/org-capture-to-journal "\n* Timeblock\n"))
 
 (defun my/org-capture-recurring-to-journal ()
-  "Capture function: jump to today's journal for a recurring task."
-  (require 'denote)
-  (require 'denote-journal)
-  (let* ((today (format-time-string "%Y-%m-%d"))
-         (journal-files (denote-directory-files "journal"))
-         (today-journal (seq-find
-                        (lambda (file)
-                          (string-match-p today (file-name-nondirectory file)))
-                        journal-files)))
-    (if today-journal
-        (find-file today-journal)
-      (denote-journal-new-or-existing-entry))
-    (goto-char (point-max))
-    (insert "\n* Recurring\n")))
+  (my/org-capture-to-journal "\n* Recurring\n"))
 
 (defun my/org-capture-meeting-to-journal ()
-  "Capture function: jump to today's journal for a meeting note."
-  (require 'denote)
-  (require 'denote-journal)
-  (let* ((today (format-time-string "%Y-%m-%d"))
-         (journal-files (denote-directory-files "journal"))
-         (today-journal (seq-find
-                        (lambda (file)
-                          (string-match-p today (file-name-nondirectory file)))
-                        journal-files)))
-    (if today-journal
-        (find-file today-journal)
-      (denote-journal-new-or-existing-entry))
-    (goto-char (point-max))
-    (insert "\n* Meeting: ")))
+  (my/org-capture-to-journal "\n* Meeting: "))
 
-;; capture templates are merged in the org-capture section below
 #+end_src
 
 
@@ -1541,48 +1574,42 @@ Skips capture tasks and projects."
 
 *** org-capture combined with denote
 
-#+begin_src emacs-lisp 
-(defun my/org-capture-denote-deadline ()
-  (let* ((context (read-string "Task with deadline: "))
-         (deadline (org-read-date t nil nil "Deadline: "))
-         (file-name (denote nil '("agenda"))))
-    (find-file file-name)
-    (goto-char (point-min))
-    (forward-line 4)
-    (insert (format "\n* %s\nDEADLINE: <%s>\n\n" context deadline))
-    (current-buffer)))
-
-(defun my/org-capture-denote-scheduled ()
-  (let* ((context (read-string "Scheduled task: "))
-         (schedule (org-read-date t nil nil "Schedule: "))
-         (file-name (denote nil '("agenda"))))
-    (find-file file-name)
-    (goto-char (point-min))
-    (forward-line 4)
-    (insert (format "\n* %s\nSCHEDULED: <%s>\n\n" context schedule))
-    (current-buffer)))
-
-(defun my/org-capture-denote-task ()
+#+begin_src emacs-lisp
+(defun my/org-capture-task-to-journal ()
   (let* ((context (read-string "Task: "))
          (todo-state (completing-read "TODO state: "
-                                      '("ACTIVE" "NEXT" "TODO" "WAIT")))
-         (file-name (denote nil '("agenda"))))
-    (find-file file-name)
-    (goto-char (point-min))
-    (forward-line 4)
-    (insert (format "\n* %s %s\n\n" todo-state context))
-    (point)))
+                                      '("ACTIVE" "NEXT" "TODO" "WAIT"))))
+    (my/org-capture-to-journal (format "\n* %s %s\n\n" todo-state context))))
+
+(defun my/org-capture-deadline-to-journal ()
+  (let* ((context (read-string "Task with deadline: "))
+         (deadline (org-read-date t nil nil "Deadline: ")))
+    (my/org-capture-to-journal (format "\n* %s\nDEADLINE: <%s>\n\n" context deadline))))
+
+(defun my/org-capture-scheduled-to-journal ()
+  "Capture a scheduled task into today's denote-journal file."
+  (let* ((context (read-string "Scheduled task: "))
+         (schedule (org-read-date t nil nil "Schedule: ")))
+    (my/org-capture-to-journal (format "\n* %s\nSCHEDULED: <%s>\n\n" context schedule))))
+
+(defun my/org-capture-float ()
+  (interactive)
+  (select-frame
+   (make-frame '((title . "org-capture")
+                 (width . 160)
+                 (height . 14))))
+  (org-capture))
 
 (with-eval-after-load 'org
   (setq org-capture-templates
         '(("t" "Task" plain
-           (function my/org-capture-denote-task)
+           (function my/org-capture-task-to-journal)
            "" :immediate-finish t :jump-to-captured t)
           ("d" "Deadline" plain
-           (function my/org-capture-denote-deadline)
+           (function my/org-capture-deadline-to-journal)
            "" :immediate-finish t :jump-to-captured t)
           ("s" "Scheduled" plain
-           (function my/org-capture-denote-scheduled)
+           (function my/org-capture-scheduled-to-journal)
            "" :immediate-finish t :jump-to-captured t)
           ("b" "Timeblock" plain
            (function my/org-capture-timeblock-to-journal)
@@ -2349,6 +2376,34 @@ Timers that expired while Emacs was closed fire immediately."
     denote-merge-region-markdown-quote
     denote-merge-region-markdown-fenced-block))
 #+end_src
+
+** denote-solo
+
+Auto switch silos (different workspaces/folders) based on preconfigured directories.
+
+#+begin_src emacs-lisp
+(use-package denote-solo
+  :ensure (:host github :repo "pavlo/denote-solo")
+  :after denote
+  :config
+  (setq denote-solo-directories
+        '(("org"    . "~/org")
+          ("garden" . "~/garden"))
+        denote-solo-display-modeline nil)
+  (denote-solo-mode 1)
+
+  (defun my/denote-solo-sync-directory (&rest _)
+    (when-let* ((solo denote-solo--current-solo)
+                (path (denote-solo--directory-for-name solo)))
+      (setq-default denote-directory path)
+      (dolist (buf (buffer-list))
+        (with-current-buffer buf
+          (when (local-variable-p 'denote-directory)
+            (setq denote-directory path))))))
+
+  (advice-add 'denote-solo-switch :after #'my/denote-solo-sync-directory))
+#+end_src
+
 
 * which-key
 
@@ -3434,9 +3489,44 @@ Native =undo-redo= (via =evil-undo-system='undo-redo=); just raise the undo limi
 
 * modelines
 
+** display-time
+
+#+begin_src emacs-lisp
+(display-time-mode 1)
+#+end_src
+
 ** doom-modeline
 
 #+begin_src emacs-lisp
+(defvar-local my/doom-modeline--buffer-title nil)
+
+(defun my/doom-modeline--update-title-cache ()
+  "Update the cached #+title for the current buffer."
+  (setq-local my/doom-modeline--buffer-title
+              (cadar (org-collect-keywords '("TITLE")))))
+
+(defun my/doom-modeline--buffer-title ()
+  "Return the cached #+title, computing it if necessary."
+  (unless (local-variable-p 'my/doom-modeline--buffer-title)
+    (my/doom-modeline--update-title-cache))
+  my/doom-modeline--buffer-title)
+
+(defun my/doom-modeline-set-buffer-title (&rest _)
+  "Override doom-modeline's cached file name with the Org #+title.
+If no TITLE keyword is found, leave doom-modeline's default name."
+  (when-let* ((title (my/doom-modeline--buffer-title)))
+    (setq doom-modeline--buffer-file-name
+          (propertize title
+                      'face 'doom-modeline-buffer-file
+                      'mouse-face 'mode-line-highlight
+                      'help-echo (concat (or buffer-file-truename (buffer-name))
+                                         "\nmouse-1: Previous buffer\nmouse-3: Next buffer")
+                      'local-map mode-line-buffer-identification-keymap))))
+
+(defun my/doom-modeline--invalidate-title-cache ()
+  "Invalidate the cached title so it gets recomputed on next update."
+  (kill-local-variable 'my/doom-modeline--buffer-title))
+
 (use-package doom-modeline
   :ensure t
   :init (doom-modeline-mode 1)
@@ -3448,7 +3538,9 @@ Native =undo-redo= (via =evil-undo-system='undo-redo=); just raise the undo limi
         doom-modeline-buffer-file-name-style 'relative-to-project
         doom-modeline-buffer-encoding nil
         doom-modeline-time t
-        doom-modeline-time-live-icon t))
+        doom-modeline-time-live-icon t)
+  (advice-add #'doom-modeline-update-buffer-file-name :after #'my/doom-modeline-set-buffer-title)
+  (add-hook 'before-save-hook #'my/doom-modeline--invalidate-title-cache))
 #+end_src
 
 * soph
@@ -4153,6 +4245,7 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "dl" '(denote-link-or-create t :wk "Link Note")
   "dn" '(denote t :wk "Create a new note")
   "dr" '(denote-rename-file t :wk "Rename Note")
+  "ds" '(denote-solo-switch :wk "switch silo")
   "dtl" '(tmr-list-timers :wk "list timer")
   "dtt" '(tmr :wk "set timer")
 
@@ -4207,6 +4300,7 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "os" '(my/snip-upload :wk "snip buffer/region")
   "oS" '(my/snip-upload-file :wk "snip file")
   "op" '(pass :wk "pass")
+  "ot" '(ghostel :wk "ghostel")
 
   "h" '(:ignore t :wk "help")
   "hm" '(describe-mode :wk "mode")
@@ -4279,17 +4373,19 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
         (call-interactively 'flash-evil-jump)))))
 
 (general-def '(normal visual operator) 'override
+  :predicate '(not (derived-mode-p 'mu4e-main-mode 'mu4e-headers-mode
+                                    'mu4e-view-mode 'mu4e-compose-mode))
   "s" 'my/s-key-dispatch)
 
 
 (general-def 'normal 'override
   "K" 'my/eldoc-and-jump
-  "'d" 'flycheck-next-error
-  ";d" 'flycheck-previous-error
+  "]d" 'flycheck-next-error
+  "[d" 'flycheck-previous-error
   "]c" 'diff-hl-next-hunk
   "[c" 'diff-hl-previous-hunk
-  "'b" 'switch-to-next-buffer
-  ";b" 'switch-to-prev-buffer
+  "]b" 'switch-to-next-buffer
+  "[b" 'switch-to-prev-buffer
   "]t" 'tab-next
   "[t" 'tab-previous
   "P" 'consult-yank-from-kill-ring
@@ -4325,6 +4421,7 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "mC" '(org-capture :wk "capture")
 
   "mc" '(:wk "set" :ignore)
+  "mk" '(kitty-gfx-org-heading-sizes :wk "kgfx headlines")
   "mcd" '(org-deadline :wk "deadline")
   "mcs" '(org-schedule :wk "schedule")
   "mce" '(org-set-effort :wk "effort")
@@ -5027,7 +5124,6 @@ opening another file in same project does not re-notify."
   (autoload 'garden-fleet "garden-fleet" nil t)
   (autoload 'garden-connect "garden-connect" nil t)
   (autoload 'garden-connect-pick "garden-connect" nil t)
-  ;; (autoload 'garden-player "garden-player" nil t)
   (autoload 'garden-publish "garden-publish" nil t)
   (autoload 'garden-publish-all "garden-publish" nil t)
   (autoload 'garden-publish-wiki "garden-publish" nil t)
@@ -5036,34 +5132,13 @@ opening another file in same project does not re-notify."
   (autoload 'denote-capf-setup "denote-capf" nil t)
   (with-eval-after-load 'denote-capf
     (setq denote-capf-directories '("~/org/")))
-  (add-hook 'org-mode-hook #'denote-capf-setup))
+  (add-hook 'org-mode-hook #'denote-capf-setup)
+
+  (defun my/denote-capf-tab-in-insert ()
+    (when (featurep 'evil)
+      (evil-local-set-key 'insert (kbd "TAB") #'indent-for-tab-command)))
+  (add-hook 'org-mode-hook #'my/denote-capf-tab-in-insert))
 #+end_src
-
-** garden-player
-
-=garden-player= (=M-x garden-player=, buffer =*navi*=) is a terminal Navidrome client: it streams through a background =mpv= over a unix socket, renders a TUI with =vui=, and shows album art inline through the kitty graphics protocol. It opens on your starred library; press =u= to flip the song list to the live up-next queue and =u= again to flip back.
-
-The buffer installs =garden-player-map= as a vim-like keymap (bindings live in =garden-player.el=, this is just the reference):
-
-| key | action                                                       |
-|-----+--------------------------------------------------------------|
-| =SPC= | play / pause                                                 |
-| =h=   | previous track                                               |
-| =l=   | next track                                                   |
-| =j=   | restart the current song from the beginning                  |
-| =k=   | cycle repeat mode: off → repeat-all → repeat-one             |
-| =s=   | reshuffle the queue                                          |
-| =n=   | search the library and play the pick next (no playlist made) |
-| =N=   | search the library and append the pick to the end            |
-| =/=   | same as =N=                                                    |
-| =u=   | toggle between the starred library and the up-next queue     |
-| =f=   | favorite the current song                                    |
-| =r=   | radio: queue songs similar to the current one                |
-| =g=   | reload the starred library                                   |
-| =q=   | quit                                                         |
-| =RET= | play the song on the current row                             |
-
-Interactive commands: =garden-player= opens the player; =garden-player-play-next= and =garden-player-enqueue= search and queue without touching server playlists; =garden-player-toggle-view= flips the list; =garden-player-repeat=, =garden-player-shuffle=, =garden-player-radio=, =garden-player-like=, =garden-player-refresh= and =garden-player-quit= back the matching keys.
 
 * sops
 
@@ -5104,52 +5179,62 @@ Interactive commands: =garden-player= opens the player; =garden-player-play-next
 
 #+begin_src emacs-lisp
 (use-package pretty-sha-path
-  :ensure t)
+  :ensure t
+  :config
+  (setopt global-pretty-sha-path-mode 't))
 #+end_src
 
-
-* COMMENT empv
+* pulsar-mode
 
 #+begin_src emacs-lisp
-(use-package empv
+(use-package pulsar
   :ensure t
-  :defer t
   :config
-  (setq empv-subsonic-url (password-store-get-field "navidrome" "url"))
-  (setq empv-subsonic-username (password-store-get-field "navidrome" "username"))
-  (setq empv-subsonic-password (password-store-get "navidrome"))
+  (setq pulsar-pulse t)
+  (setq pulsar-delay 0.025)
+  (setq pulsar-iterations 10)
+  (setq pulsar-face 'evil-ex-lazy-highlight)
+  (setq pulsar-tty-color "white")
 
-  (defun my/empv-subsonic-starred-songs ()
-    "List every starred song in Navidrome and play the selected one."
-    (interactive)
-    (empv--subsonic-request
-     "getStarred2.view"
-     (empv--subsonic-result-handler "Starred song:")))
+  (let ((orig-face-background (symbol-function 'face-background)))
+    (defun my/pulsar--create-pulse (locus face)
+      "Like `pulsar--create-pulse' but with a smarter TTY colour fallback."
+      (let ((common-fn (lambda (locus face)
+                         (let ((pulse-flag t)
+                               (pulse-delay pulsar-delay)
+                               (pulse-iterations pulsar-iterations)
+                               (overlay (make-overlay (car locus) (cdr locus))))
+                           (overlay-put overlay 'pulse-delete t)
+                           (overlay-put overlay 'window (frame-selected-window))
+                           (pulse-momentary-highlight-overlay overlay face)))))
+        (if (display-graphic-p)
+            (funcall common-fn locus face)
+          (cl-letf (((symbol-function 'face-background)
+                     (lambda (f &optional frame inherit)
+                       (let ((bg (funcall orig-face-background f frame inherit)))
+                         (cond
+                          ((and (eq f 'default) (null bg))
+                           (or (frame-parameter frame 'background-color)
+                               (if (eq (frame-parameter frame 'background-mode) 'light)
+                                   "white"
+                                 "black")))
+                          ((null bg) pulsar-tty-color)
+                          (t bg))))))
+            (funcall common-fn locus face))))))
+  (advice-add 'pulsar--create-pulse :override #'my/pulsar--create-pulse)
 
-  (defun my/empv-subsonic-starred-songs-urls ()
-    "Return a list of playable URLs for every starred song."
-    (thread-last
-      (empv--subsonic-request "getStarred2.view")
-      (alist-get 'results)
-      (seq-filter (lambda (item) (eq (alist-get 'kind item) 'song)))
-      (mapcar #'empv--subsonic-item-extract-url)))
+  (add-to-list 'pulsar-pulse-functions 'evil-scroll-down)
+  (add-to-list 'pulsar-pulse-functions 'flymake-goto-next-error)
+  (add-to-list 'pulsar-pulse-functions 'flymake-goto-prev-error)
+  (add-to-list 'pulsar-pulse-functions 'evil-yank)
+  (add-to-list 'pulsar-pulse-functions 'evil-yank-line)
+  (add-to-list 'pulsar-pulse-functions 'evil-delete)
+  (add-to-list 'pulsar-pulse-functions 'evil-delete-line)
+  (add-to-list 'pulsar-pulse-functions 'evil-jump-item)
+  (add-to-list 'pulsar-pulse-functions 'diff-hl-next-hunk)
+  (add-to-list 'pulsar-pulse-functions 'diff-hl-previous-hunk)
 
-  (defun my/empv-subsonic-play-all-starred-songs ()
-    "Clear the playlist and play every starred song."
-    (interactive)
-    (if-let ((urls (my/empv-subsonic-starred-songs-urls)))
-        (empv-play urls)
-      (message "No starred songs found")))
-
-  (defun my/empv-subsonic-enqueue-all-starred-songs ()
-    "Append every starred song to the current playlist."
-    (interactive)
-    (if-let ((urls (my/empv-subsonic-starred-songs-urls)))
-        (empv-enqueue urls)
-      (message "No starred songs found")))
-
-  (with-eval-after-load 'embark
-    (empv-embark-initialize-extra-actions)))
+  (pulsar-global-mode))
 #+end_src
 
 * provide init
