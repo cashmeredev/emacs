@@ -104,3 +104,4 @@ dirvish/thumbnails
 /elfeed/index
 /org-persist/
 *.eld
+/elfeed/

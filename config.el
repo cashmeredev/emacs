@@ -4275,4 +4275,8 @@ opening another file in same project does not re-notify."
 
   (pulsar-global-mode))
 
+(use-package org-auto-tangle
+  :ensure t
+  :hook (org-mode . org-auto-tangle-mode))
+
 (provide 'init)

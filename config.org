@@ -5221,6 +5221,14 @@ opening another file in same project does not re-notify."
   (pulsar-global-mode))
 #+end_src
 
+* org-auto-tangle
+
+#+begin_src emacs-lisp
+(use-package org-auto-tangle
+  :ensure t
+  :hook (org-mode . org-auto-tangle-mode))
+#+end_src
+
 * provide init
 
 #+begin_src emacs-lisp
