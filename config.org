@@ -178,6 +178,32 @@ Set per-host in the gitignored `local.el'.")
   :group 'appearance)
 #+end_src
 
+* freebsd
+
+Settings that only apply on FreeBSD (system-type = berkeley-unix).
+Currently this is only for pinentry-emacs, which is not needed on NixOS.
+
+#+begin_src emacs-lisp
+(when (eq system-type 'berkeley-unix)
+  ;; Start the Emacs server so emacsclient (and pinentry-emacs) can connect.
+  (require 'server)
+  (unless (server-running-p)
+    (server-start))
+
+  ;; Handler for pinentry-emacs: GPG passphrase prompts in the minibuffer.
+  (defun pinentry-emacs (desc prompt _ok _error)
+    (read-passwd
+     (concat (replace-regexp-in-string "%22" "\""
+              (replace-regexp-in-string "%0A" "\n" desc))
+             prompt ": ")))
+
+  ;; Open a file as root via doas.
+  (defun my/find-file-doas (filename)
+    "Open FILENAME as root using doas."
+    (interactive "FFile (with doas): ")
+    (find-file (concat "/doas::" (expand-file-name filename)))))
+#+end_src
+
 * window
 
 #+begin_src emacs-lisp
@@ -2912,7 +2938,7 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
   (add-hook 'go-mode-hook #'go-mode-setup))
 #+end_src
 
-** json-ts-mode
+** COMMENT json-ts-mode
 
 #+begin_src emacs-lisp
 (use-package json-ts-mode
@@ -3585,7 +3611,7 @@ created later still get them."
 
 #+begin_src emacs-lisp
 (add-to-list 'custom-theme-load-path "~/.emacs.d/themes/")
-(load-theme 'tinty t)
+;; (load-theme 'tinty t)
 #+end_src
 
 * dirvish
@@ -4214,7 +4240,7 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
           :wk "find file/switch project")
   "sp" '(consult-projectile :wk "search project")
   "ss" '(consult-line :wk "search project")
-  "sd" '(my/consult-ripgrep-in :wk "grep in dir")
+  "sg" '(my/consult-ripgrep-in :wk "grep in dir")
   "sf" '(my/consult-fd-in :wk "find file in dir")
   "/" '(consult-ripgrep :wk "search project")
   "." '(find-file :wk "find file")

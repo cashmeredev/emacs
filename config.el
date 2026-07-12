@@ -155,6 +155,25 @@ Set per-host in the gitignored `local.el'.")
   :type 'boolean
   :group 'appearance)
 
+(when (eq system-type 'berkeley-unix)
+  ;; Start the Emacs server so emacsclient (and pinentry-emacs) can connect.
+  (require 'server)
+  (unless (server-running-p)
+    (server-start))
+
+  ;; Handler for pinentry-emacs: GPG passphrase prompts in the minibuffer.
+  (defun pinentry-emacs (desc prompt _ok _error)
+    (read-passwd
+     (concat (replace-regexp-in-string "%22" "\""
+              (replace-regexp-in-string "%0A" "\n" desc))
+             prompt ": ")))
+
+  ;; Open a file as root via doas.
+  (defun my/find-file-doas (filename)
+    "Open FILENAME as root using doas."
+    (interactive "FFile (with doas): ")
+    (find-file (concat "/doas::" (expand-file-name filename)))))
+
 (defun my/compilation-buffer-p (buffer-name _action)
   "Match any compilation-derived buffer (compile, grep, …) for display."
   (with-current-buffer buffer-name
@@ -2369,15 +2388,6 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
 (with-eval-after-load 'ob-async
   (add-hook 'ob-async-pre-execute-src-block-hook my/ob-xonsh-installer))
 
-(use-package json-ts-mode
-  :ensure nil
-  :mode "\\.json\\'"
-  :hook (json-ts-mode . eglot-ensure)
-  :config
-  (with-eval-after-load 'eglot
-    (add-to-list 'eglot-server-programs
-                 '(json-ts-mode . ("vscode-json-language-server" "--stdio")))))
-
 (use-package yaml-ts-mode
   :ensure nil
   :mode "\\.ya?ml\\'"
@@ -2863,7 +2873,7 @@ created later still get them."
   (setq grip-command 'auto)) ;; auto, grip, go-grip or mdopen
 
 (add-to-list 'custom-theme-load-path "~/.emacs.d/themes/")
-(load-theme 'tinty t)
+;; (load-theme 'tinty t)
 
 (use-package dirvish
   :ensure (:host github :repo "latiagertrutis/dirvish" :branch "main")
@@ -3415,7 +3425,7 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
           :wk "find file/switch project")
   "sp" '(consult-projectile :wk "search project")
   "ss" '(consult-line :wk "search project")
-  "sd" '(my/consult-ripgrep-in :wk "grep in dir")
+  "sg" '(my/consult-ripgrep-in :wk "grep in dir")
   "sf" '(my/consult-fd-in :wk "find file in dir")
   "/" '(consult-ripgrep :wk "search project")
   "." '(find-file :wk "find file")
@@ -4177,37 +4187,6 @@ opening another file in same project does not re-notify."
   :config
   (inheritenv-add-advice 'ghostel-compile)
   (inheritenv-add-advice 'ghostel-recompile))
-
-(when-let* ((garden-dir (expand-file-name
-                         (or (alist-get 'garden my/local-packages) "~/garden")))
-            ((file-directory-p garden-dir)))
-  (use-package vui
-    :ensure (:host github :repo "d12frosted/vui.el" :files ("*.el")))
-
-  (add-to-list 'load-path (expand-file-name "lisp/" garden-dir))
-  (setq garden-directory (file-name-as-directory garden-dir))
-  (require 'garden-core)
-  (garden-auto-index-mode 1)
-  (autoload 'garden "garden-dashboard" nil t)
-  (autoload 'garden-sidecar "garden-dashboard" nil t)
-  (autoload 'garden-search "garden-dashboard" nil t)
-  (autoload 'garden-fleet "garden-fleet" nil t)
-  (autoload 'garden-connect "garden-connect" nil t)
-  (autoload 'garden-connect-pick "garden-connect" nil t)
-  (autoload 'garden-publish "garden-publish" nil t)
-  (autoload 'garden-publish-all "garden-publish" nil t)
-  (autoload 'garden-publish-wiki "garden-publish" nil t)
-  (autoload 'garden-publish-blog "garden-publish" nil t)
-  (autoload 'garden-publish-deploy "garden-publish" nil t)
-  (autoload 'denote-capf-setup "denote-capf" nil t)
-  (with-eval-after-load 'denote-capf
-    (setq denote-capf-directories '("~/org/")))
-  (add-hook 'org-mode-hook #'denote-capf-setup)
-
-  (defun my/denote-capf-tab-in-insert ()
-    (when (featurep 'evil)
-      (evil-local-set-key 'insert (kbd "TAB") #'indent-for-tab-command)))
-  (add-hook 'org-mode-hook #'my/denote-capf-tab-in-insert))
 
 (use-package sops
   :ensure (:type git :host github :repo "djgoku/sops")
