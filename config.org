@@ -5130,7 +5130,7 @@ opening another file in same project does not re-notify."
   (inheritenv-add-advice 'ghostel-recompile))
 #+end_src
 
-* garden
+* COMMENT garden
 
 #+begin_src emacs-lisp
 (when-let* ((garden-dir (expand-file-name
