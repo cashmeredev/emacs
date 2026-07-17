@@ -2049,6 +2049,36 @@ Org Backend exporter for typst templates written and configured in org mode.
   :after org)
 #+end_src
 
+* consult
+
+#+begin_src emacs-lisp
+(use-package consult
+  :ensure (:wait t)
+  :defer t
+  :init
+  (advice-add #'register-preview :override #'consult-register-window)
+
+  (setq xref-show-xrefs-function #'consult-xref
+        xref-show-definitions-function #'consult-xref)
+
+  :config
+  (setq consult-buffer-filter
+        '("\\` "
+          "\\`\\*Messages\\*\\'"
+          "\\`\\*Warnings\\*\\'"
+          "\\`\\*Compile-Log\\*\\'"
+          "\\`\\*Backtrace\\*\\'"
+          "\\`\\*Help\\*\\'"
+          "\\`\\*scratch\\*\\'"
+          "\\`\\*Completions\\*\\'"
+          "\\`\\*Flymake"
+          "\\`\\*lsp-help\\*\\'"
+          "\\`\\*eldoc"
+          "\\`\\*elpaca-log\\*\\'"
+          "\\`\\*Native-compile-Log\\*\\'"
+          "\\`\\*Async-native-compile-log\\*\\'")))
+#+end_src
+
 * denote
 
 Denote is objectively the best note taking extension, which you could install. It has a very easy to parse file naming scheme and suports not only org files. It has also transclusion inclusive! if you are interested, then check it out yourself.
@@ -2496,36 +2526,6 @@ Auto switch silos (different workspaces/folders) based on preconfigured director
   (with-eval-after-load 'eglot
     (advice-add 'eglot-completion-at-point :around #'cape-wrap-noninterruptible)
     (advice-add 'eglot-completion-at-point :around #'cape-wrap-buster)))
-#+end_src
-
-* consult
-
-#+begin_src emacs-lisp
-(use-package consult
-  :ensure (:wait t)
-  :defer t
-  :init
-  (advice-add #'register-preview :override #'consult-register-window)
-
-  (setq xref-show-xrefs-function #'consult-xref
-        xref-show-definitions-function #'consult-xref)
-
-  :config
-  (setq consult-buffer-filter
-        '("\\` "
-          "\\`\\*Messages\\*\\'"
-          "\\`\\*Warnings\\*\\'"
-          "\\`\\*Compile-Log\\*\\'"
-          "\\`\\*Backtrace\\*\\'"
-          "\\`\\*Help\\*\\'"
-          "\\`\\*scratch\\*\\'"
-          "\\`\\*Completions\\*\\'"
-          "\\`\\*Flymake"
-          "\\`\\*lsp-help\\*\\'"
-          "\\`\\*eldoc"
-          "\\`\\*elpaca-log\\*\\'"
-          "\\`\\*Native-compile-Log\\*\\'"
-          "\\`\\*Async-native-compile-log\\*\\'")))
 #+end_src
 
 #+begin_comment

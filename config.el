@@ -1738,11 +1738,37 @@ Skips capture tasks and projects."
 (setq org-export-with-broken-links t)
 
 (use-package ox-pandoc
-  :ensure t
+  :ensure (:wait t)
   :after org)
 
+(use-package consult
+  :ensure (:wait t)
+  :defer t
+  :init
+  (advice-add #'register-preview :override #'consult-register-window)
+
+  (setq xref-show-xrefs-function #'consult-xref
+        xref-show-definitions-function #'consult-xref)
+
+  :config
+  (setq consult-buffer-filter
+        '("\\` "
+          "\\`\\*Messages\\*\\'"
+          "\\`\\*Warnings\\*\\'"
+          "\\`\\*Compile-Log\\*\\'"
+          "\\`\\*Backtrace\\*\\'"
+          "\\`\\*Help\\*\\'"
+          "\\`\\*scratch\\*\\'"
+          "\\`\\*Completions\\*\\'"
+          "\\`\\*Flymake"
+          "\\`\\*lsp-help\\*\\'"
+          "\\`\\*eldoc"
+          "\\`\\*elpaca-log\\*\\'"
+          "\\`\\*Native-compile-Log\\*\\'"
+          "\\`\\*Async-native-compile-log\\*\\'")))
+
 (use-package denote
-  :ensure t
+  :ensure (:wait t)
   :hook (dired-mode . denote-dired-mode)
   :config
   (setq denote-rename-buffer-format "%t"
@@ -2057,7 +2083,7 @@ Timers that expired while Emacs was closed fire immediately."
   (which-key-idle-delay 0.3))
 
 (use-package vertico
-  :ensure t
+  :ensure (:wait t)
   :hook
   (after-init . vertico-mode)
   :custom
@@ -2090,7 +2116,8 @@ Timers that expired while Emacs was closed fire immediately."
   (corfu-popupinfo-mode))
 
 (use-package cape
-  :ensure t
+  :ensure (:wait t)
+
   ;; Bind prefix keymap providing all Cape commands under a mnemonic key.
   ;; Press C-c p ? to for help.
   ;; Alternatively bind Cape commands individually.
@@ -2111,34 +2138,8 @@ Timers that expired while Emacs was closed fire immediately."
     (advice-add 'eglot-completion-at-point :around #'cape-wrap-noninterruptible)
     (advice-add 'eglot-completion-at-point :around #'cape-wrap-buster)))
 
-(use-package consult
-  :ensure t
-  :defer t
-  :init
-  (advice-add #'register-preview :override #'consult-register-window)
-
-  (setq xref-show-xrefs-function #'consult-xref
-        xref-show-definitions-function #'consult-xref)
-
-  :config
-  (setq consult-buffer-filter
-        '("\\` "
-          "\\`\\*Messages\\*\\'"
-          "\\`\\*Warnings\\*\\'"
-          "\\`\\*Compile-Log\\*\\'"
-          "\\`\\*Backtrace\\*\\'"
-          "\\`\\*Help\\*\\'"
-          "\\`\\*scratch\\*\\'"
-          "\\`\\*Completions\\*\\'"
-          "\\`\\*Flymake"
-          "\\`\\*lsp-help\\*\\'"
-          "\\`\\*eldoc"
-          "\\`\\*elpaca-log\\*\\'"
-          "\\`\\*Native-compile-Log\\*\\'"
-          "\\`\\*Async-native-compile-log\\*\\'")))
-
 (use-package embark
-  :ensure t
+  :ensure (:wait t)
   :defer t
   :bind
   (("C-." . embark-act)

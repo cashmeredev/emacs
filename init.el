@@ -5,7 +5,7 @@
 (defvar elpaca-core-date
   (list (string-to-number (format-time-string "%Y%m%d" (or emacs-build-time (current-time))))))
 
-(defvar elpaca-queue-limit 8)
+(defvar elpaca-queue-limit 4)
 
 ;; Elpaca bootstrap
 (defvar elpaca-installer-version 0.12)
