@@ -2484,7 +2484,7 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
           ("DEPRECATED" . "#808080"))))
 
 (use-package magit
-  :ensure t
+  :ensure (:wait t)
   :config
   (if ek-use-nerd-fonts
 	  (setopt magit-format-file-function #'magit-format-file-nerd-icons))
