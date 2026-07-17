@@ -114,8 +114,8 @@ Set per-host in the gitignored `local.el'.")
   (scroll-bar-mode -1)
   (add-to-list 'default-frame-alist '(vertical-scroll-bars . nil))
   (add-to-list 'default-frame-alist '(horizontal-scroll-bars . nil))
-  (set-frame-parameter (selected-frame) 'alpha-background 80)
-  (add-to-list 'default-frame-alist '(alpha-background . 80))
+  (set-frame-parameter (selected-frame) 'alpha-background 90)
+  (add-to-list 'default-frame-alist '(alpha-background . 90))
   (global-hl-line-mode 1) ;; Highlight the current line
   (add-hook 'org-mode-hook (lambda () (setq-local global-hl-line-mode nil))) ;; hl-line repaints wipe kitty-graphics scaled headings
   (add-hook 'markdown-mode-hook (lambda () (setq-local global-hl-line-mode nil))) ;; same conflict for kitty-graphics markdown headings
@@ -276,6 +276,10 @@ Selects the compilation window so the cursor lands in it."
 
 (use-package async :ensure t)
 
+;; Always-available IRC entry points so `M-x run-irc` works from any daemon
+;; (hub, work, standalone). Calling `erc-tls` autoloads ERC on demand.
+;; Soju routes to the upstream network via the USER string, so we still need
+;; one connection per network. We connect to Libera and Ergo only.
 (defun my/soju-password ()
   "Read the Soju bouncer password from the sops-nix secret."
   (string-trim
@@ -284,84 +288,211 @@ Selects the compilation window so the cursor lands in it."
       "/home/cashmere/.config/sops-nix/secrets/senpai_password")
      (buffer-string))))
 
-(use-package clatter
-  :ensure (:host github :repo "parenworks/clatter.el" :files ("*.el"))
-  :commands (clatter clatter-connect)
-  :custom
-  (clatter-networks
-   '(("libera"
-      :server "bouncer.cashmere.rs" :port 6699 :tls t
-      :nick "cashmere1337"
-      :username "cashmere/irc.libera.chat@emacs")
-     ("ergo"
-      :server "bouncer.cashmere.rs" :port 6699 :tls t
-      :nick "cashmere"
-      :username "cashmere/ergo@emacs")
-     ("mansion"
-      :server "bouncer.cashmere.rs" :port 6699 :tls t
-      :nick "cashmere"
-      :username "cashmere/mansion@emacs")
-     ("bitlbee"
-      :server "bouncer.cashmere.rs" :port 6699 :tls t
-      :nick "cashmere"
-      :username "cashmere/bitlbee@emacs")))
-  (clatter-flyspell-enable nil)
-  (clatter-format-strip-only t)
-  (clatter-message-order 'oldest-first)
-  (clatter-read-marker-enabled nil)
-  (clatter-chathistory-limit 1000)
-  :config
-  (require 'gnutls)
-  (clatter-setup)
-  (setq clatter-hl-keywords '("cashmere"))
-  (advice-add 'clatter-buffer-name :override #'my/clatter-buffer-name)
-  (add-hook 'clatter-mode-hook (lambda () (setq-local corfu-auto nil)))
-  (general-def 'normal clatter-mode-map
-    "gb" #'my/clatter-switch-buffer
-    "gH" #'clatter-chathistory-request
-    "gh" #'clatter-chathistory-more))
-
-(defun my/clatter-buffer-name (network target)
-  "Name clatter buffers by bare channel/query TARGET, server by NETWORK."
-  (if (string= target "*server*")
-      (format "*%s*" network)
-    target))
-
-(defun my/clatter-switch-buffer ()
-  "Switch to a clatter IRC buffer."
-  (interactive)
-  (let ((bufs (cl-remove-if-not
-               (lambda (b)
-                 (with-current-buffer b (derived-mode-p 'clatter-mode)))
-               (buffer-list))))
-    (if bufs
-        (switch-to-buffer
-         (completing-read "IRC buffer: " (mapcar #'buffer-name bufs) nil t))
-      (message "No clatter buffers."))))
-
-(defvar my/clatter-inhibit-popup nil
-  "When non-nil, clatter buffers are not auto-displayed by `display-buffer'.")
-
-(defun my/clatter-popup-suppressed-p (buf &rest _)
-  "Non-nil when BUF is a clatter buffer and popups are inhibited."
-  (and my/clatter-inhibit-popup
-       (get-buffer buf)
-       (with-current-buffer (get-buffer buf)
-         (derived-mode-p 'clatter-mode))))
-
-(add-to-list 'display-buffer-alist
-             '(my/clatter-popup-suppressed-p
-               display-buffer-no-window
-               (allow-no-window . t)))
-
 (defun run-irc ()
-  "Connect to all IRC networks via the Soju bouncer, in the background."
+  "Connect to Libera and Ergo via the Soju bouncer."
   (interactive)
   (let ((pw (my/soju-password)))
-    (setq my/clatter-inhibit-popup t)
-    (dolist (net '("libera" "ergo" "mansion" "bitlbee"))
-      (clatter-connect net :password pw))
-    (run-at-time 8 nil (lambda () (setq my/clatter-inhibit-popup nil)))))
+    (erc-tls :server "bouncer.cashmere.rs"
+             :port 6699
+             :id 'libera
+             :nick "cashmere1337"
+             :user "cashmere/irc.libera.chat@emacs"
+             :password pw)
+    (erc-tls :server "bouncer.cashmere.rs"
+             :port 6699
+             :id 'ergo
+             :nick "cashmere"
+             :user "cashmere/ergo@emacs"
+             :password pw)))
+
+(use-package erc
+  :ensure nil
+  :defer t
+  :custom
+  ;; connection
+  (erc-nick "cashmere1337")
+  (erc-user-full-name "cashmere")
+
+  ;; behaviour
+  (erc-join-buffer 'buffer)
+  (erc-kill-buffer-on-part nil)
+  (erc-kill-queries-on-quit t)
+  (erc-kill-server-buffer-on-quit t)
+
+  ;; visuals
+  (erc-fill-function 'erc-fill-wrap)
+  (erc-timestamp-format "[%H:%M]")
+  (erc-timestamp-format-left "[%H:%M]")
+  (erc-timestamp-format-right "[%H:%M]")
+  (erc-hide-list '("JOIN" "PART" "QUIT" "NICK" "MODE"))
+  (erc-track-exclude-types '("JOIN" "PART" "QUIT" "NICK" "MODE" "324" "329" "332" "333" "353" "477"))
+  (erc-track-shorten-start 4)
+  (erc-track-visibility 'visible)
+
+  ;; prompt
+  (erc-prompt (lambda () (concat (buffer-name) ">")))
+
+  ;; modules
+  (erc-modules '(autojoin
+                 button
+                 completion
+                 fill
+                 irccontrols
+                 list
+                 match
+                 move-to-prompt
+                 netsplit
+                 networks
+                 nicks
+                 noncommands
+                 notifications
+                 readonly
+                 ring
+                 scrolltobottom
+                 stamp
+                 track))
+  :config
+  ;; highlight own nick
+  (setq erc-current-nick-highlight-type 'all)
+  (setq erc-keywords '("cashmere"))
+  (setq erc-pals '("cashmere"))
+
+  ;; nicks module (built-in nick coloring in Emacs 30)
+  (setq erc-nicks-contrast-range '(40 . 90))
+
+  ;; scrolltobottom -- keep input always at bottom
+  (setq erc-scrolltobottom-all t)
+  (erc-scrolltobottom-mode 1)
+
+  ;; fill-wrap -- modern chat-like wrapping
+  (setq erc-fill-wrap-align-prompt nil)
+  (setq erc-fill-static-center 14)
+
+  ;; track -- activity NOT in modeline (channels list clutters doom-modeline)
+  (setq erc-track-position-in-mode-line nil)
+
+  ;; keep large buffer for soju history replay
+  (setq erc-max-buffer-size 100000)
+
+  (erc-update-modules))
+
+(defvar my/consult-source-erc
+  (list :name "IRC"
+        :narrow ?i
+        :category 'buffer
+        :face 'erc-default-face
+        :state #'consult--buffer-state
+        :items (lambda ()
+                 (mapcar #'buffer-name
+                         (cl-remove-if-not
+                          (lambda (buf)
+                            (with-current-buffer buf
+                              (derived-mode-p 'erc-mode)))
+                          (buffer-list))))))
+
+(defun my/erc-switch-channel ()
+  "Switch to an ERC channel buffer via consult."
+  (interactive)
+  (consult-buffer (list my/consult-source-erc)))
+
+(defun my/erc-fetch-history (&optional count)
+  "Fetch COUNT previous messages from Soju via CHATHISTORY.
+Defaults to 1000 (soju max). With prefix arg, prompts for count.
+Temporarily disables notifications during the fetch."
+  (interactive "P")
+  (let ((target (erc-default-target)))
+    (if (not target)
+        (message "Not in a channel buffer.")
+      (let ((n (min (if count
+                       (read-number "Messages to fetch: " 1000)
+                     1000)
+                    1000)))
+        (erc-notifications-disable)
+        (erc-server-send (format "CHATHISTORY LATEST %s * %d" target n))
+        (run-at-time 5 nil #'erc-notifications-enable)))))
+
+(defun my/erc-quit-all ()
+  "Disconnect from IRC and kill all ERC buffers."
+  (interactive)
+  (erc-cmd-QUIT "bye")
+  (run-at-time 1 nil
+               (lambda ()
+                 (dolist (buf (buffer-list))
+                   (when (with-current-buffer buf (derived-mode-p 'erc-mode))
+                     (kill-buffer buf))))))
+
+(defun my/erc-reconnect ()
+  "Reconnect to the current ERC server."
+  (interactive)
+  (erc-cmd-RECONNECT))
+
+(defun my/erc-list-channels ()
+  "Request channel list from the current ERC server."
+  (interactive)
+  (erc-cmd-LIST))
+
+(defun persp-irc ()
+  "Switch to (or create) the IRC frame and show ERC buffers."
+  (interactive)
+  (let* ((erc-bufs (cl-remove-if-not
+                    (lambda (buf)
+                      (with-current-buffer buf
+                        (derived-mode-p 'erc-mode)))
+                    (buffer-list)))
+         (irc-frame (cl-find-if
+                     (lambda (f)
+                       (string= (frame-parameter f 'name) "irc"))
+                     (frame-list))))
+    (if irc-frame
+        (select-frame-set-input-focus irc-frame)
+      (select-frame-set-input-focus (make-frame '((name . "irc")))))
+    (if erc-bufs
+        (switch-to-buffer (car erc-bufs))
+      (letrec ((hook-fn (lambda ()
+                          (switch-to-buffer (current-buffer))
+                          (remove-hook 'erc-join-hook hook-fn))))
+        (add-hook 'erc-join-hook hook-fn))
+      (run-irc))))
+
+;; ERC keybindings and hooks — register from any daemon, since `run-irc`
+;; autoloads ERC even outside the hub daemon.
+;; `general' is required eagerly (not via with-eval-after-load) so the
+;; `general-def' macro is expanded when config.el is compiled; inside a
+;; deferred lambda it would survive as a function call and fail at runtime.
+(with-eval-after-load 'erc
+  (add-hook 'erc-mode-hook
+            (lambda ()
+              (setq-local scroll-margin 0)
+              (setq-local maximum-scroll-margin 0.0)
+              (setq-local corfu-auto nil)))
+
+  ;; Prevent accidental ERC buffer kills from parting channels
+  (add-hook 'kill-buffer-query-functions
+            (lambda ()
+              (if (and (derived-mode-p 'erc-mode)
+                       (erc-server-process-alive)
+                       (not (eq this-command 'my/erc-quit-all)))
+                  (yes-or-no-p
+                   (format "ERC buffer %s is connected. Really kill (will part channel)? "
+                           (buffer-name)))
+                t)))
+
+  (general-def 'normal erc-mode-map
+    "q"   'quit-window
+    "Q"   'my/erc-quit-all
+    "gb"  'my/erc-switch-channel
+    "gn"  'erc-track-switch-buffer
+    "gH"  'my/erc-fetch-history
+    "go"  'erc-channel-names
+    "gj"  'erc-join-channel
+    "gl"  'my/erc-list-channels
+    "gr"  'my/erc-reconnect
+    "RET" 'erc-send-current-line)
+
+  (general-def '(normal insert) erc-mode-map
+    "M-n" 'erc-track-switch-buffer
+    "C-k" 'erc-previous-command
+    "C-j" 'erc-next-command))
 
 (defvar my/centered-cursor-enabled nil)
 
@@ -397,7 +528,12 @@ Selects the compilation window so the cursor lands in it."
     (when (and (not register)
                (memq this-command '(evil-yank evil-yank-line)))
       (my/send-to-clipboard (car kill-ring))))
-  (advice-add 'evil-yank :after #'my/evil-yank-to-clipboard))
+  (advice-add 'evil-yank :after #'my/evil-yank-to-clipboard)
+  ;; elfeed-search-yank bypasses evil-yank (uses gui-set-selection directly),
+  ;; so route it through the same clipboard path — needed in TTY frames.
+  (defun my/elfeed-yank-to-clipboard (&rest _)
+    (my/send-to-clipboard (car kill-ring)))
+  (advice-add 'elfeed-search-yank :after #'my/elfeed-yank-to-clipboard))
 
 (use-package isearch
   :ensure nil                                  ;; This is built-in, no need to fetch it.
@@ -525,7 +661,7 @@ Selects the compilation window so the cursor lands in it."
             (or
              (mode . eca-chat-mode)))
 
-           ("IRC" (or (mode . clatter-mode)))
+           ("IRC" (or (mode . erc-mode)))
 
            ("Emacs" (or
                      (mode . emacs-lisp-mode)
@@ -702,7 +838,7 @@ Selects the compilation window so the cursor lands in it."
     ;; 2026-06-23: replaced claude-code-ide bindings with pi-coding-agent under `a'.
     ;; pi-coding-agent only exposes 3 user-facing commands, so the prefix is intentionally sparse.
     (my-leader
-      "aa" '(agent-shell :wk "start")
+      "aa" '(agent-shell-sidebar-toggle :wk "start")
       "at" '(agent-shell-toggle :wk "toggle")
       "am" '(agent-shell-help-menu :wk "open session")
       "ar" '(agent-shell-send-region :wk "send region")))
@@ -799,6 +935,10 @@ Selects the compilation window so the cursor lands in it."
   (advice-add 'agent-shell-yank-dwim :around
               #'my/agent-shell-yank-dwim-in-terminal))
 
+(use-package agent-shell-sidebar
+  :after agent-shell
+  :ensure (:host github :repo "cmacrae/agent-shell-sidebar"))
+
 (use-package eldoc
   :ensure nil
   :config
@@ -825,6 +965,8 @@ Selects the compilation window so the cursor lands in it."
   :ensure t
   :config
   (setq flycheck-display-errors-function nil)
+  (setq flycheck-global-modes
+        '(not ghostel-mode vterm-mode term-mode shell-mode eshell-mode eat-mode))
   (add-hook 'after-init-hook #'global-flycheck-mode))
 
 (use-package flycheck-rust
@@ -960,7 +1102,7 @@ Selects the compilation window so the cursor lands in it."
   :custom
   (kitty-gfx-enable-video t)
   (kitty-gfx-shr-scale 'fit)
-  (kitty-gfx-shr-fit-width 0.6)
+  (kitty-gfx-shr-fit-width 0.4)
   (kitty-gfx-shr-fit-height 20)
   :hook (dired-mode . kitty-gfx-dired-auto-preview-mode)
   :config
@@ -2567,7 +2709,7 @@ so the working-tree diff stays visible until the user explicitly stages."
   (evil-set-initial-state 'messages-buffer-mode 'normal)
   (evil-set-initial-state 'dired-mode 'normal)
   (evil-set-initial-state 'ibuffer-mode 'normal)
-  (evil-set-initial-state 'clatter-mode 'normal)
+  (evil-set-initial-state 'erc-mode 'normal)
   (define-key evil-insert-state-map (kbd "C-w") 'evil-window-map))
 
 (modify-syntax-entry ?_ "w")
@@ -2831,6 +2973,12 @@ If no TITLE keyword is found, leave doom-modeline's default name."
         doom-modeline-buffer-encoding nil
         doom-modeline-time t
         doom-modeline-time-live-icon t)
+
+  ;; Replace the channel-list segment with the icon-only segment in ERC buffers.
+  (doom-modeline-def-modeline 'special
+    '(eldoc bar window-state window-number modals matches buffer-info remote-host buffer-position word-count parrot selection-info)
+    '(compilation objed-state misc-info battery irc debug minor-modes input-method indent-info buffer-encoding major-mode process time))
+
   (advice-add #'doom-modeline-update-buffer-file-name :after #'my/doom-modeline-set-buffer-title)
   (add-hook 'before-save-hook #'my/doom-modeline--invalidate-title-cache))
 
@@ -2873,7 +3021,7 @@ created later still get them."
   :config 
   (setq grip-command 'auto)) ;; auto, grip, go-grip or mdopen
 
-(add-to-list 'custom-theme-load-path "~/.emacs.d/themes/")
+;; (add-to-list 'custom-theme-load-path "~/.emacs.d/themes/")
 ;; (load-theme 'tinty t)
 
 (use-package dirvish
@@ -3248,10 +3396,12 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
 
   (add-hook 'persp-filter-save-buffers-functions
             (lambda (buf)
-              (with-current-buffer buf (derived-mode-p 'clatter-mode))))
+              (with-current-buffer buf (derived-mode-p 'erc-mode))))
 
   (defun my/workspace--inhibit-irc-part (orig &rest args)
-    (cl-letf (((symbol-function 'clatter--on-kill-buffer) #'ignore))
+    (let ((erc-kill-channel-hook nil)
+          (erc-kill-server-hook nil)
+          (erc-kill-buffer-hook nil))
       (apply orig args)))
   (advice-add 'my/workspace-kill :around #'my/workspace--inhibit-irc-part)
   (advice-add 'my/workspace-kill-session :around #'my/workspace--inhibit-irc-part)

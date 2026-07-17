@@ -21,52 +21,52 @@
 (let* (;; Tinted8 UI surface colors
        (ui-bg "#1e1e2e")
        (ui-fg "#cdd6f4")
-       (ui-fg-dim "#a6adc8")
+       (ui-fg-dim "#97abed")
        ;; Use dim foreground for borders/muted chrome so they stay visible in
        ;; light variants (the raw border color is nearly white on latte).
-       (ui-border "#a6adc8")
-       (ui-line-highlight "#232336")
+       (ui-border "#97abed")
+       (ui-line-highlight "#505365")
        (ui-bg-dark "#181825")
-       (ui-bg-light "#45475a")
+       (ui-bg-light "#353554")
 
        ;; Tinted8 UI accent/status colors
        (ui-accent "#f38ba8")
-       (ui-link "#89b4fa")
+       (ui-link "#c6ede6")
        (ui-info "#fab387")
        (ui-error "#f38ba8")
        (ui-success "#a6e3a1")
        (ui-warning "#f9e2af")
 
        ;; Tinted8 UI container colors (for BACKGROUNDS only)
-       (ui-selection-bg "#45475a")
+       (ui-selection-bg "#353554")
        (ui-selection-fg "#cdd6f4")
-       (ui-button-bg "#45475a")
+       (ui-button-bg "#353554")
        (ui-button-fg "#cdd6f4")
-       (ui-tooltip-bg "#313244")
+       (ui-tooltip-bg "#181825")
        (ui-tooltip-fg "#cdd6f4")
-       (ui-active-text-bg "#9399b2")
+       (ui-active-text-bg "#6c7086")
        (ui-active-text-fg "#cdd6f4")
-       (ui-search-bg "#94e2d5")
-       (ui-search-fg "#1e1e2e")
+       (ui-search-bg "#353554")
+       (ui-search-fg "#f9e2af")
 
        ;; Tinted8 syntax colors
        ;; Comments use dim foreground instead of the raw syntax-comment gray,
        ;; which becomes almost invisible in light variants.
-       (syntax-comment "#a6adc8")
+       (syntax-comment "#97abed")
        (syntax-constant "#fab387")
-       (syntax-function "#89b4fa")
+       (syntax-function "#94e2d5")
        (syntax-keyword "#cba6f7")
        (syntax-string "#a6e3a1")
-       (syntax-type "#f9e2af")
+       (syntax-type "#c7dafa")
        ;; Give variables/imported names a distinct hue instead of blending into
        ;; the default foreground.
-       (syntax-variable "#aa69f7")
+       (syntax-variable "#cdd6f4")
        (syntax-warning "#f6c5d3")
        (syntax-preprocessor "#488dfd")
        (syntax-annotation "#f9e2af")
-       (syntax-attribute "#c7dafa")
-       (syntax-number "#fab387")
-       (syntax-operator "#89dceb")
+       (syntax-attribute "#ece0fb")
+       (syntax-number "#cba6f7")
+       (syntax-operator "#94e2d5")
 
        ;; Raw palette colors for rainbow headings, delimiters, terminal faces,
        ;; and anywhere else we need a predictable hue cycle.
@@ -77,7 +77,7 @@
        (pal-cyan "#94e2d5")
        (pal-blue "#89b4fa")
        (pal-magenta "#cba6f7")
-       (pal-gray "#9399b2")
+       (pal-gray "#6c7086")
        (pal-white "#cdd6f4")
        (pal-black "#1e1e2e"))
 
@@ -509,14 +509,14 @@
    `(ansi-color-magenta ((t (:foreground ,pal-magenta :background ,pal-magenta))))
    `(ansi-color-cyan ((t (:foreground ,pal-cyan :background ,pal-cyan))))
    `(ansi-color-white ((t (:foreground ,pal-white :background ,pal-white))))
-   `(ansi-color-bright-black ((t (:foreground "#45475a" :background "#45475a"))))
+   `(ansi-color-bright-black ((t (:foreground "#353554" :background "#353554"))))
    `(ansi-color-bright-red ((t (:foreground "#f6c5d3" :background "#f6c5d3"))))
    `(ansi-color-bright-green ((t (:foreground "#d4efd2" :background "#d4efd2"))))
    `(ansi-color-bright-yellow ((t (:foreground "#fcf6e9" :background "#fcf6e9"))))
    `(ansi-color-bright-blue ((t (:foreground "#c7dafa" :background "#c7dafa"))))
    `(ansi-color-bright-magenta ((t (:foreground "#ece0fb" :background "#ece0fb"))))
    `(ansi-color-bright-cyan ((t (:foreground "#c6ede6" :background "#c6ede6"))))
-   `(ansi-color-bright-white ((t (:foreground "#bac2de" :background "#bac2de"))))
+   `(ansi-color-bright-white ((t (:foreground "#ffffff" :background "#ffffff"))))
 
    ;; === Anzu ===
    `(anzu-replace-highlight ((t (:background ,ui-line-highlight :foreground ,ui-error :weight bold :strike-through t))))
@@ -1167,14 +1167,14 @@
    ;; === Term (extended) ===
    `(term ((t (:foreground ,ui-fg :background ,ui-bg))))
    `(term-bold ((t (:weight bold))))
-   `(term-color-bright-black ((t (:foreground "#45475a" :background "#45475a"))))
+   `(term-color-bright-black ((t (:foreground "#353554" :background "#353554"))))
    `(term-color-bright-red ((t (:foreground "#f6c5d3" :background "#f6c5d3"))))
    `(term-color-bright-green ((t (:foreground "#d4efd2" :background "#d4efd2"))))
    `(term-color-bright-yellow ((t (:foreground "#fcf6e9" :background "#fcf6e9"))))
    `(term-color-bright-blue ((t (:foreground "#c7dafa" :background "#c7dafa"))))
    `(term-color-bright-magenta ((t (:foreground "#ece0fb" :background "#ece0fb"))))
    `(term-color-bright-cyan ((t (:foreground "#c6ede6" :background "#c6ede6"))))
-   `(term-color-bright-white ((t (:foreground "#bac2de" :background "#bac2de"))))
+   `(term-color-bright-white ((t (:foreground "#ffffff" :background "#ffffff"))))
 
    ;; === Transient ===
    `(transient-heading ((t (:foreground ,pal-blue :weight bold))))
