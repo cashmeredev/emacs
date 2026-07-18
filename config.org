@@ -791,7 +791,10 @@ Defined early so later =with-eval-after-load 'general= callbacks find =my-leader
   :ensure (:wait t)
   :demand t
   :config
-  (general-evil-setup)
+  (general-evil-setup))
+
+(eval-and-compile
+  (require 'general)
 
   (general-create-definer my-leader
     :states '(normal visual insert)
@@ -857,117 +860,6 @@ Defined early so later =with-eval-after-load 'general= callbacks find =my-leader
   (markdown-header-face-4 ((t (:height 1.15 :foreground "#BF616A" :weight bold :inherit markdown-header-face))))
   (markdown-header-face-5 ((t (:height 1.1 :foreground "#b48ead" :weight bold :inherit markdown-header-face))))
   (markdown-header-face-6 ((t (:height 1.05 :foreground "#5e81ac" :weight semi-bold :inherit markdown-header-face)))))
-#+end_src
-
-** claude-code-ide
-
-#+begin_src emacs-lisp
-(use-package claude-code-ide
-  :ensure (:host github :repo "manzaltu/claude-code-ide.el"
-           :files ("*.el"))
-  :defer t
-  :commands (claude-code-ide
-             claude-code-ide-menu
-             claude-code-ide-toggle
-             claude-code-ide-toggle-recent
-             claude-code-ide-continue
-             claude-code-ide-resume
-             claude-code-ide-stop
-             claude-code-ide-send-prompt
-             claude-code-ide-insert-at-mentioned
-             claude-code-ide-switch-to-buffer
-             claude-code-ide-list-sessions
-             claude-code-ide-check-status
-             claude-code-ide-show-debug
-             claude-code-ide-clear-debug)
-  :custom
-  ;; CLI
-  (claude-code-ide-cli-path "claude")
-  (claude-code-ide-cli-debug nil)
-  ;; Terminal backend
-  (claude-code-ide-terminal-backend 'ghostel)
-
-  ;; Window placement — mirror eca on the right side so the two AI assistants
-  ;; don't fight over the same slot
-  (claude-code-ide-use-side-window t)
-  (claude-code-ide-window-side 'right)
-  (claude-code-ide-window-width 75)
-  (claude-code-ide-focus-on-open t)
-
-  ;; Ediff integration for code suggestions
-  (claude-code-ide-use-ide-diff t)
-  (claude-code-ide-focus-claude-after-ediff t)
-  (claude-code-ide-show-claude-window-in-ediff t)
-  (claude-code-ide-switch-tab-on-ediff t)
-
-  ;; Diagnostics — auto-pick flycheck/flymake
-  (claude-code-ide-diagnostics-backend 'auto)
-
-  ;; Allow Claude to evaluate Elisp in this Emacs (executeCode MCP tool)
-  (claude-code-ide-enable-execute-code t)
-
-  :init
-  ;; Evil: open the Claude terminal in insert state so you can type immediately.
-  ;; Defined in :init so it applies even before claude-code-ide loads.
-  (with-eval-after-load 'evil
-    (evil-set-initial-state 'eat-mode 'insert))
-
-  (defun my/claude-code-ide--enter-insert (&rest _)
-    "Force evil insert state in the Claude terminal buffer after invocation."
-    (when (bound-and-true-p evil-mode)
-      (run-at-time
-       0.05 nil
-       (lambda ()
-         (when-let* ((buf (seq-find
-                           (lambda (b)
-                             (string-match-p "\\*claude-code"
-                                             (buffer-name b)))
-                           (buffer-list))))
-           (with-current-buffer buf
-             (when (get-buffer-window buf)
-               (select-window (get-buffer-window buf)))
-             (evil-insert-state)))))))
-
-  (dolist (cmd '(claude-code-ide
-                 claude-code-ide-toggle
-                 claude-code-ide-toggle-recent
-                 claude-code-ide-continue
-                 claude-code-ide-resume
-                 claude-code-ide-switch-to-buffer))
-    (advice-add cmd :after #'my/claude-code-ide--enter-insert))
-
-  ;; Leader-key bindings (SPC a …) — defined pre-load so :commands autoloads fire.
-  (with-eval-after-load 'general
-    ;; 2026-06-23: replaced claude-code-ide bindings with pi-coding-agent under `a'.
-    ;; pi-coding-agent only exposes 3 user-facing commands, so the prefix is intentionally sparse.
-    (my-leader
-      "aa" '(agent-shell-sidebar-toggle :wk "start")
-      "at" '(agent-shell-toggle :wk "toggle")
-      "am" '(agent-shell-help-menu :wk "open session")
-      "ar" '(agent-shell-send-region :wk "send region")))
-
-  :config
-  ;; Runs only on first invocation — not at Emacs startup.
-  (claude-code-ide-emacs-tools-setup))
-#+end_src
-
-** eca
-
-#+begin_src emacs-lisp
-(use-package eca
-  :ensure t
-  :config
-  (setopt evil-collection-eca-maps 't))
-#+end_src
-
-** pi-coding-agent
-
-#+begin_src emacs-lisp
-(use-package pi-coding-agent
-  :ensure t
-  :commands (pi-coding-agent
-             pi-coding-agent-toggle
-             pi-coding-agent-open-session-file))
 #+end_src
 
 ** agent-shell
@@ -1101,7 +993,38 @@ let's give agent-shell another try
   (setq flycheck-display-errors-function nil)
   (setq flycheck-global-modes
         '(not ghostel-mode vterm-mode term-mode shell-mode eshell-mode eat-mode))
-  (add-hook 'after-init-hook #'global-flycheck-mode))
+  (add-hook 'after-init-hook #'global-flycheck-mode)
+  ;; Org >= 9.8 returns the report line as a propertized string (with an
+  ;; `org-lint-marker' property), while flycheck's bundled `org-lint' checker
+  ;; expects a number and chokes with "Wrong type argument:
+  ;; number-or-marker-p".  Redefine the checker with a coercing parser.
+  (flycheck-define-generic-checker 'org-lint
+    "An Org mode syntax checker using `org-lint'."
+    :start (lambda (checker callback)
+             (condition-case err
+                 (let ((errors
+                        (delq nil
+                              (mapcar
+                               (lambda (e)
+                                 (pcase e
+                                   (`(,_n [,line ,_trust ,desc ,_checker])
+                                    (flycheck-error-new-at
+                                     (if (stringp line)
+                                         (string-to-number line)
+                                       line)
+                                     nil 'info desc
+                                     :checker checker))
+                                   (_
+                                    (flycheck-error-new-at
+                                     1 nil 'warning
+                                     (format "Unexpected org-lint format: %S" e)
+                                     :checker checker))))
+                               (org-lint)))))
+                   (funcall callback 'finished errors))
+               (error (funcall callback 'errored
+                               (error-message-string err)))))
+    :modes '(org-mode)
+    :enabled #'flycheck-org-lint-available-p))
 #+end_src
 
 ** flycheck-rust
@@ -2726,8 +2649,15 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :ensure t
   :hook
   (after-init . marginalia-mode)
+  :custom
+  (marginalia-align 'right)
   :config
-  (setq marginalia-align 'center))
+  (set-face-attribute 'marginalia-documentation nil
+                      :inherit nil
+                      :slant 'italic
+                      :foreground "grey43")
+  (set-face-attribute 'marginalia-key nil
+                      :foreground "#00ff5f"))
 #+end_src
 
 * programming
@@ -4239,7 +4169,6 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
 (my-leader
   "TAB"     '(:ignore t :wk "workspace")
   "TAB TAB" '(my/workspace-display :wk "display")
-  "TAB h"   '(enlight-open :wk "dashboard")
   "TAB ."   '(my/workspace-switch-to :wk "switch to…")
   "TAB `"   '(my/workspace-other :wk "last")
   "TAB n"   '(my/workspace-new :wk "new")
@@ -4464,7 +4393,10 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "gu" '(my/magit-uncommit :wk "uncommit (keep & unstage)")
   "gb" '(vc-annotate :wk "blame")
   "gT" '(my/code-todos-harvest :wk "harvest code TODOs")
-
+  "aa" '(agent-shell-sidebar-toggle :wk "start")
+  "at" '(agent-shell-toggle :wk "toggle")
+  "am" '(agent-shell-help-menu :wk "open session")
+  "ar" '(agent-shell-send-region :wk "send region")
   "o" '(:ignore t :wk "open")
   "os" '(my/snip-upload :wk "snip buffer/region")
   "oS" '(my/snip-upload-file :wk "snip file")
@@ -5226,7 +5158,7 @@ opening another file in same project does not re-notify."
 (use-package ghostel
   :ensure t
   :custom
-  (ghostel-shell "xonsh")
+  (ghostel-shell "fish")
   (ghostel-ssh-install-terminfo t)
   :config
   ;; Ghostel's platform detector only knows darwin/linux; teach it FreeBSD
