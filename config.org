@@ -943,7 +943,7 @@ let's give agent-shell another try
 #+begin_src emacs-lisp
 (use-package agent-shell-sidebar
   :after agent-shell
-  :ensure (:host github :repo "cmacrae/agent-shell-sidebar"))
+  :ensure (:host nil :repo "ssh://git@git.cashmere.rs/agent-shell-sidebar.git"))
 #+end_src
 
 
