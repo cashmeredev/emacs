@@ -318,6 +318,30 @@ Selects the compilation window so the cursor lands in it."
 (use-package async :ensure t)
 #+end_src
 
+* general (leader keys)
+
+#+begin_src emacs-lisp
+(use-package general
+  :ensure (:wait t)
+  :demand t
+  :config
+  (general-evil-setup))
+
+(eval-and-compile
+  (require 'general)
+
+  (general-create-definer my-leader
+    :states '(normal visual insert)
+    :keymaps 'override
+    :prefix "SPC"
+    :non-normal-prefix "M-SPC")
+
+  (general-create-definer my-local-leader
+    :states '(normal visual)
+    :keymaps 'override
+    :prefix ","))
+#+end_src
+
 * erc
 
 #+begin_src emacs-lisp
@@ -499,11 +523,6 @@ Temporarily disables notifications during the fetch."
         (add-hook 'erc-join-hook hook-fn))
       (run-irc))))
 
-;; ERC keybindings and hooks — register from any daemon, since `run-irc`
-;; autoloads ERC even outside the hub daemon.
-;; `general' is required eagerly (not via with-eval-after-load) so the
-;; `general-def' macro is expanded when config.el is compiled; inside a
-;; deferred lambda it would survive as a function call and fail at runtime.
 (with-eval-after-load 'erc
   (add-hook 'erc-mode-hook
             (lambda ()
@@ -780,32 +799,6 @@ Not necessary but an eyecandy to look at!
                           ("C-c ^ l" . smerge-keep-lower)  ;; Keep the changes from the lower version.
                           ("C-c ^ n" . smerge-next)        ;; Move to the next conflict.
                           ("C-c ^ p" . smerge-previous)))  ;; Move to the previous conflict.
-#+end_src
-
-* general (leader keys)
-
-Defined early so later =with-eval-after-load 'general= callbacks find =my-leader= already bound.
-
-#+begin_src emacs-lisp
-(use-package general
-  :ensure (:wait t)
-  :demand t
-  :config
-  (general-evil-setup))
-
-(eval-and-compile
-  (require 'general)
-
-  (general-create-definer my-leader
-    :states '(normal visual insert)
-    :keymaps 'override
-    :prefix "SPC"
-    :non-normal-prefix "M-SPC")
-
-  (general-create-definer my-local-leader
-    :states '(normal visual)
-    :keymaps 'override
-    :prefix ","))
 #+end_src
 
 * ai
@@ -3693,9 +3686,12 @@ created later still get them."
 
 ** theme load
 
+#+begin_comment
+moved to local.el
+#+end_comment
+
 #+begin_src emacs-lisp
-;; (add-to-list 'custom-theme-load-path "~/.emacs.d/themes/")
-;; (load-theme 'tinty t)
+
 #+end_src
 
 * dirvish
@@ -5218,7 +5214,7 @@ opening another file in same project does not re-notify."
   (inheritenv-add-advice 'ghostel-recompile))
 #+end_src
 
-* COMMENT garden
+* garden
 
 #+begin_src emacs-lisp
 (when-let* ((garden-dir (expand-file-name
