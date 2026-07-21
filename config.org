@@ -585,8 +585,6 @@ Temporarily disables notifications during the fetch."
 
 * clipetty
 
-Only =y= (evil-yank) reaches the system clipboard; deletes (=d=, =x=, =c=) and word kills (M-DEL, C-w in insert) stay in the kill-ring only. Clipetty's global mode would sync every kill via OSC 52, so instead the OSC 52 escape is emitted explicitly after each yank. =elfeed-search-yank= (which bypasses evil-yank via =gui-set-selection=) gets the same treatment for TTY frames.
-
 #+begin_src emacs-lisp
 (use-package clipetty
   :ensure t
@@ -603,11 +601,10 @@ Only =y= (evil-yank) reaches the system clipboard; deletes (=d=, =x=, =c=) and w
                (memq this-command '(evil-yank evil-yank-line)))
       (my/send-to-clipboard (car kill-ring))))
   (advice-add 'evil-yank :after #'my/evil-yank-to-clipboard)
-  ;; elfeed-search-yank bypasses evil-yank (uses gui-set-selection directly),
-  ;; so route it through the same clipboard path — needed in TTY frames.
   (defun my/elfeed-yank-to-clipboard (&rest _)
     (my/send-to-clipboard (car kill-ring)))
-  (advice-add 'elfeed-search-yank :after #'my/elfeed-yank-to-clipboard))
+  (advice-add 'elfeed-search-yank :after #'my/elfeed-yank-to-clipboard)
+  (advice-add 'link-hint-copy-link :after #'my/elfeed-yank-to-clipboard))
 #+end_src
 
 * isearch
@@ -3724,25 +3721,15 @@ moved to local.el
   (setq delete-by-moving-to-trash t)
   (setq dired-mouse-drag-files t)
 
-  ;; On TTY: drop dirvish's GUI-only media dispatchers (image/video/gif).
-  ;; They call `create-image' + `image-size' on cached thumbnails →
-  ;; "Window system frame should be used" on terminal frames.  Bare
-  ;; symbols here — `dirvish-*-dp' names only appear after
-  ;; `dirvish--preview-dps-validate' interns them (dirvish.el:577).
-  ;;
-  ;; kitty-graphics ships its own dirvish dispatcher (`kitty-image',
-  ;; registered by `kitty-gfx--install-dirvish' on `kitty-graphics-mode'
-  ;; enable, see kitty-graphics.el:4040) that handles images + video
-  ;; thumbnails via the Kitty protocol.  It runs before this filter
-  ;; thanks to being prepended; removing the GUI dispatchers is purely
-  ;; a safety net for cases where `kitty-image' returns nil (backend
-  ;; lost, mode disabled mid-flight).
-  (unless (display-graphic-p)
-    (with-eval-after-load 'dirvish
-      (setq dirvish-preview-dispatchers
-            (cl-remove-if (lambda (d)
-                            (memq d '(image gif video video-mtn)))
-                          dirvish-preview-dispatchers)))))
+  (define-advice dirvish--preview-dps-validate
+      (:around (fn &optional dps) tty-media-filter)
+    "Drop GUI-only media dispatchers when the session's frame is a TTY."
+    (let ((dps (if (display-graphic-p)
+                   dps
+                 (cl-remove-if (lambda (d)
+                                 (memq d '(image gif video video-mtn)))
+                               (or dps dirvish-preview-dispatchers)))))
+      (funcall fn dps))))
 #+end_src
 
 
@@ -3751,21 +3738,6 @@ moved to local.el
 #+begin_src emacs-lisp
 (use-package zoxide
   :ensure t) 
-#+end_src
-
-* rsync
-
-#+begin_src emacs-lisp
-(use-package dired-rsync 
-  :ensure t)
-#+end_src
-
-** rsync-transient
-
-#+begin_src emacs-lisp
-(use-package dired-rsync-transient
-  :ensure t
-  :after (dired-rsync transient))
 #+end_src
 
 * my/fns
@@ -4899,32 +4871,6 @@ reset is unnecessary, so do the handler resolution ourselves and skip
     :keymaps '(eww-mode-map elfeed-show-mode-map elfeed-search-mode-map)
     "f" #'link-hint-open-link
     "F" #'link-hint-copy-link))
-#+end_src
-
-** engine-mode — search engine shortcuts (C-x / …)
-
-#+begin_src emacs-lisp
-(use-package engine-mode
-  :ensure t
-  :commands (engine/search-duckduckgo
-             engine/search-google
-             engine/search-github
-             engine/search-mdn
-             engine/search-wikipedia
-             engine/search-arch-wiki
-             engine/search-nixpkgs
-             engine/search-rustdocs)
-  :config
-  (engine-mode 1)
-  (setq engine/browser-function 'eww-browse-url)
-  (defengine duckduckgo "https://duckduckgo.com/html/?q=%s" :keybinding "d")
-  (defengine google     "https://google.com/search?q=%s"    :keybinding "g")
-  (defengine github     "https://github.com/search?q=%s&type=code" :keybinding "h")
-  (defengine mdn        "https://developer.mozilla.org/en-US/search?q=%s" :keybinding "m")
-  (defengine wikipedia  "https://en.wikipedia.org/wiki/Special:Search?search=%s" :keybinding "w")
-  (defengine arch-wiki  "https://wiki.archlinux.org/index.php?search=%s" :keybinding "a")
-  (defengine nixpkgs    "https://search.nixos.org/packages?query=%s" :keybinding "n")
-  (defengine rustdocs   "https://docs.rs/releases/search?query=%s" :keybinding "r"))
 #+end_src
 
 * mu4e
