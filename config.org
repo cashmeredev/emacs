@@ -4329,6 +4329,7 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "bd" '(bookmark-delete :wk "delete bookmark")
   "bk" '(kill-current-buffer :wk "kill buffer")
   "bs" '(bookmark-set :wk "save bookmark")
+  "br" '(rename-buffer :wk "rename buffer")
 
   "p" '(:ignore t :wk "project")
   "pp" '(projectile-switch-project :wk "switch project")
@@ -5100,7 +5101,7 @@ opening another file in same project does not re-notify."
 (use-package ghostel
   :ensure t
   :custom
-  (ghostel-shell "fish")
+  (ghostel-shell "xonsh")
   (ghostel-ssh-install-terminfo t)
   :config
   ;; Ghostel's platform detector only knows darwin/linux; teach it FreeBSD
