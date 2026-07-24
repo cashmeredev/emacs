@@ -3300,7 +3300,8 @@ so the working-tree diff stays visible until the user explicitly stages."
   :init
   (smartparens-global-mode 1)  
   :config
-  (require 'smartparens-config))
+  (require 'smartparens-config)
+  (sp-local-pair 'org-mode "~" nil :actions nil))
 (use-package evil-smartparens
   :ensure t
   :after evil-collection
