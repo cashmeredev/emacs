@@ -3738,7 +3738,14 @@ moved to local.el
 
 #+begin_src emacs-lisp
 (use-package zoxide
-  :ensure t) 
+  :ensure t
+  :config
+  (defun my/zoxide-add-dired ()
+    "Append the current dired/dirvish directory to the zoxide database."
+    (when (and default-directory
+               (not (file-remote-p default-directory)))
+      (zoxide-add default-directory)))
+  (add-hook 'dired-after-readin-hook #'my/zoxide-add-dired))
 #+end_src
 
 * my/fns
