@@ -604,7 +604,17 @@ Temporarily disables notifications during the fetch."
   (defun my/elfeed-yank-to-clipboard (&rest _)
     (my/send-to-clipboard (car kill-ring)))
   (advice-add 'elfeed-search-yank :after #'my/elfeed-yank-to-clipboard)
-  (advice-add 'link-hint-copy-link :after #'my/elfeed-yank-to-clipboard))
+  (advice-add 'link-hint-copy-link :after #'my/elfeed-yank-to-clipboard)
+  (with-eval-after-load 'pass
+    (dolist (cmd '(pass-copy
+                   pass-copy-field
+                   pass-copy-username
+                   pass-copy-url
+                   pass-otp-token-copy
+                   pass-otp-uri-copy
+                   pass-view-copy-password
+                   pass-view-copy-token))
+      (advice-add cmd :after #'my/elfeed-yank-to-clipboard))))
 #+end_src
 
 * isearch
@@ -1060,17 +1070,6 @@ let's give agent-shell another try
 (use-package sideline-flycheck
   :ensure t
   :hook (flycheck-mode . sideline-flycheck-setup))
-#+end_src
-
-** flycheck-vale
-
-#+begin_src emacs-lisp
-;; (use-package flycheck-vale
-;;   :ensure t
-;;   :after flycheck
-;;   :demand t
-;;   :config
-;;   (flycheck-vale-setup))
 #+end_src
 
 * xref
@@ -2139,6 +2138,28 @@ Org Backend exporter for typst templates written and configured in org mode.
           "\\`\\*Async-native-compile-log\\*\\'")))
 #+end_src
 
+* xdg-launcher
+
+
+#+begin_src emacs-lisp
+(use-package xdg-launcher
+  :ensure (:host github :repo "emacs-exwm/xdg-launcher")
+  :commands (xdg-launcher-run-app)
+  :config
+  (with-eval-after-load 'consult
+    (push 'xdg-launcher-consult-source
+          (cdr (memq 'consult-source-buffer consult-buffer-sources)))))
+
+(defun my/app-launcher ()
+  "Launch an XDG application.
+In the dedicated floating \"emacs-launcher\" frame, close the frame
+after the app was launched."
+  (interactive)
+  (xdg-launcher-run-app)
+  (when (string= (frame-parameter nil 'name) "emacs-launcher")
+    (delete-frame)))
+#+end_src
+
 * denote
 
 Denote is objectively the best note taking extension, which you could install. It has a very easy to parse file naming scheme and suports not only org files. It has also transclusion inclusive! if you are interested, then check it out yourself.
@@ -2321,14 +2342,6 @@ Some goodies for better integration with org files.
 #+begin_src emacs-lisp
 (use-package denote-org
     :ensure t)
-#+end_src
-
-** consult-denote
-
-#+begin_src emacs-lisp
-(use-package consult-denote
-  :ensure (:host github :repo "protesilaos/consult-denote")
-  :defer t)
 #+end_src
 
 ** my/functions
@@ -2587,10 +2600,6 @@ Auto switch silos (different workspaces/folders) based on preconfigured director
     (advice-add 'eglot-completion-at-point :around #'cape-wrap-noninterruptible)
     (advice-add 'eglot-completion-at-point :around #'cape-wrap-buster)))
 #+end_src
-
-#+begin_comment
-markdown-mode moved before eca — see section before eca block
-#+end_comment
 
 * embark
 
@@ -3136,31 +3145,6 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
     (diff-hl-margin-mode 1)))
 #+end_src
 
-* COMMENT shackle
-
-#+begin_src emacs-lisp
-(defun my-org-sidecar-left ()
-  "Pick an org-mode buffer via consult and display it as a left sidecar."
-  (interactive)
-  (let* ((bufs (cl-remove-if-not
-                (lambda (b)
-                  (with-current-buffer b
-                    (derived-mode-p 'org-mode)))
-                (buffer-list)))
-         (names (mapcar #'buffer-name bufs))
-         (choice (consult--read names
-                   :prompt "Org sidecar: "
-                   :sort nil
-                   :require-match t
-                   :category 'buffer)))
-    (when-let* ((buf (get-buffer choice)))
-      (display-buffer-in-side-window
-       buf
-       '((side . left)
-         (window-width . 0.25)
-         (slot . 0))))))
-#+end_src
-
 * hl-todo
 
 #+begin_src emacs-lisp
@@ -3670,15 +3654,6 @@ created later still get them."
 #+end_src
 
 * essentials
-
-** grip mode
-
-#+begin_src emacs-lisp
-(use-package grip-mode
-  :ensure t
-  :config 
-  (setq grip-command 'auto)) ;; auto, grip, go-grip or mdopen
-#+end_src
 
 * themes
 
@@ -4293,19 +4268,14 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
    (t (message "No formatter for %s" major-mode))))
 
 (my-leader
-  "SPC" '((lambda () 
-            (interactive)
-            (if (projectile-project-p)
-                (consult-projectile-find-file)
-              (projectile-switch-project)))
-          :wk "find file/switch project")
+  "SPC" '(my/find-file-or-switch-project :wk "find file/switch project")
   "sp" '(consult-projectile :wk "search project")
-  "ss" '(consult-line :wk "search project")
+  "ss" '(fzfa-swiper :wk "search line")
   "sg" '(my/consult-ripgrep-in :wk "grep in dir")
   "sf" '(my/consult-fd-in :wk "find file in dir")
-  "/" '(consult-ripgrep :wk "search project")
-  "." '(find-file :wk "find file")
-  "," '(consult-buffer :wk "switch buffer")
+  "/" '(fzfa-rg :wk "search project")
+  "." '(fzfa-find :wk "find file")
+  "," '(fzfa-buffer :wk "switch buffer")
   ":" (lambda () (interactive) (execute-extended-command nil))
   "u" '(universal-argument :wk "universal argument")
 
@@ -4326,12 +4296,12 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "f" '(:ignore t :wk "files")
   "fd" '(dired-jump :wk "dired")
   "fD" '(dired-jump :wk "dired jump")
-  "fr" '(consult-recent-file :wk "recent files")
-  "ff" '(find-file :wk "find file")
+  "fr" '(fzfa-recent-file :wk "recent files")
+  "ff" '(fzfa-fd :wk "find file")
   "fs" '(save-buffer :wk "save file")
 
   "b" '(:ignore t :wk "buffer/bookmarks")
-  "bb" '(consult-bookmark :wk "display current bookmarks")
+  "bb" '(fzfa-bookmark :wk "display current bookmarks")
   "bi" '(my/ibuffer-workspace :wk "ibuffer (workspace)")
   "bp" '(projectile-ibuffer :wk "ibuffer project")
   "bd" '(bookmark-delete :wk "delete bookmark")
@@ -4340,8 +4310,8 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "br" '(rename-buffer :wk "rename buffer")
 
   "p" '(:ignore t :wk "project")
-  "pp" '(projectile-switch-project :wk "switch project")
-  "pf" '(projectile-find-file :wk "find file")
+  "pp" '(fzfa-project-switch-project :wk "switch project")
+  "pf" '(fzfa-project-find-file :wk "find file")
   "ps" '(consult-ripgrep :wk "search")
   "pb" '(consult-projectile-buffer :wk "buffers") 
   "pk" '(projectile-kill-buffers :wk "kill buffers") 
@@ -4370,11 +4340,12 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "gu" '(my/magit-uncommit :wk "uncommit (keep & unstage)")
   "gb" '(vc-annotate :wk "blame")
   "gT" '(my/code-todos-harvest :wk "harvest code TODOs")
-  "aa" '(agent-shell-sidebar-toggle :wk "start")
+  "aa" '(agent-shell :wk "start")
   "at" '(agent-shell-toggle :wk "toggle")
   "am" '(agent-shell-help-menu :wk "open session")
   "ar" '(agent-shell-send-region :wk "send region")
   "o" '(:ignore t :wk "open")
+  "oa" '(my/app-launcher :wk "app launcher")
   "os" '(my/snip-upload :wk "snip buffer/region")
   "oS" '(my/snip-upload-file :wk "snip file")
   "op" '(pass :wk "pass")
@@ -5006,7 +4977,7 @@ reset is unnecessary, so do the handler resolution ourselves and skip
   (add-to-list 'global-colorful-modes 'helpful-mode))
 #+end_src
 
-* gleam
+* COMMENT gleam
 
 #+begin_src emacs-lisp
 (use-package gleam-ts-mode
@@ -5292,6 +5263,32 @@ opening another file in same project does not re-notify."
 (use-package org-auto-tangle
   :ensure t
   :hook (org-mode . org-auto-tangle-mode))
+#+end_src
+
+* fzfa
+
+#+begin_src emacs-lisp
+(use-package fzfa
+  :ensure t)
+
+(defun my/fzfa-switch-project-find-file ()
+  "Switch to a known project and immediately browse its files.
+Like `consult-projectile': pick a project, then a file — without the
+`project-switch-project' dispatch menu.  Binding
+`project-switch-commands' to a symbol makes `project-switch-project'
+invoke it directly."
+  (interactive)
+  (let ((project-switch-commands 'fzfa-project-find-file))
+    (fzfa-project-switch-project)))
+
+(defun my/find-file-or-switch-project ()
+  "Find a file in the current project; outside one, pick a project first.
+After picking a project its files are shown immediately, so this also
+works from the master workspace (e.g. *scratch*)."
+  (interactive)
+  (if (projectile-project-p)
+      (fzfa-project-find-file)
+    (my/fzfa-switch-project-find-file)))
 #+end_src
 
 * provide init
