@@ -1204,15 +1204,16 @@ Only activates when running in a Kitty terminal (not in GUI Emacs).
   :ensure (:host github :repo "cashmeredev/kitty-graphics.el")
   :demand t
   :custom
-  (kitty-gfx-enable-video t)
-  (kitty-gfx-shr-scale 'fit)
-  (kitty-gfx-shr-fit-width 0.4)
-  (kitty-gfx-shr-fit-height 20)
-  :hook (dired-mode . kitty-gfx-dired-auto-preview-mode)
+  (kitty-graphics-enable-video t)
+  (kitty-graphics-shr-scale 'fit)
+  (kitty-graphics-shr-fit-width 0.4)
+  (kitty-graphics-shr-fit-height 20)
+  (kitty-graphics-doc-view-resolution-scale 2.0)
+  :hook (dired-mode . kitty-graphics-dired-auto-preview-mode)
   :config
-  (setq kitty-gfx-enable-browser t
-        kitty-gfx-casty-program "~/projects/casty/bin/casty.js"
-        kitty-gfx-casty-chrome "helium-browser")
+  (setq kitty-graphics-enable-browser t
+        kitty-graphics-casty-program "~/projects/casty/bin/casty.js"
+        kitty-graphics-casty-chrome "helium-browser")
 
   (kitty-graphics-setup))
 #+end_src
@@ -4470,7 +4471,7 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "mC" '(org-capture :wk "capture")
 
   "mc" '(:wk "set" :ignore)
-  "mk" '(kitty-gfx-org-heading-sizes :wk "kgfx headlines")
+  "mk" '(kitty-graphics-org-heading-sizes :wk "kgfx headlines")
   "mcd" '(org-deadline :wk "deadline")
   "mcs" '(org-schedule :wk "schedule")
   "mce" '(org-set-effort :wk "effort")
