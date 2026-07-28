@@ -85,10 +85,6 @@ dirvish/thumbnails
 # persp-mode session autosave state
 /workspaces/
 
-# tramp-rpc server binaries (per-host build artifacts); keep the lisp sources
-/tramp-rpc/*/
-!/tramp-rpc/lisp/
-
 # Per-host runtime/session state (savehist, recentf, places, bookmarks, clocks, timers)
 /triples.db
 /tmr-timers.eld
