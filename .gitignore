@@ -105,3 +105,4 @@ dirvish/thumbnails
 /org-persist/
 *.eld
 /elfeed/
+/cache/
