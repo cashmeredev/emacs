@@ -4271,7 +4271,7 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
 (my-leader
   "SPC" '(my/find-file-or-switch-project :wk "find file/switch project")
   "sp" '(consult-projectile :wk "search project")
-  "ss" '(fzfa-swiper :wk "search line")
+  "ss" '(my/fzfa-swiper :wk "search line")
   "sg" '(my/consult-ripgrep-in :wk "grep in dir")
   "sf" '(my/consult-fd-in :wk "find file in dir")
   "/" '(fzfa-rg :wk "search project")
@@ -4311,7 +4311,7 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "br" '(rename-buffer :wk "rename buffer")
 
   "p" '(:ignore t :wk "project")
-  "pp" '(fzfa-project-switch-project :wk "switch project")
+  "pp" '(my/fzfa-switch-project-find-file :wk "switch project workspace")
   "pf" '(fzfa-project-find-file :wk "find file")
   "ps" '(consult-ripgrep :wk "search")
   "pb" '(consult-projectile-buffer :wk "buffers") 
@@ -5270,17 +5270,64 @@ opening another file in same project does not re-notify."
 
 #+begin_src emacs-lisp
 (use-package fzfa
-  :ensure t)
+  :ensure (:host github :repo "jojojames/fzfa"))
+
+(defun my/project-open-workspace ()
+  "Open the workspace for the project chosen by `project-switch-project'.
+`project-switch-project' conveys the chosen root via
+`project-current-directory-override', not `default-directory'."
+  (interactive)
+  (my/workspace-switch-to-project
+   (project-root (project-current t))))
 
 (defun my/fzfa-switch-project-find-file ()
-  "Switch to a known project and immediately browse its files.
-Like `consult-projectile': pick a project, then a file — without the
-`project-switch-project' dispatch menu.  Binding
-`project-switch-commands' to a symbol makes `project-switch-project'
-invoke it directly."
+  "Switch to a known project's workspace and immediately browse its files.
+Picks a project with fzfa, lets `my/workspace-switch-to-project'
+switch to (or create) the persp workspace named after it, then runs
+`fzfa-project-find-file' inside it.  Binding `project-switch-commands'
+to a command symbol makes `project-switch-project' invoke it directly."
   (interactive)
-  (let ((project-switch-commands 'fzfa-project-find-file))
+  (let ((my/workspace-switch-project-function #'fzfa-project-find-file)
+        (project-switch-commands #'my/project-open-workspace))
     (fzfa-project-switch-project)))
+
+(defun my/fzfa-swiper ()
+  "Search lines of the current buffer with fontified candidates.
+Like `fzfa-swiper', but keeps font-lock faces on the candidates and
+jumps to the candidate's line as the selection moves.  Aborting
+restores the original point."
+  (interactive)
+  (let* ((source (or (buffer-file-name) (buffer-name)))
+         (origin (point-marker))
+         (candidates
+          (save-excursion
+            (font-lock-ensure)
+            (goto-char (point-min))
+            (let ((i 1) lines)
+              (while (not (eobp))
+                (let ((content (buffer-substring
+                                (line-beginning-position)
+                                (line-end-position))))
+                  (unless (string-empty-p content)
+                    (push (fzfa--location-candidate
+                           (concat (propertize (format "%d:" i)
+                                               'face 'line-number)
+                                   content)
+                           source i)
+                          lines)))
+                (forward-line 1)
+                (cl-incf i))
+              (nreverse lines)))))
+    (fzfa-visit-location
+     (let ((fzfa-preview-delay 0.1))
+       (fzfa-completing-read
+        :candidates candidates
+        :prompt "swiper: "
+        :category 'fzfa-location
+        :preview `(:preview fzfa--location-preview
+                   :return ,(lambda (cand)
+                              (unless cand
+                                (goto-char origin)))))))))
 
 (defun my/find-file-or-switch-project ()
   "Find a file in the current project; outside one, pick a project first.
