@@ -1027,7 +1027,7 @@ let's give agent-shell another try
     :enabled #'flycheck-org-lint-available-p))
 #+end_src
 
-** flycheck-rust
+** COMMENT flycheck-rust
 
 #+begin_src emacs-lisp
 (use-package flycheck-rust
@@ -1037,7 +1037,7 @@ let's give agent-shell another try
   (add-hook 'rust-ts-mode-hook #'flycheck-rust-setup))
 #+end_src
 
-** flycheck-ruff
+** COMMENT flycheck-ruff
 
 #+begin_src emacs-lisp
 (use-package flycheck-python-ruff
@@ -1045,7 +1045,7 @@ let's give agent-shell another try
   :hook (python-ts-mode . flycheck-python-ruff-setup))
 #+end_src
 
-** flycheck eglot
+** COMMENT flycheck eglot
 
 #+begin_src emacs-lisp
 (use-package flycheck-eglot
@@ -1055,7 +1055,7 @@ let's give agent-shell another try
   (global-flycheck-eglot-mode 1))
 #+end_src
 
-** sideline-flycheck
+** COMMENT sideline-flycheck
 
 #+begin_src emacs-lisp
 (use-package sideline
