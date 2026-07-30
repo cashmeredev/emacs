@@ -136,8 +136,6 @@ Set per-host in the gitignored `local.el'.")
   (scroll-bar-mode -1)
   (add-to-list 'default-frame-alist '(vertical-scroll-bars . nil))
   (add-to-list 'default-frame-alist '(horizontal-scroll-bars . nil))
-  (set-frame-parameter (selected-frame) 'alpha-background 90)
-  (add-to-list 'default-frame-alist '(alpha-background . 90))
   (global-hl-line-mode 1) ;; Highlight the current line
   (add-hook 'org-mode-hook (lambda () (setq-local global-hl-line-mode nil))) ;; hl-line repaints wipe kitty-graphics scaled headings
   (add-hook 'markdown-mode-hook (lambda () (setq-local global-hl-line-mode nil))) ;; same conflict for kitty-graphics markdown headings
@@ -982,94 +980,6 @@ let's give agent-shell another try
 (setq trusted-content
       '("~/.emacs.d/config.el"
         "~/.emacs.d/init.el"))
-#+end_src
-
-* flycheck
-
-#+begin_src emacs-lisp
-(use-package flycheck
-  :ensure t
-  :config
-  (setq flycheck-display-errors-function nil)
-  (setq flycheck-global-modes
-        '(not ghostel-mode vterm-mode term-mode shell-mode eshell-mode eat-mode))
-  (add-hook 'after-init-hook #'global-flycheck-mode)
-  ;; Org >= 9.8 returns the report line as a propertized string (with an
-  ;; `org-lint-marker' property), while flycheck's bundled `org-lint' checker
-  ;; expects a number and chokes with "Wrong type argument:
-  ;; number-or-marker-p".  Redefine the checker with a coercing parser.
-  (flycheck-define-generic-checker 'org-lint
-    "An Org mode syntax checker using `org-lint'."
-    :start (lambda (checker callback)
-             (condition-case err
-                 (let ((errors
-                        (delq nil
-                              (mapcar
-                               (lambda (e)
-                                 (pcase e
-                                   (`(,_n [,line ,_trust ,desc ,_checker])
-                                    (flycheck-error-new-at
-                                     (if (stringp line)
-                                         (string-to-number line)
-                                       line)
-                                     nil 'info desc
-                                     :checker checker))
-                                   (_
-                                    (flycheck-error-new-at
-                                     1 nil 'warning
-                                     (format "Unexpected org-lint format: %S" e)
-                                     :checker checker))))
-                               (org-lint)))))
-                   (funcall callback 'finished errors))
-               (error (funcall callback 'errored
-                               (error-message-string err)))))
-    :modes '(org-mode)
-    :enabled #'flycheck-org-lint-available-p))
-#+end_src
-
-** COMMENT flycheck-rust
-
-#+begin_src emacs-lisp
-(use-package flycheck-rust
-  :ensure t
-  :config
-  (setq flycheck-rust-check-tests nil)
-  (add-hook 'rust-ts-mode-hook #'flycheck-rust-setup))
-#+end_src
-
-** COMMENT flycheck-ruff
-
-#+begin_src emacs-lisp
-(use-package flycheck-python-ruff
-  :ensure (:host github :repo "v4n6/flycheck-python-ruff")
-  :hook (python-ts-mode . flycheck-python-ruff-setup))
-#+end_src
-
-** COMMENT flycheck eglot
-
-#+begin_src emacs-lisp
-(use-package flycheck-eglot
-  :ensure t
-  :after (flycheck eglot)
-  :config
-  (global-flycheck-eglot-mode 1))
-#+end_src
-
-** COMMENT sideline-flycheck
-
-#+begin_src emacs-lisp
-(use-package sideline
-  :ensure t
-  :hook (flycheck-mode . sideline-mode)
-  :config
-  (setq sideline-delay 0.001)
-  :custom
-  (sideline-backends-right '(sideline-flycheck))
-  (sideline-display-backend-name t))
-
-(use-package sideline-flycheck
-  :ensure t
-  :hook (flycheck-mode . sideline-flycheck-setup))
 #+end_src
 
 * xref
@@ -3679,7 +3589,7 @@ created later still get them."
   (when (display-graphic-p frame)
     (set-face-attribute 'default frame
                         :family "Maple Mono NF"
-                        :height 180
+                        :height cashmere/font-height
                         :font (font-spec
                                :family "Maple Mono NF"
                                :features '(cv04 ss05 zero)

@@ -114,8 +114,6 @@ Set per-host in the gitignored `local.el'.")
   (scroll-bar-mode -1)
   (add-to-list 'default-frame-alist '(vertical-scroll-bars . nil))
   (add-to-list 'default-frame-alist '(horizontal-scroll-bars . nil))
-  ;; (set-frame-parameter (selected-frame) 'alpha-background 90)
-  ;; (add-to-list 'default-frame-alist '(alpha-background . 90))
   (global-hl-line-mode 1) ;; Highlight the current line
   (add-hook 'org-mode-hook (lambda () (setq-local global-hl-line-mode nil))) ;; hl-line repaints wipe kitty-graphics scaled headings
   (add-hook 'markdown-mode-hook (lambda () (setq-local global-hl-line-mode nil))) ;; same conflict for kitty-graphics markdown headings
@@ -2922,7 +2920,7 @@ created later still get them."
   (when (display-graphic-p frame)
     (set-face-attribute 'default frame
                         :family "Maple Mono NF"
-                        :height 180
+                        :height cashmere/font-height
                         :font (font-spec
                                :family "Maple Mono NF"
                                :features '(cv04 ss05 zero)
