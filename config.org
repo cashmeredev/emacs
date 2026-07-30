@@ -1784,9 +1784,12 @@ Skips capture tasks and projects."
              (:name "Schedule"
               :time-grid t
               :order 1)
+             (:name "Scheduled today"
+              :scheduled today
+              :order 2)
              (:name "Deadlines"
               :deadline today
-              :order 2)
+              :order 3)
              (:discard (:anything t))))))
 
        ;; Block 2: active + next tasks (what you can work on right now)
@@ -1821,6 +1824,9 @@ Skips capture tasks and projects."
              (:name "Schedule"
               :time-grid t
               :order 1)
+             (:name "Scheduled today"
+              :scheduled today
+              :order 2)
              (:discard (:anything t))))))
 
        ;; Block 2: next 6 days
@@ -1889,12 +1895,37 @@ Skips capture tasks and projects."
              (:name "Schedule"
               :time-grid t
               :order 1)
+             (:name "Scheduled today"
+              :scheduled today
+              :order 2)
              (:name "Deadlines"
               :deadline today
-              :order 2)
+              :order 3)
              (:discard (:anything t))))))
 
-       ;; Block 2: project
+       ;; Block 2: next 6 days
+       (agenda ""
+         ((org-agenda-start-on-weekday nil)
+          (org-agenda-start-day "+1d")
+          (org-agenda-span 6)
+          (org-deadline-warning-days 0)
+          (org-agenda-overriding-header "Next 6 Days")
+          (org-super-agenda-groups
+           '((:anything t)))))
+
+       ;; Block 3: upcoming deadlines beyond this week
+       (agenda ""
+         ((org-agenda-time-grid nil)
+          (org-agenda-start-on-weekday nil)
+          (org-agenda-start-day "+7d")
+          (org-agenda-span 14)
+          (org-agenda-show-all-dates nil)
+          (org-agenda-entry-types '(:deadline))
+          (org-agenda-overriding-header "Upcoming Deadlines (+14d)")
+          (org-super-agenda-groups
+           '((:anything t)))))
+
+       ;; Block 4: project
        (org-ql-block '(and (tags "project")
                            (not (done)))
          ((org-ql-block-header "Project")
@@ -1905,7 +1936,7 @@ Skips capture tasks and projects."
              (:name "WAIT"   :todo "WAIT"   :order 4)
              (:discard (:anything t))))))
 
-       ;; Block 3: development
+       ;; Block 5: development
        (org-ql-block '(and (tags "development")
                            (not (done)))
          ((org-ql-block-header "Development")
@@ -1916,7 +1947,7 @@ Skips capture tasks and projects."
              (:name "WAIT"   :todo "WAIT"   :order 4)
              (:discard (:anything t))))))
 
-       ;; Block 4: blog
+       ;; Block 6: blog
        (org-ql-block '(and (tags "blog")
                            (not (done)))
          ((org-ql-block-header "Blog")
@@ -1927,7 +1958,7 @@ Skips capture tasks and projects."
              (:name "WAIT"   :todo "WAIT"   :order 4)
              (:discard (:anything t))))))
 
-       ;; Block 5: self
+       ;; Block 7: self
        (org-ql-block '(and (tags "self")
                            (not (done)))
          ((org-ql-block-header "Self")
@@ -1938,7 +1969,7 @@ Skips capture tasks and projects."
              (:name "WAIT"   :todo "WAIT"   :order 4)
              (:discard (:anything t))))))
 
-       ;; Block 6: backlog — everything not covered above
+       ;; Block 8: backlog — everything not covered above
        (org-ql-block '(and (todo)
                            (not (done))
                            (not (tags "project" "development" "blog" "self")))
@@ -2189,6 +2220,28 @@ Denote fitself focused on the last versions to have a core for note taking and t
   (denote-agenda-insinuate))
 #+end_src
 
+** my/denote-toggle-agenda-keyword
+
+#+begin_src emacs-lisp
+(defun my/denote-toggle-agenda-keyword ()
+  "Toggle the \"agenda\" keyword on the current Denote note.
+Renames the file and rewrites its front matter, saving the buffer."
+  (interactive)
+  (unless (and buffer-file-name (denote-file-is-note-p buffer-file-name))
+    (user-error "Current buffer is not a Denote note"))
+  (save-buffer)
+  (let* ((keywords (denote-extract-keywords-from-path buffer-file-name))
+         (denote-rename-confirmations nil)
+         (denote-save-buffers t)
+         (new-keywords (if (member "agenda" keywords)
+                           (remove "agenda" keywords)
+                         (cons "agenda" keywords))))
+    (denote-rename-file buffer-file-name 'keep-current new-keywords
+                        'keep-current 'keep-current 'keep-current)
+    (message "%s the agenda"
+             (if (member "agenda" new-keywords) "Added to" "Removed from"))))
+#+end_src
+
 ** denote-journal
 
 #+begin_src emacs-lisp
@@ -2311,29 +2364,13 @@ Works on the base filename (without extension), e.g. matches \"-agenda\", \":age
 
 ** denote-menu
 
+My own vui-based replacement for Protesilaos' =denote-menu= (in =lisp/denote-menu.el=). Lists the notes of the current silo in a borderless, elfeed-style table with filtering and sorting, with first-class evil bindings.
+
 #+begin_src emacs-lisp
 (use-package denote-menu
-  :ensure t
-  :defer t
-  :config
-  (setq denote-menu-title-column-width 60)
-
-  (defun denote-menu-export-to-dired ()
-    "Switch to a plain Dired buffer listing the filtered *Denotes* files.
-Bypasses dirvish's `dired-noselect' advice: dirvish keys session
-buffers by directory only, so it would reuse the existing buffer
-for `denote-directory' and silently drop the file-list filter."
-    (interactive)
-    (if-let* ((paths (denote-menu--entries-to-paths))
-              (default-directory (denote-directory)))
-        (pop-to-buffer-same-window
-         (unwind-protect
-             (progn
-               (advice-remove 'dired-noselect 'dirvish-dired-noselect-a)
-               (dired-noselect (cons default-directory paths)))
-           (when (bound-and-true-p dirvish-override-dired-mode)
-             (advice-add 'dired-noselect :around 'dirvish-dired-noselect-a))))
-      (user-error "No files to export"))))
+  :ensure nil
+  :after denote
+  :commands (denote-menu))
 #+end_src
 
 ** denote-org
@@ -4281,8 +4318,9 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "u" '(universal-argument :wk "universal argument")
 
   "d" '(:ignore t :wk "denote")
+  "da" '(my/denote-toggle-agenda-keyword :wk "toggle agenda tag")
   "dj" '(denote-journal-new-or-existing-entry :wk "journal")
-  "dd" '(denote-menu-list-notes t :wk "List all notes")
+  "dd" '(denote-menu t :wk "List all notes")
   "dm" '(:ignore t :wk "Merge Notes")
   "dmr" '(denote-merge-region :wk "Merge Region")
   "dmf" '(denote-merge-file :wk "Merge File")
@@ -4500,17 +4538,6 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "mr" '(rust-run :wk "run")
   "mc" '(rust-run-clippy :wk "clippy")
   "mC" '(rust-check :wk "check"))
-#+end_src
-
-** denote-menu keymaps
-
-#+begin_src emacs-lisp
-(with-eval-after-load 'denote-menu
-  (general-def 'normal denote-menu-mode-map
-    "r" 'denote-menu-filter
-    "c" 'denote-menu-clear-filters
-    "e" 'denote-menu-export-to-dired
-    "o" 'denote-menu-filter-out-keyword))
 #+end_src
 
 ** tmr keynmaps
@@ -5270,7 +5297,9 @@ opening another file in same project does not re-notify."
 
 #+begin_src emacs-lisp
 (use-package fzfa
-  :ensure (:host github :repo "jojojames/fzfa"))
+  :ensure (:host github :repo "jojojames/fzfa")
+  :custom
+  (fzfa-preview-delay 0.25))
 
 (defun my/project-open-workspace ()
   "Open the workspace for the project chosen by `project-switch-project'.
@@ -5319,15 +5348,14 @@ restores the original point."
                 (cl-incf i))
               (nreverse lines)))))
     (fzfa-visit-location
-     (let ((fzfa-preview-delay 0.1))
-       (fzfa-completing-read
-        :candidates candidates
-        :prompt "swiper: "
-        :category 'fzfa-location
-        :preview `(:preview fzfa--location-preview
-                   :return ,(lambda (cand)
-                              (unless cand
-                                (goto-char origin)))))))))
+     (fzfa-completing-read
+      :candidates candidates
+      :prompt "swiper: "
+      :category 'fzfa-location
+      :preview `(:preview fzfa--location-preview
+                 :return ,(lambda (cand)
+                            (unless cand
+                              (goto-char origin))))))))
 
 (defun my/find-file-or-switch-project ()
   "Find a file in the current project; outside one, pick a project first.
