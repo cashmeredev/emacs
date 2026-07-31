@@ -443,24 +443,22 @@ Selects the compilation window so the cursor lands in it."
 
   (erc-update-modules))
 
-(defvar my/consult-source-erc
-  (list :name "IRC"
-        :narrow ?i
-        :category 'buffer
-        :face 'erc-default-face
-        :state #'consult--buffer-state
-        :items (lambda ()
-                 (mapcar #'buffer-name
-                         (cl-remove-if-not
-                          (lambda (buf)
-                            (with-current-buffer buf
-                              (derived-mode-p 'erc-mode)))
-                          (buffer-list))))))
-
 (defun my/erc-switch-channel ()
-  "Switch to an ERC channel buffer via consult."
+  "Switch to an ERC channel buffer via helm."
   (interactive)
-  (consult-buffer (list my/consult-source-erc)))
+  (require 'helm)
+  (helm :sources
+        (helm-build-sync-source "IRC"
+          :candidates
+          (lambda ()
+            (mapcar #'buffer-name
+                    (cl-remove-if-not
+                     (lambda (buf)
+                       (with-current-buffer buf
+                         (derived-mode-p 'erc-mode)))
+                     (buffer-list))))
+          :action '(("Switch to buffer" . switch-to-buffer)))
+        :buffer "*helm erc*"))
 
 (defun my/erc-fetch-history (&optional count)
   "Fetch COUNT previous messages from Soju via CHATHISTORY.
@@ -891,19 +889,19 @@ let's give agent-shell another try
 
 (use-package agent-shell
   :ensure t
-  :bind (:map agent-shell-mode-map
-              ("RET" . newline)
-              ("M-RET" . shell-maker-submit))
   :config
   (advice-add 'shell-maker-submit :after #'my/agent-shell-autoscroll)
   (dolist (rule (my/agent-shell-display-buffer-rules))
     (add-to-list 'display-buffer-alist rule)) 
-  (setq agent-shell-tool-use-expand-by-default nil)
-  (setq agent-shell-thought-process-expand-by-default nil)
-  (setq agent-shell-user-message-expand-by-default nil)
+  (setq agent-shell-tool-use-expand-by-default t)
+  (setq agent-shell-thought-process-expand-by-default t)
+  (setq agent-shell-user-message-expand-by-default t)
   (setq agent-shell-diff-delta-command
         (when (executable-find "delta")
           '("delta" "--no-gitconfig" "--color-only")))
+  (setq agent-shell-activity-group-header-label-function
+      #'agent-shell-activity-group-descriptive-label)
+
 
   ;; Work around agent-shell's `window-system' guard so clipboard images
   ;; work in terminal Emacs (`emacs -nw').  The underlying save routine
@@ -2050,58 +2048,6 @@ Org Backend exporter for typst templates written and configured in org mode.
   :after org)
 #+end_src
 
-* consult
-
-#+begin_src emacs-lisp
-(use-package consult
-  :ensure (:wait t)
-  :defer t
-  :init
-  (advice-add #'register-preview :override #'consult-register-window)
-
-  (setq xref-show-xrefs-function #'consult-xref
-        xref-show-definitions-function #'consult-xref)
-
-  :config
-  (setq consult-buffer-filter
-        '("\\` "
-          "\\`\\*Messages\\*\\'"
-          "\\`\\*Warnings\\*\\'"
-          "\\`\\*Compile-Log\\*\\'"
-          "\\`\\*Backtrace\\*\\'"
-          "\\`\\*Help\\*\\'"
-          "\\`\\*scratch\\*\\'"
-          "\\`\\*Completions\\*\\'"
-          "\\`\\*Flymake"
-          "\\`\\*lsp-help\\*\\'"
-          "\\`\\*eldoc"
-          "\\`\\*elpaca-log\\*\\'"
-          "\\`\\*Native-compile-Log\\*\\'"
-          "\\`\\*Async-native-compile-log\\*\\'")))
-#+end_src
-
-* xdg-launcher
-
-
-#+begin_src emacs-lisp
-(use-package xdg-launcher
-  :ensure (:host github :repo "emacs-exwm/xdg-launcher")
-  :commands (xdg-launcher-run-app)
-  :config
-  (with-eval-after-load 'consult
-    (push 'xdg-launcher-consult-source
-          (cdr (memq 'consult-source-buffer consult-buffer-sources)))))
-
-(defun my/app-launcher ()
-  "Launch an XDG application.
-In the dedicated floating \"emacs-launcher\" frame, close the frame
-after the app was launched."
-  (interactive)
-  (xdg-launcher-run-app)
-  (when (string= (frame-parameter nil 'name) "emacs-launcher")
-    (delete-frame)))
-#+end_src
-
 * denote
 
 Denote is objectively the best note taking extension, which you could install. It has a very easy to parse file naming scheme and suports not only org files. It has also transclusion inclusive! if you are interested, then check it out yourself.
@@ -2481,31 +2427,6 @@ Auto switch silos (different workspaces/folders) based on preconfigured director
   (which-key-idle-delay 0.3))
 #+end_src
 
-* vertico
-
-#+begin_src emacs-lisp
-(use-package vertico
-  :ensure (:wait t)
-  :hook
-  (after-init . vertico-mode)
-  :custom
-  (vertico-count 10)
-  (vertico-resize nil)
-  (vertico-cycle nil)
-  :bind (:map vertico-map
-                          ("C-j" . vertico-next)
-                          ("C-k" . vertico-previous))
-  :config
-  (advice-add #'vertico--format-candidate :around
-                          (lambda (orig cand prefix suffix index _start)
-                                (setq cand (funcall orig cand prefix suffix index _start))
-                                (concat
-                                 (if (= vertico--index index)
-                                         (propertize "» " 'face '(:foreground "#80adf0" :weight bold))
-                                   "  ")
-                                 cand))))
-#+end_src
-
 ** corfu
 
 #+begin_src emacs-lisp
@@ -2567,15 +2488,6 @@ Auto switch silos (different workspaces/folders) based on preconfigured director
   (setq prefix-help-command #'embark-prefix-help-command))
 #+end_src
 
-** embark-consult
-
-#+begin_src emacs-lisp
-(use-package embark-consult
-  :ensure t
-  :hook
-  (embark-collect-mode . consult-preview-at-point-mode)) ;; Enable preview in Embark collect mode.
-#+end_src
-
 ** orderless
 
 #+begin_src emacs-lisp
@@ -2589,22 +2501,41 @@ completion-category-defaults nil      ;; Clear default category settings.
 completion-category-overrides '((file (styles partial-completion))))) ;; Customize file completion styles.
 #+end_src
 
-** marginalia
+* helm
 
 #+begin_src emacs-lisp
-(use-package marginalia
-  :ensure t
+(use-package helm
+  :ensure (:wait t)
   :hook
-  (after-init . marginalia-mode)
+  (after-init . helm-mode)
   :custom
-  (marginalia-align 'right)
-  :config
-  (set-face-attribute 'marginalia-documentation nil
-                      :inherit nil
-                      :slant 'italic
-                      :foreground "grey43")
-  (set-face-attribute 'marginalia-key nil
-                      :foreground "#00ff5f"))
+  (helm-M-x-fuzzy-match t)
+  (helm-buffers-fuzzy-matching t)
+  (helm-recentf-fuzzy-match t)
+  (helm-move-to-line-cycle-in-source nil)
+  (helm-split-window-inside-p t)
+  (helm-boring-buffer-regexp-list
+   '("\\` "
+     "\\`\\*helm"
+     "\\`\\*Echo Area"
+     "\\`\\*Minibuf"
+     "\\`\\*Messages\\*\\'"
+     "\\`\\*Warnings\\*\\'"
+     "\\`\\*Compile-Log\\*\\'"
+     "\\`\\*Backtrace\\*\\'"
+     "\\`\\*Help\\*\\'"
+     "\\`\\*scratch\\*\\'"
+     "\\`\\*Completions\\*\\'"
+     "\\`\\*Flymake"
+     "\\`\\*lsp-help\\*\\'"
+     "\\`\\*eldoc"
+     "\\`\\*elpaca-log\\*\\'"
+     "\\`\\*Native-compile-Log\\*\\'"
+     "\\`\\*Async-native-compile-log\\*\\'"))
+  ;; (helm-display-function #'helm-display-buffer-in-own-frame)
+  :bind (:map helm-map
+              ("C-j" . helm-next-line)
+              ("C-k" . helm-previous-line)))
 #+end_src
 
 * programming
@@ -3475,10 +3406,9 @@ Native =undo-redo= (via =evil-undo-system='undo-redo=); just raise the undo limi
 (use-package nerd-icons-completion
   :if ek-use-nerd-fonts                   ;; Load the package only if the user has configured to use nerd fonts.
   :ensure t                               ;; Ensure the package is installed.
-  :after (:all nerd-icons marginalia)     ;; Load after `nerd-icons' and `marginalia' to ensure proper integration.
+  :after nerd-icons
   :config
-  (nerd-icons-completion-mode)            ;; Activate nerd icons for completion interfaces.
-  (add-hook 'marginalia-mode-hook #'nerd-icons-completion-marginalia-setup)) ;; Setup icons in the marginalia mode for enhanced completion display.
+  (nerd-icons-completion-mode))
 #+end_src
 
 * TODO efs install fn
@@ -3517,7 +3447,10 @@ Native =undo-redo= (via =evil-undo-system='undo-redo=); just raise the undo limi
 (defun my/doom-modeline--update-title-cache ()
   "Update the cached #+title for the current buffer."
   (setq-local my/doom-modeline--buffer-title
-              (cadar (org-collect-keywords '("TITLE")))))
+              ;; `org-collect-keywords' runs the org element parser, which
+              ;; errors (rx range error) outside org-mode buffers.
+              (and (derived-mode-p 'org-mode)
+                   (cadar (org-collect-keywords '("TITLE"))))))
 
 (defun my/doom-modeline--buffer-title ()
   "Return the cached #+title, computing it if necessary."
@@ -3744,15 +3677,13 @@ still require a restart since elpaca queues run at init time."
   (add-hook 'after-save-hook #'projectile-cache-current-file))
 #+end_src
 
-** consult projectile
+** helm-projectile
 
 #+begin_src emacs-lisp
-(use-package consult-projectile
+(use-package helm-projectile
   :ensure t
-  :after (consult projectile)
-  :defer t
-  :config
-  (setq consult-project-function #'projectile-project-root))
+  :after (helm projectile)
+  :commands (helm-projectile-find-file helm-projectile-switch-project))
 #+end_src
 
 ** wgrep
@@ -3765,33 +3696,35 @@ still require a restart since elpaca queues run at init time."
   (wgrep-auto-save-buffer t)
   (wgrep-change-readonly-file t))
 
+(use-package wgrep-helm
+  :ensure t
+  :after (wgrep helm))
+
 (defun my/project-replace ()
-  "Project-wide search via `consult-ripgrep'.
-In the minibuffer press `C-c C-e' (embark-export) — wgrep mode
-activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
+  "Project-wide search via `helm-do-grep-ag-project'.
+Press `C-x C-s' in the helm session to save results to a *hgrep*
+buffer, then `C-c C-p' (wgrep-change-to-wgrep-mode) to edit in
+place. `C-c C-c' commits, `C-c C-k' aborts."
   (interactive)
-  (call-interactively #'consult-ripgrep))
-
-(defun my/embark-export-auto-wgrep (&rest _)
-  "Enter wgrep mode automatically after `embark-export'."
-  (when (and (derived-mode-p 'grep-mode)
-             (fboundp 'wgrep-change-to-wgrep-mode))
-    (wgrep-change-to-wgrep-mode)))
-
-(with-eval-after-load 'embark
-  (advice-add 'embark-export :after #'my/embark-export-auto-wgrep))
+  (call-interactively #'helm-do-grep-ag-project))
 #+end_src
 
 ** search in arbitrary directories
 
 #+begin_src emacs-lisp
-(defun my/consult-fd-in (dir)
+(defun my/helm-find-in (dir)
   (interactive "DFind files in: ")
-  (consult-fd dir))
+  (helm-find-1 dir))
 
-(defun my/consult-ripgrep-in (dir)
+(defun my/helm-grep-in (dir)
   (interactive "DGrep in: ")
-  (consult-ripgrep dir))
+  (let ((default-directory (file-name-as-directory dir)))
+    (helm-do-grep-ag nil)))
+
+(defun my/denote-grep ()
+  (interactive)
+  (let ((default-directory (expand-file-name denote-directory)))
+    (helm-do-grep-ag nil)))
 #+end_src
 
 * workspaces
@@ -3806,7 +3739,7 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   (defvar my/workspaces-master "master")
   (defvar my/workspace-last nil)
   (defvar my/workspaces-on-switch-project 'non-empty)
-  (defvar my/workspace-switch-project-function #'projectile-find-file)
+  (defvar my/workspace-switch-project-function #'helm-projectile-find-file)
 
   (setq persp-autokill-buffer-on-remove 'kill-weak
         persp-reset-windows-on-nil-window-conf nil
@@ -4029,26 +3962,6 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
 #+end_src
 
 #+begin_src emacs-lisp
-(with-eval-after-load 'consult
-  (defvar my/workspace-consult-source
-    (list :name     "Workspace"
-          :narrow   ?w
-          :category 'buffer
-          :face     'consult-buffer
-          :history  'buffer-name-history
-          :state    #'consult--buffer-state
-          :default  t
-          :items
-          (lambda ()
-            (consult--buffer-query
-             :predicate #'persp-contain-buffer-p
-             :sort 'visibility
-             :as #'buffer-name))))
-  (add-to-list 'consult-buffer-sources 'my/workspace-consult-source)
-  (consult-customize consult--source-buffer :default nil :narrow ?B))
-#+end_src
-
-#+begin_src emacs-lisp
 (with-eval-after-load 'ibuffer
   (define-ibuffer-filter persp
       "Limit to buffers in the current workspace."
@@ -4215,15 +4128,26 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
    ((bound-and-true-p eglot--managed-mode) (eglot-format-buffer))
    (t (message "No formatter for %s" major-mode))))
 
+(defun my/find-file-or-switch-project ()
+  "Find a file in the current project; outside one, pick a project first.
+Uses the native Helm sources from `helm-projectile'.  Picking a project
+switches to its workspace and shows its files via
+`projectile-switch-project-action', so this also works from the master
+workspace (e.g. *scratch*)."
+  (interactive)
+  (if (projectile-project-p)
+      (helm-projectile-find-file)
+    (helm-projectile-switch-project)))
+
 (my-leader
   "SPC" '(my/find-file-or-switch-project :wk "find file/switch project")
-  "sp" '(consult-projectile :wk "search project")
-  "ss" '(my/fzfa-swiper :wk "search line")
-  "sg" '(my/consult-ripgrep-in :wk "grep in dir")
-  "sf" '(my/consult-fd-in :wk "find file in dir")
-  "/" '(fzfa-rg :wk "search project")
-  "." '(fzfa-find :wk "find file")
-  "," '(fzfa-buffer :wk "switch buffer")
+  "sp" '(helm-projectile :wk "search project")
+  "ss" '(helm-occur :wk "search line")
+  "sg" '(my/helm-grep-in :wk "grep in dir")
+  "sf" '(my/helm-find-in :wk "find file in dir")
+  "/" '(helm-do-grep-ag-project :wk "search project")
+  "." '(helm-find-files :wk "find file")
+  "," '(helm-mini :wk "switch buffer")
   ":" (lambda () (interactive) (execute-extended-command nil))
   "u" '(universal-argument :wk "universal argument")
 
@@ -4234,7 +4158,7 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "dm" '(:ignore t :wk "Merge Notes")
   "dmr" '(denote-merge-region :wk "Merge Region")
   "dmf" '(denote-merge-file :wk "Merge File")
-  "dg" '(consult-denote-grep t :wk "Search")
+  "dg" '(my/denote-grep :wk "Search")
   "dl" '(denote-link-or-create t :wk "Link Note")
   "dn" '(denote t :wk "Create a new note")
   "dr" '(denote-rename-file t :wk "Rename Note")
@@ -4245,12 +4169,12 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "f" '(:ignore t :wk "files")
   "fd" '(dired-jump :wk "dired")
   "fD" '(dired-jump :wk "dired jump")
-  "fr" '(fzfa-recent-file :wk "recent files")
-  "ff" '(fzfa-fd :wk "find file")
+  "fr" '(helm-recentf :wk "recent files")
+  "ff" '(helm-find-files :wk "find file")
   "fs" '(save-buffer :wk "save file")
 
   "b" '(:ignore t :wk "buffer/bookmarks")
-  "bb" '(fzfa-bookmark :wk "display current bookmarks")
+  "bb" '(helm-filtered-bookmarks :wk "display current bookmarks")
   "bi" '(my/ibuffer-workspace :wk "ibuffer (workspace)")
   "bp" '(projectile-ibuffer :wk "ibuffer project")
   "bd" '(bookmark-delete :wk "delete bookmark")
@@ -4259,10 +4183,10 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "br" '(rename-buffer :wk "rename buffer")
 
   "p" '(:ignore t :wk "project")
-  "pp" '(my/fzfa-switch-project-find-file :wk "switch project workspace")
-  "pf" '(fzfa-project-find-file :wk "find file")
-  "ps" '(consult-ripgrep :wk "search")
-  "pb" '(consult-projectile-buffer :wk "buffers") 
+  "pp" '(helm-projectile-switch-project :wk "switch project workspace")
+  "pf" '(helm-projectile-find-file :wk "find file")
+  "ps" '(helm-projectile-rg :wk "search")
+  "pb" '(helm-projectile-switch-to-buffer :wk "buffers")
   "pk" '(projectile-kill-buffers :wk "kill buffers") 
   "pd" '(projectile-remove-known-project :wk "delete project")
   "pr" '(my/project-replace :wk "project replace (wgrep)")
@@ -4305,7 +4229,7 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "hf" '(describe-function :wk "function")
   "hv" '(describe-variable :wk "variable")
   "hk" '(describe-key :wk "key")
-  "ht" '(consult-theme :wk "load theme")
+  ;; "ht" '(load-theme :wk "load theme")
 
   "w w" '(evil-window-next :wk "Close window")
   "w c" '(evil-window-delete :wk "Close window")
@@ -4340,7 +4264,7 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "x" '(org-capture :wk "capture")
 
   ";" '(embark-act :wk "embark")
-  "P" '(consult-yank-from-kill-ring :wk "paste history")
+  "P" '(helm-show-kill-ring :wk "paste history")
 
   ;; "t" '(:ignore t :wk "treesitter")
   ;; "ts" '(flash-treesitter :wk "flash treesitter")
@@ -4386,7 +4310,7 @@ activates automatically. Edit, then `C-c C-c' commits, `C-c C-k' aborts."
   "[b" 'switch-to-prev-buffer
   "]t" 'tab-next
   "[t" 'tab-previous
-  "P" 'consult-yank-from-kill-ring
+  "P" 'helm-show-kill-ring
   ;; "?" 'casual-avy-tmenu
   "gcc" (lambda ()
           (interactive)
@@ -5201,80 +5125,6 @@ opening another file in same project does not re-notify."
 (use-package org-auto-tangle
   :ensure t
   :hook (org-mode . org-auto-tangle-mode))
-#+end_src
-
-* fzfa
-
-#+begin_src emacs-lisp
-(use-package fzfa
-  :ensure (:host github :repo "jojojames/fzfa")
-  :custom
-  (fzfa-preview-delay 0.25))
-
-(defun my/project-open-workspace ()
-  "Open the workspace for the project chosen by `project-switch-project'.
-`project-switch-project' conveys the chosen root via
-`project-current-directory-override', not `default-directory'."
-  (interactive)
-  (my/workspace-switch-to-project
-   (project-root (project-current t))))
-
-(defun my/fzfa-switch-project-find-file ()
-  "Switch to a known project's workspace and immediately browse its files.
-Picks a project with fzfa, lets `my/workspace-switch-to-project'
-switch to (or create) the persp workspace named after it, then runs
-`fzfa-project-find-file' inside it.  Binding `project-switch-commands'
-to a command symbol makes `project-switch-project' invoke it directly."
-  (interactive)
-  (let ((my/workspace-switch-project-function #'fzfa-project-find-file)
-        (project-switch-commands #'my/project-open-workspace))
-    (fzfa-project-switch-project)))
-
-(defun my/fzfa-swiper ()
-  "Search lines of the current buffer with fontified candidates.
-Like `fzfa-swiper', but keeps font-lock faces on the candidates and
-jumps to the candidate's line as the selection moves.  Aborting
-restores the original point."
-  (interactive)
-  (let* ((source (or (buffer-file-name) (buffer-name)))
-         (origin (point-marker))
-         (candidates
-          (save-excursion
-            (font-lock-ensure)
-            (goto-char (point-min))
-            (let ((i 1) lines)
-              (while (not (eobp))
-                (let ((content (buffer-substring
-                                (line-beginning-position)
-                                (line-end-position))))
-                  (unless (string-empty-p content)
-                    (push (fzfa--location-candidate
-                           (concat (propertize (format "%d:" i)
-                                               'face 'line-number)
-                                   content)
-                           source i)
-                          lines)))
-                (forward-line 1)
-                (cl-incf i))
-              (nreverse lines)))))
-    (fzfa-visit-location
-     (fzfa-completing-read
-      :candidates candidates
-      :prompt "swiper: "
-      :category 'fzfa-location
-      :preview `(:preview fzfa--location-preview
-                 :return ,(lambda (cand)
-                            (unless cand
-                              (goto-char origin))))))))
-
-(defun my/find-file-or-switch-project ()
-  "Find a file in the current project; outside one, pick a project first.
-After picking a project its files are shown immediately, so this also
-works from the master workspace (e.g. *scratch*)."
-  (interactive)
-  (if (projectile-project-p)
-      (fzfa-project-find-file)
-    (my/fzfa-switch-project-find-file)))
 #+end_src
 
 * provide init
