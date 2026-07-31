@@ -2536,6 +2536,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   :bind (:map helm-map
               ("C-j" . helm-next-line)
               ("C-k" . helm-previous-line)))
+(global-set-key (kbd "M-x") 'helm-M-x)
 #+end_src
 
 * programming
@@ -3602,6 +3603,20 @@ moved to local.el
                (not (file-remote-p default-directory)))
       (zoxide-add default-directory)))
   (add-hook 'dired-after-readin-hook #'my/zoxide-add-dired))
+#+end_src
+
+* croc
+
+A Rougier-style dashboard for the =croc= CLI file transfer tool (in =lisp/croc-ui.el=).  Sends files, folders and text, receives by code; each transfer is a real croc process with a live progress chip in the feed and its raw log one =RET= away.  The current share code gets a hero block and copies with =w=.
+
+#+begin_src emacs-lisp
+(use-package croc-ui
+  :ensure nil
+  :commands (croc-ui croc-ui-send-files croc-ui-send-directory
+             croc-ui-send-text croc-ui-receive)
+  :init
+  (with-eval-after-load 'general
+    (my-leader "oc" '(croc-ui :wk "croc"))))
 #+end_src
 
 * my/fns
