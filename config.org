@@ -3619,6 +3619,19 @@ A Rougier-style dashboard for the =croc= CLI file transfer tool (in =lisp/croc-u
     (my-leader "oc" '(croc-ui :wk "croc"))))
 #+end_src
 
+* sync
+
+A Rougier-style dashboard for autosync/autopush of the local and redundant git repos (in =lisp/sync-ui.el=).  =s= runs a manual sync cycle: auto repos (org, skills, pass) commit everything dirty with a =host: ISO8601= message, rebase and push to every remote; ask repos (nix, emacs.d) offer a magit detour first and push on =r= once a commit exists.  A rebase conflict aborts and marks the repo CONFLICTED.  =a= / =d= / =t= add, remove and toggle repos, persisted via customize.
+
+#+begin_src emacs-lisp
+(use-package sync-ui
+  :ensure nil
+  :commands (sync-ui)
+  :init
+  (with-eval-after-load 'general
+    (my-leader "oy" '(sync-ui :wk "sync"))))
+#+end_src
+
 * my/fns
 
 #+begin_src emacs-lisp
@@ -4312,7 +4325,7 @@ workspace (e.g. *scratch*)."
 (general-def '(normal visual operator) 'override
   :predicate '(not (derived-mode-p 'mu4e-main-mode 'mu4e-headers-mode
                                     'mu4e-view-mode 'mu4e-compose-mode
-                                    'croc-ui-mode))
+                                    'croc-ui-mode 'sync-ui-mode))
   "s" 'my/s-key-dispatch)
 
 
