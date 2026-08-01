@@ -7,10 +7,7 @@
  '(custom-safe-themes
    '("d43860349c9f7a5b96a090ecf5f698ff23a8eb49cd1e5c8a83bb2068f24ea563"
      default))
- '(erc-modules
-   '(autojoin button completion fill irccontrols list match
-              move-to-prompt netsplit networks nicks noncommands
-              notifications readonly ring scrolltobottom stamp track) nil nil "Customized with use-package erc")
+ '(helm-minibuffer-history-key "M-p")
  '(package-selected-packages
    '(adaptive-wrap async corfu-terminal cursory edit-indirect flycheck
                    gptel marginalia markdown-mode mu4e nov
@@ -44,6 +41,9 @@
      (eval progn
            (add-to-list 'auto-mode-alist '("\\.html\\'" . jinja2-mode))
            (add-to-list 'auto-mode-alist '("\\.j2\\'" . jinja2-mode)))))
+ '(sync-ui-repos
+   '(("~/org" . auto) ("~/.claude/skills" . auto) ("~/pass" . auto)
+     ("~/nix" . ask) ("~/.emacs.d" . auto)))
  '(zoom-size '(0.382 . 0.618)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
