@@ -4311,7 +4311,8 @@ workspace (e.g. *scratch*)."
 
 (general-def '(normal visual operator) 'override
   :predicate '(not (derived-mode-p 'mu4e-main-mode 'mu4e-headers-mode
-                                    'mu4e-view-mode 'mu4e-compose-mode))
+                                    'mu4e-view-mode 'mu4e-compose-mode
+                                    'croc-ui-mode))
   "s" 'my/s-key-dispatch)
 
 
