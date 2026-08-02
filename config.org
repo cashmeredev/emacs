@@ -4572,6 +4572,18 @@ date) and the dired header are never skipped."
   :config
   (elfeed-protocol-enable))
 
+(defun my/elfeed-reset ()
+  "Delete the local elfeed database and re-fetch everything from tt-rss.
+Fixes stale feeds that were removed server-side but still show up
+locally.  Note: entries no longer present on the server are lost."
+  (interactive)
+  (when (yes-or-no-p "Delete local elfeed db and re-fetch all feeds from tt-rss? ")
+    (elfeed-db-unload)
+    (delete-directory elfeed-db-directory t)
+    (make-directory elfeed-db-directory t)
+    (elfeed-db-load)
+    (elfeed-update)))
+
 (use-package elfeed-goodies
   :ensure t
   :after elfeed
