@@ -2501,7 +2501,7 @@ completion-category-defaults nil      ;; Clear default category settings.
 completion-category-overrides '((file (styles partial-completion))))) ;; Customize file completion styles.
 #+end_src
 
-* helm
+* helm-mode
 
 #+begin_src emacs-lisp
 (use-package helm
@@ -2537,6 +2537,16 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
               ("C-j" . helm-next-line)
               ("C-k" . helm-previous-line)))
 (global-set-key (kbd "M-x") 'helm-M-x)
+#+end_src
+
+** helm-flx
+
+#+begin_src emacs-lisp
+(use-package helm-flx
+  :ensure t
+  :after helm
+  :config
+  (helm-flx-mode +1))
 #+end_src
 
 * programming
@@ -3711,7 +3721,9 @@ still require a restart since elpaca queues run at init time."
 (use-package helm-projectile
   :ensure t
   :after (helm projectile)
-  :commands (helm-projectile-find-file helm-projectile-switch-project))
+  :commands (helm-projectile-find-file helm-projectile-switch-project)
+  :custom
+  (helm-projectile-fuzzy-match t))
 #+end_src
 
 ** wgrep
