@@ -3617,8 +3617,6 @@ moved to local.el
 
 * croc
 
-A Rougier-style dashboard for the =croc= CLI file transfer tool (in =lisp/croc-ui.el=).  Sends files, folders and text, receives by code; each transfer is a real croc process with a live progress chip in the feed and its raw log one =RET= away.  The current share code gets a hero block and copies with =w=.
-
 #+begin_src emacs-lisp
 (use-package croc-ui
   :ensure nil
@@ -3631,15 +3629,13 @@ A Rougier-style dashboard for the =croc= CLI file transfer tool (in =lisp/croc-u
 
 * sync
 
-A Rougier-style dashboard for autosync/autopush of the local and redundant git repos (in =lisp/sync-ui.el=).  =s= runs a manual sync cycle: auto repos (org, skills, pass) commit everything dirty with a =host: ISO8601= message, rebase and push to every remote; ask repos (nix, emacs.d) offer a magit detour first and push on =r= once a commit exists.  A rebase conflict aborts and marks the repo CONFLICTED.  =a= / =d= / =t= add, remove and toggle repos, persisted via customize.
-
 #+begin_src emacs-lisp
 (use-package sync-ui
   :ensure nil
-  :commands (sync-ui)
+  :commands (sync-ui))
   :init
   (with-eval-after-load 'general
-    (my-leader "oy" '(sync-ui :wk "sync"))))
+    (my-leader "oy" '(sync-ui :wk "sync")))
 #+end_src
 
 * my/fns
@@ -4232,6 +4228,7 @@ workspace (e.g. *scratch*)."
   "pr" '(my/project-replace :wk "project replace (wgrep)")
   "pa" '(projectile-add-known-project :wk "add project")
   "pi" '(projectile-invalidate-cache :wk "invalidate cache")
+  "pt" '(projectile-run-task :wk "tasks")
 
   "g" '(:ignore t :wk "git")
   "gc" '(magit-clone :wk "clone")
@@ -5178,6 +5175,14 @@ opening another file in same project does not re-notify."
 (use-package org-auto-tangle
   :ensure t
   :hook (org-mode . org-auto-tangle-mode))
+#+end_src
+
+* zfs.el
+
+#+begin_src emacs-lisp
+(use-package zfs
+  :ensure nil
+  :commands (zfs))
 #+end_src
 
 * provide init
