@@ -2178,6 +2178,12 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
               ("C-k" . helm-previous-line)))
 (global-set-key (kbd "M-x") 'helm-M-x)
 
+(use-package helm-flx
+  :ensure t
+  :after helm
+  :config
+  (helm-flx-mode +1))
+
 (use-package eglot
   :ensure nil
   :config
@@ -2941,10 +2947,10 @@ created later still get them."
 
 (use-package sync-ui
   :ensure nil
-  :commands (sync-ui)
+  :commands (sync-ui))
   :init
   (with-eval-after-load 'general
-    (my-leader "oy" '(sync-ui :wk "sync"))))
+    (my-leader "oy" '(sync-ui :wk "sync")))
 
 (defun my/reload-config ()
   "Re-tangle config.org and reload the generated config.el in place.
@@ -3008,7 +3014,9 @@ still require a restart since elpaca queues run at init time."
 (use-package helm-projectile
   :ensure t
   :after (helm projectile)
-  :commands (helm-projectile-find-file helm-projectile-switch-project))
+  :commands (helm-projectile-find-file helm-projectile-switch-project)
+  :custom
+  (helm-projectile-fuzzy-match t))
 
 (use-package wgrep
   :ensure t
@@ -3477,6 +3485,7 @@ workspace (e.g. *scratch*)."
   "pr" '(my/project-replace :wk "project replace (wgrep)")
   "pa" '(projectile-add-known-project :wk "add project")
   "pi" '(projectile-invalidate-cache :wk "invalidate cache")
+  "pt" '(projectile-run-task :wk "tasks")
 
   "g" '(:ignore t :wk "git")
   "gc" '(magit-clone :wk "clone")
@@ -3791,6 +3800,18 @@ date) and the dired header are never skipped."
                :append)
   :config
   (elfeed-protocol-enable))
+
+(defun my/elfeed-reset ()
+  "Delete the local elfeed database and re-fetch everything from tt-rss.
+Fixes stale feeds that were removed server-side but still show up
+locally.  Note: entries no longer present on the server are lost."
+  (interactive)
+  (when (yes-or-no-p "Delete local elfeed db and re-fetch all feeds from tt-rss? ")
+    (elfeed-db-unload)
+    (delete-directory elfeed-db-directory t)
+    (make-directory elfeed-db-directory t)
+    (elfeed-db-load)
+    (elfeed-update)))
 
 (use-package elfeed-goodies
   :ensure t
@@ -4261,5 +4282,9 @@ opening another file in same project does not re-notify."
 (use-package org-auto-tangle
   :ensure t
   :hook (org-mode . org-auto-tangle-mode))
+
+(use-package zfs
+  :ensure nil
+  :commands (zfs))
 
 (provide 'init)
