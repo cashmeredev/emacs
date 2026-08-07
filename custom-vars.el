@@ -43,7 +43,7 @@
            (add-to-list 'auto-mode-alist '("\\.j2\\'" . jinja2-mode)))))
  '(sync-ui-repos
    '(("~/org" . auto) ("~/.claude/skills" . auto) ("~/pass" . auto)
-     ("~/nix" . ask) ("~/.emacs.d" . auto)))
+     ("~/nix" . ask) ("~/.emacs.d" . auto) ("~/garden/" . ask)))
  '(zoom-size '(0.382 . 0.618)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
