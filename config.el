@@ -2868,7 +2868,7 @@ If no TITLE keyword is found, leave doom-modeline's default name."
 (blink-cursor-mode 0)
 (setq-default cursor-type 'box)
 
-(defvar cashmere/font-height 160)
+(defvar cashmere/font-height 200)
 
 (defun cashmere/set-fonts (&optional frame)
   "Apply the MapleMono faces, but only on graphical frames.
