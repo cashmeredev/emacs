@@ -2078,6 +2078,19 @@ Timers that expired while Emacs was closed fire immediately."
 
   (advice-add 'denote-solo-switch :after #'my/denote-solo-sync-directory))
 
+(use-package company
+  :ensure t
+  :hook (after-init . global-company-mode)
+  :custom
+  (company-idle-delay 0)
+  (company-tooltip-idle-delay 0)        ; Tooltip sofort, kein Delay
+  (company-minimum-prefix-length 2)
+  (company-require-match nil)
+  (company-frontends
+   '(company-pseudo-tooltip-unless-just-one-frontend  ; ohne -with-delay
+     company-echo-metadata-frontend))
+  (company-backends '(company-capf)))
+
 (use-package which-key
   :ensure t
   :defer t
@@ -2085,18 +2098,6 @@ Timers that expired while Emacs was closed fire immediately."
   (after-init . which-key-mode)
   :custom
   (which-key-idle-delay 0.3))
-
-(use-package corfu
-  :ensure t
-  :custom
-  (corfu-cycle t)
-  (corfu-auto t)
-  (corfu-auto-delay 0.2)
-  (corfu-auto-prefix 2)
-  :init
-  (global-corfu-mode)
-  (corfu-history-mode)
-  (corfu-popupinfo-mode))
 
 (use-package cape
   :ensure (:wait t)
@@ -2135,15 +2136,6 @@ Timers that expired while Emacs was closed fire immediately."
   :init
   (setq prefix-help-command #'embark-prefix-help-command))
 
-(use-package orderless
-    :ensure t
-    :defer t                                    ;; Load Orderless on demand.
-    :after vertico                              ;; Ensure Vertico is loaded before Orderless.
-    :init
-    (setq completion-styles '(orderless basic)  ;; Set the completion styles.
-completion-category-defaults nil      ;; Clear default category settings.
-completion-category-overrides '((file (styles partial-completion))))) ;; Customize file completion styles.
-
 (use-package helm
   :ensure (:wait t)
   :hook
@@ -2154,6 +2146,7 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
   (helm-recentf-fuzzy-match t)
   (helm-move-to-line-cycle-in-source nil)
   (helm-split-window-inside-p t)
+  (helm-autoresize-mode 1)
   (helm-boring-buffer-regexp-list
    '("\\` "
      "\\`\\*helm"
@@ -2178,11 +2171,21 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
               ("C-k" . helm-previous-line)))
 (global-set-key (kbd "M-x") 'helm-M-x)
 
-(use-package helm-flx
+(use-package helm-xref
   :ensure t
-  :after helm
-  :config
-  (helm-flx-mode +1))
+  :after helm)
+
+(use-package citre
+  :ensure t
+  :defer t
+  :init
+  (require 'citre-config)
+  :custom
+  (citre-default-create-tags-file-location 'in-dir)
+  (citre-edit-ctags-options-manually nil)
+  (citre-auto-enable-citre-mode-modes '(prog-mode))
+  :bind (("C-c e" . citre-jump)
+         ("C-c u" . citre-update-this-tags-file)))
 
 (use-package eglot
   :ensure nil
@@ -2228,13 +2231,39 @@ completion-category-overrides '((file (styles partial-completion))))) ;; Customi
 (use-package nix-ts-mode
   :ensure t
   :mode "\\.nix\\'"
-  :hook (nix-ts-mode . eglot-ensure)
   :config
+  (modify-syntax-entry ?. "_" nix-ts-mode--syntax-table)
   (with-eval-after-load 'eglot
     (add-to-list 'eglot-server-programs
                  '(nix-ts-mode . ("nixd")))))
 
 (put 'eglot-workspace-configuration 'safe-local-variable #'listp)
+
+(with-eval-after-load 'compile
+  (dolist (rule '((nix-def "^\\s-*- In [`']\\(/[^'\n]+\\)'" 1)
+                  (nix-eval "^\\s-+at \\(/[^:\n]+\\):\\([0-9]+\\):\\([0-9]+\\):" 1 2 3)
+                  (nix-trace "^\\s-+at \\(/nix/store/[^:\n]+\\):\\([0-9]+\\):\\([0-9]+\\):" 1 2 3 0)))
+    (add-to-list 'compilation-error-regexp-alist (car rule))
+    (add-to-list 'compilation-error-regexp-alist-alist rule)))
+
+(defun nix-compile-goto-option ()
+  (interactive)
+  (let (option path)
+    (save-excursion
+      (goto-char (point-min))
+      (unless (re-search-forward "option `\\([^'\n]+\\)'" nil t)
+        (user-error "No nix option error found"))
+      (setq option (match-string 1))
+      (unless (re-search-forward "- In `\\(/[^'\n]+\\)'" nil t)
+        (user-error "No definition file found"))
+      (setq path (match-string 1)))
+    (when (file-directory-p path)
+      (setq path (expand-file-name "default.nix" path)))
+    (find-file path)
+    (goto-char (point-min))
+    (search-forward (car (last (split-string option "\\." t))))))
+
+(keymap-set compilation-mode-map "C-c o" #'nix-compile-goto-option)
 
 (use-package c-ts-mode
   :ensure nil
@@ -2776,13 +2805,6 @@ so the working-tree diff stays visible until the user explicitly stages."
   ((dired-mode . diredfl-mode)
    (dirvish-directory-view-mode . diredfl-mode)))
 
-(use-package nerd-icons-completion
-  :if ek-use-nerd-fonts                   ;; Load the package only if the user has configured to use nerd fonts.
-  :ensure t                               ;; Ensure the package is installed.
-  :after nerd-icons
-  :config
-  (nerd-icons-completion-mode))
-
 (defun ek/first-install ()
   "dired"
   (interactive)                                      ;; Allow this function to be called interactively.
@@ -2889,6 +2911,21 @@ created later still get them."
 (cashmere/set-fonts)
 
 
+
+(use-package batppuccin
+  :ensure t
+  :config
+  (load-theme 'batppuccin-mocha t))
+
+;; (use-package solarized-theme
+;;   :ensure t
+;;   :config
+;;   (load-theme 'solarized-gruvbox-dark t))
+
+;; (use-package tokyo-night
+;;   :ensure t
+;;   :config
+;;   (load-theme 'tokyo-night t))
 
 (use-package dirvish
   :ensure (:host github :repo "latiagertrutis/dirvish" :branch "main")
@@ -3030,26 +3067,26 @@ still require a restart since elpaca queues run at init time."
   :after (wgrep helm))
 
 (defun my/project-replace ()
-  "Project-wide search via `helm-do-grep-ag-project'.
+  "Project-wide search via ripgrep (`helm-projectile-rg').
 Press `C-x C-s' in the helm session to save results to a *hgrep*
 buffer, then `C-c C-p' (wgrep-change-to-wgrep-mode) to edit in
 place. `C-c C-c' commits, `C-c C-k' aborts."
   (interactive)
-  (call-interactively #'helm-do-grep-ag-project))
+  (call-interactively #'helm-projectile-rg))
 
 (defun my/helm-find-in (dir)
   (interactive "DFind files in: ")
   (helm-find-1 dir))
 
-(defun my/helm-grep-in (dir)
-  (interactive "DGrep in: ")
-  (let ((default-directory (file-name-as-directory dir)))
-    (helm-do-grep-ag nil)))
+(defun my/helm-rg-in (dir)
+  "Search DIR recursively with ripgrep via Helm."
+  (interactive "DRipgrep in: ")
+  (helm-grep-ag (expand-file-name dir) nil))
 
-(defun my/denote-grep ()
+(defun my/denote-rg ()
+  "Search `denote-directory' recursively with ripgrep via Helm."
   (interactive)
-  (let ((default-directory (expand-file-name denote-directory)))
-    (helm-do-grep-ag nil)))
+  (helm-grep-ag (expand-file-name denote-directory) nil))
 
 (use-package persp-mode
   :ensure t
@@ -3411,11 +3448,30 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
   (setq auto-mode-alist
         (seq-remove (lambda (e) (eq (cdr e) 'pdf-view-mode)) auto-mode-alist)))
 
+(defun my/nixfmt-buffer ()
+  "Format the current buffer with nixfmt, no LSP required."
+  (interactive)
+  (let* ((src (buffer-substring-no-properties (point-min) (point-max)))
+         (formatted (with-temp-buffer
+                      (insert src)
+                      (unless (zerop (call-process-region
+                                      (point-min) (point-max) "nixfmt" t t nil))
+                        (user-error "nixfmt failed"))
+                      (buffer-string))))
+    (unless (string= src formatted)
+      (let ((pt (point)))
+        (erase-buffer)
+        (insert formatted)
+        (goto-char (min pt (point-max)))))))
+
 (defun my/format-buffer ()
   (interactive)
   (cond
    ((eq major-mode 'rust-ts-mode) (eglot-format-buffer))
-   ((eq major-mode 'nix-ts-mode) (eglot-format-buffer))  
+   ((eq major-mode 'nix-ts-mode)
+    (if (bound-and-true-p eglot--managed-mode)
+        (eglot-format-buffer)
+      (my/nixfmt-buffer)))
    ((eq major-mode 'python-ts-mode) (eglot-format-buffer))
    ((eq major-mode 'c-mode) (eglot-format-buffer))
    ((bound-and-true-p eglot--managed-mode) (eglot-format-buffer))
@@ -3436,9 +3492,9 @@ workspace (e.g. *scratch*)."
   "SPC" '(my/find-file-or-switch-project :wk "find file/switch project")
   "sp" '(helm-projectile :wk "search project")
   "ss" '(helm-occur :wk "search line")
-  "sg" '(my/helm-grep-in :wk "grep in dir")
+  "sg" '(my/helm-rg-in :wk "rg in dir")
   "sf" '(my/helm-find-in :wk "find file in dir")
-  "/" '(helm-do-grep-ag-project :wk "search project")
+  "/" '(helm-projectile-rg :wk "search project")
   "." '(helm-find-files :wk "find file")
   "," '(helm-mini :wk "switch buffer")
   ":" (lambda () (interactive) (execute-extended-command nil))
@@ -3451,7 +3507,7 @@ workspace (e.g. *scratch*)."
   "dm" '(:ignore t :wk "Merge Notes")
   "dmr" '(denote-merge-region :wk "Merge Region")
   "dmf" '(denote-merge-file :wk "Merge File")
-  "dg" '(my/denote-grep :wk "Search")
+  "dg" '(my/denote-rg :wk "rg notes")
   "dl" '(denote-link-or-create t :wk "Link Note")
   "dn" '(denote t :wk "Create a new note")
   "dr" '(denote-rename-file t :wk "Rename Note")
@@ -3570,9 +3626,10 @@ workspace (e.g. *scratch*)."
   "e b" '(eww-list-bookmarks :wk "bookmarks")
   "e h" '(eww-list-histories :wk "history")
   "e f" '(elfeed :wk "elfeed (rss)")
-  "e s" '(engine/search-duckduckgo :wk "search duckduckgo")
+  ;; "e s" '(engine/search-duckduckgo :wk "search duckduckgo")
   "e L" '(link-hint-open-link :wk "hint open link")
   "e C" '(link-hint-copy-link :wk "hint copy link")
+  "e x" '(xwidget-webkit-browse-url :wk "webkit browser")
   )
 
 (defun my/flash-enabled-p ()
@@ -4146,6 +4203,10 @@ opening another file in same project does not re-notify."
                (format "%s-freebsd" arch)))))
   (advice-add 'ghostel--module-platform-tag :around #'my/ghostel-module-platform-tag)
   (require 'ghostel-compile)
+  ;; Route every `compile'-style call (compile, recompile, project-compile,
+  ;; projectile-compile-project, projectile-run-task, ...) through ghostel
+  ;; instead of the plain compilation-mode buffer.
+  (ghostel-compile-global-mode 1)
   (setq-default window-adjust-process-window-size-function
                 #'window-adjust-process-window-size-largest)
   (evil-define-key 'normal ghostel-mode-map
@@ -4225,10 +4286,10 @@ opening another file in same project does not re-notify."
   (when (executable-find "delta")
     (add-hook 'magit-mode-hook #'magit-delta-mode)))
 
-(use-package pretty-sha-path
-  :ensure t
-  :config
-  (setopt global-pretty-sha-path-mode 't))
+;; (use-package pretty-sha-path
+;;   :ensure t
+;;   :config
+;;   (setopt global-pretty-sha-path-mode 't))
 
 (use-package pulsar
   :ensure t
@@ -4286,5 +4347,21 @@ opening another file in same project does not re-notify."
 (use-package zfs
   :ensure nil
   :commands (zfs))
+
+(use-package org-tree-slide
+  :ensure t)
+(when (require 'org-tree-slide nil t)
+  (global-set-key (kbd "<f8>") 'org-tree-slide-mode)
+  (global-set-key (kbd "S-<f8>") 'org-tree-slide-skip-done-toggle)
+  (define-key org-tree-slide-mode-map (kbd "<f9>")
+    'org-tree-slide-move-previous-tree)
+  (define-key org-tree-slide-mode-map (kbd "<f10>")
+    'org-tree-slide-move-next-tree)
+  (define-key org-tree-slide-mode-map (kbd "<f11>")
+    'org-tree-slide-content)
+  (setq org-tree-slide-skip-outline-level 4)
+  (org-tree-slide-narrowing-control-profile)
+  (setq org-tree-slide-skip-comments 'inherit)
+  (setq org-tree-slide-skip-done nil))
 
 (provide 'init)

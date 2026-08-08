@@ -5162,10 +5162,10 @@ opening another file in same project does not re-notify."
 * pretty-sha-path
 
 #+begin_src emacs-lisp
-(use-package pretty-sha-path
-  :ensure t
-  :config
-  (setopt global-pretty-sha-path-mode 't))
+;; (use-package pretty-sha-path
+;;   :ensure t
+;;   :config
+;;   (setopt global-pretty-sha-path-mode 't))
 #+end_src
 
 * pulsar-mode
