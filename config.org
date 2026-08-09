@@ -2520,7 +2520,7 @@ Auto switch silos (different workspaces/folders) based on preconfigured director
      "\\`\\*elpaca-log\\*\\'"
      "\\`\\*Native-compile-Log\\*\\'"
      "\\`\\*Async-native-compile-log\\*\\'"))
-  ;; (helm-display-function #'helm-display-buffer-in-own-frame)
+  (helm-display-function #'helm-display-buffer-in-own-frame)
   :bind (:map helm-map
               ("C-j" . helm-next-line)
               ("C-k" . helm-previous-line)))

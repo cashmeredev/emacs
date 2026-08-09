@@ -2083,11 +2083,11 @@ Timers that expired while Emacs was closed fire immediately."
   :hook (after-init . global-company-mode)
   :custom
   (company-idle-delay 0)
-  (company-tooltip-idle-delay 0)        ; Tooltip sofort, kein Delay
+  (company-tooltip-idle-delay 0)
   (company-minimum-prefix-length 2)
   (company-require-match nil)
   (company-frontends
-   '(company-pseudo-tooltip-unless-just-one-frontend  ; ohne -with-delay
+   '(company-pseudo-tooltip-unless-just-one-frontend
      company-echo-metadata-frontend))
   (company-backends '(company-capf)))
 
@@ -2165,7 +2165,7 @@ Timers that expired while Emacs was closed fire immediately."
      "\\`\\*elpaca-log\\*\\'"
      "\\`\\*Native-compile-Log\\*\\'"
      "\\`\\*Async-native-compile-log\\*\\'"))
-  ;; (helm-display-function #'helm-display-buffer-in-own-frame)
+  (helm-display-function #'helm-display-buffer-in-own-frame)
   :bind (:map helm-map
               ("C-j" . helm-next-line)
               ("C-k" . helm-previous-line)))
@@ -3448,30 +3448,10 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
   (setq auto-mode-alist
         (seq-remove (lambda (e) (eq (cdr e) 'pdf-view-mode)) auto-mode-alist)))
 
-(defun my/nixfmt-buffer ()
-  "Format the current buffer with nixfmt, no LSP required."
-  (interactive)
-  (let* ((src (buffer-substring-no-properties (point-min) (point-max)))
-         (formatted (with-temp-buffer
-                      (insert src)
-                      (unless (zerop (call-process-region
-                                      (point-min) (point-max) "nixfmt" t t nil))
-                        (user-error "nixfmt failed"))
-                      (buffer-string))))
-    (unless (string= src formatted)
-      (let ((pt (point)))
-        (erase-buffer)
-        (insert formatted)
-        (goto-char (min pt (point-max)))))))
-
 (defun my/format-buffer ()
   (interactive)
   (cond
-   ((eq major-mode 'rust-ts-mode) (eglot-format-buffer))
-   ((eq major-mode 'nix-ts-mode)
-    (if (bound-and-true-p eglot--managed-mode)
-        (eglot-format-buffer)
-      (my/nixfmt-buffer)))
+   ((eq major-mode 'rust-ts-mode) (eglot-format-buffer)) 
    ((eq major-mode 'python-ts-mode) (eglot-format-buffer))
    ((eq major-mode 'c-mode) (eglot-format-buffer))
    ((bound-and-true-p eglot--managed-mode) (eglot-format-buffer))
@@ -3507,7 +3487,7 @@ workspace (e.g. *scratch*)."
   "dm" '(:ignore t :wk "Merge Notes")
   "dmr" '(denote-merge-region :wk "Merge Region")
   "dmf" '(denote-merge-file :wk "Merge File")
-  "dg" '(my/denote-rg :wk "rg notes")
+  "dg" '(my/denote-rg :wk "grep denotes")
   "dl" '(denote-link-or-create t :wk "Link Note")
   "dn" '(denote t :wk "Create a new note")
   "dr" '(denote-rename-file t :wk "Rename Note")
@@ -3626,7 +3606,6 @@ workspace (e.g. *scratch*)."
   "e b" '(eww-list-bookmarks :wk "bookmarks")
   "e h" '(eww-list-histories :wk "history")
   "e f" '(elfeed :wk "elfeed (rss)")
-  ;; "e s" '(engine/search-duckduckgo :wk "search duckduckgo")
   "e L" '(link-hint-open-link :wk "hint open link")
   "e C" '(link-hint-copy-link :wk "hint copy link")
   "e x" '(xwidget-webkit-browse-url :wk "webkit browser")
@@ -4203,9 +4182,6 @@ opening another file in same project does not re-notify."
                (format "%s-freebsd" arch)))))
   (advice-add 'ghostel--module-platform-tag :around #'my/ghostel-module-platform-tag)
   (require 'ghostel-compile)
-  ;; Route every `compile'-style call (compile, recompile, project-compile,
-  ;; projectile-compile-project, projectile-run-task, ...) through ghostel
-  ;; instead of the plain compilation-mode buffer.
   (ghostel-compile-global-mode 1)
   (setq-default window-adjust-process-window-size-function
                 #'window-adjust-process-window-size-largest)
