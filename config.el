@@ -360,7 +360,8 @@ Selects the compilation window so the cursor lands in it."
     (alist-get helix--current-state helix--state-to-keymap-alist)))
 
 (defvar my/helix-preserve-local-map-modes
-  '(magit-mode magit-section-mode magit-blame-read-only-mode)
+  '(magit-mode magit-section-mode magit-blame-read-only-mode
+    croc-ui-mode croc-ui-log-mode sync-ui-mode)
   "Modes whose local keymaps should stay behind Helix mode overrides.")
 
 (defun my/helix-preserve-local-map-p ()
@@ -1288,6 +1289,8 @@ Selects the compilation window so the cursor lands in it."
   (helix-define-key 'normal "[b" #'switch-to-prev-buffer)
   (helix-define-key 'normal "]t" #'tab-next)
   (helix-define-key 'normal "[t" #'tab-previous)
+  (helix-define-key 'normal (kbd "C-w C-w") #'other-window)
+  (helix-define-key 'normal (kbd "C-w c") #'delete-window)
   (helix-define-key 'normal "gcc"
                     (lambda ()
                       (interactive)
@@ -1298,9 +1301,11 @@ Selects the compilation window so the cursor lands in it."
   (helix-define-key 'normal "j" #'croc-ui-next 'croc-ui-mode)
   (helix-define-key 'normal "k" #'croc-ui-previous 'croc-ui-mode)
   (helix-define-key 'normal (kbd "RET") #'croc-ui-open-log 'croc-ui-mode)
+  (helix-define-key 'normal (kbd "<return>") #'croc-ui-open-log 'croc-ui-mode)
   (helix-define-key 'normal "j" #'sync-ui-next 'sync-ui-mode)
   (helix-define-key 'normal "k" #'sync-ui-previous 'sync-ui-mode)
   (helix-define-key 'normal (kbd "RET") #'sync-ui-magit 'sync-ui-mode)
+  (helix-define-key 'normal (kbd "<return>") #'sync-ui-magit 'sync-ui-mode)
   (helix-define-key 'normal (kbd "RET") #'feed-ui-open-thread-at-point 'feed-ui-mode)
   (helix-define-key 'normal "r" #'feed-ui-reply-at-point 'feed-ui-mode)
   (helix-define-key 'normal "m" #'feed-ui-mute-at-point 'feed-ui-mode)
@@ -1364,6 +1369,7 @@ Selects the compilation window so the cursor lands in it."
   (helix-define-key 'normal "]]" #'passage-next-directory 'passage-mode)
   (helix-define-key 'normal "[[" #'passage-prev-directory 'passage-mode)
   (helix-define-key 'normal (kbd "RET") #'passage-view 'passage-mode)
+  (helix-define-key 'normal (kbd "<return>") #'passage-view 'passage-mode)
   (helix-define-key 'normal "q" #'my/passage-quit 'passage-mode)
   (helix-define-key 'normal "Q" #'my/passage-kill-view-buffers-and-quit 'passage-mode)
   (helix-define-key 'normal "q" #'quit-window 'passage-view-mode)

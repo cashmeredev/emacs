@@ -164,7 +164,8 @@
   "Mode for raw croc process logs."
   (setq-local truncate-lines t)
   (local-set-key (kbd "w") #'croc-ui-copy-code)
-  (local-set-key (kbd "x") #'croc-ui-kill))
+  (local-set-key (kbd "x") #'croc-ui-kill)
+  (local-set-key (kbd "q") #'quit-window))
 
 (defun croc-ui--filter (proc chunk)
   "Append CHUNK to PROC's log and fold its state into the transfer struct."
@@ -949,6 +950,7 @@ stay square; MARGIN (default 4) modules of quiet zone wrap the code."
     (define-key map (kbd "t") #'croc-ui-send-text)
     (define-key map (kbd "r") #'croc-ui-receive)
     (define-key map (kbd "RET") #'croc-ui-open-log)
+    (define-key map (kbd "<return>") #'croc-ui-open-log)
     (define-key map (kbd "w") #'croc-ui-copy-code)
     (define-key map (kbd "Q") #'croc-ui-toggle-qr)
     (define-key map (kbd "x") #'croc-ui-kill)
@@ -976,6 +978,7 @@ stay square; MARGIN (default 4) modules of quiet zone wrap the code."
   (helix-define-key 'normal "j" #'croc-ui-next 'croc-ui-mode)
   (helix-define-key 'normal "k" #'croc-ui-previous 'croc-ui-mode)
   (helix-define-key 'normal "RET" #'croc-ui-open-log 'croc-ui-mode)
+  (helix-define-key 'normal (kbd "<return>") #'croc-ui-open-log 'croc-ui-mode)
   (helix-define-key 'normal "s" #'croc-ui-send-files 'croc-ui-mode)
   (helix-define-key 'normal "d" #'croc-ui-send-directory 'croc-ui-mode)
   (helix-define-key 'normal "t" #'croc-ui-send-text 'croc-ui-mode)

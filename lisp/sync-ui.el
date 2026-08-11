@@ -893,6 +893,7 @@ A ⁺ marks a remote that has no copy of the branch yet."
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "s") #'sync-ui-sync-all)
     (define-key map (kbd "RET") #'sync-ui-magit)
+    (define-key map (kbd "<return>") #'sync-ui-magit)
     (define-key map (kbd "r") #'sync-ui-resume)
     (define-key map (kbd "x") #'sync-ui-skip)
     (define-key map (kbd "t") #'sync-ui-toggle)
@@ -901,6 +902,7 @@ A ⁺ marks a remote that has no copy of the branch yet."
     (define-key map (kbd "g") #'sync-ui-refresh)
     (define-key map (kbd "n") #'sync-ui-next)
     (define-key map (kbd "p") #'sync-ui-previous)
+    (define-key map (kbd "q") #'quit-window)
     map)
   "Keymap for `sync-ui-mode'.")
 
@@ -920,7 +922,8 @@ A ⁺ marks a remote that has no copy of the branch yet."
 (with-eval-after-load 'helix
   (helix-define-key 'normal "j" #'sync-ui-next 'sync-ui-mode)
   (helix-define-key 'normal "k" #'sync-ui-previous 'sync-ui-mode)
-  (helix-define-key 'normal "RET" #'sync-ui-magit 'sync-ui-mode))
+  (helix-define-key 'normal "RET" #'sync-ui-magit 'sync-ui-mode)
+  (helix-define-key 'normal (kbd "<return>") #'sync-ui-magit 'sync-ui-mode))
 
 ;;; § 8 Entry points
 
