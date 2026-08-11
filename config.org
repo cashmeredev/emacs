@@ -1100,7 +1100,7 @@ automatically encrypted before save and can be decrypted in-place with
   :demand t
   :custom
   (age-program "rage")
-  (age-default-identity "~/.config/passage/identities")
+  (age-default-identity "~/.config/age/keys.txt")
   (age-default-recipient
    '("age188928acysrh9zpc3rk6q4lqmf3qlpjx3s26m6k3p6kah63gcws7sx3jeej"
      "age1mhvdwh6cvd70hm5dcptc4xca2xnkf383g6706ful6kmrudwdysvq0eytym"))
@@ -1155,16 +1155,12 @@ TITLE names the new denote-style file in ~/org."
 #+begin_src emacs-lisp :tangle yes
 (use-package passage
   :ensure (:host github :repo "anticomputer/passage.el")
-  :after age
   :custom
   (auth-source-passage-filename "~/pass")
   :config
   (with-eval-after-load 'evil
     (evil-define-key 'normal passage-mode-map
-      "y" #'passage-copy
-      "yn" #'passage-copy-username
-      "yu" #'passage-copy-url
-      "yf" #'passage-copy-field
+
       "J" #'passage-goto-entry
       "U" #'passage-browse-url
       "a" #'passage-insert
@@ -1179,7 +1175,32 @@ TITLE names the new denote-style file in ~/org."
       "]]" #'passage-next-directory
       "[[" #'passage-prev-directory
       (kbd "RET") #'passage-view
-      "q" #'passage-quit)))
+      "q" #'passage-quit)
+    (evil-define-key 'normal passage-view-mode-map
+      "q" #'quit-window
+      "t" #'passage-view-toggle-password
+      "y" #'passage-view-copy-password))
+  (with-eval-after-load 'evil-collection
+    (evil-collection-define-operator-key 'yank 'passage-mode-map
+      "f" #'passage-copy-field
+      "n" #'passage-copy-username
+      "u" #'passage-copy-url))
+  ;; The yank-operator sub-keys ("yn"/"yu"/"yf") are invisible to
+  ;; `where-is', so hardcode their header labels (evil-collection-pass
+  ;; uses the same trick for pass).
+  (defconst my/passage-command-to-label
+    '((passage-copy-field . "yf")
+      (passage-copy-username . "yn")
+      (passage-copy-url . "yu")))
+  (defun my/passage-display-keybinding (f &rest args)
+    "Render `my/passage-command-to-label' labels in the passage header."
+    (if-let* ((label (alist-get (car args) my/passage-command-to-label)))
+        (insert (format "%8s %-13s \t "
+                        (propertize (format "<%s>" label)
+                                    'face 'font-lock-constant-face)
+                        (cadr args)))
+      (apply f args)))
+  (advice-add 'passage--display-keybinding :around #'my/passage-display-keybinding))
 #+end_src
 
 ** org-appear
@@ -2619,7 +2640,7 @@ Auto switch silos (different workspaces/folders) based on preconfigured director
      "\\`\\*elpaca-log\\*\\'"
      "\\`\\*Native-compile-Log\\*\\'"
      "\\`\\*Async-native-compile-log\\*\\'"))
-  (helm-display-function #'helm-display-buffer-in-own-frame)
+  ;; (helm-display-function #'helm-display-buffer-in-own-frame)
   :bind (:map helm-map
               ("C-j" . helm-next-line)
               ("C-k" . helm-previous-line)))
@@ -4361,7 +4382,7 @@ workspace (e.g. *scratch*)."
   "oa" '(my/app-launcher :wk "app launcher")
   "os" '(my/snip-upload :wk "snip buffer/region")
   "oS" '(my/snip-upload-file :wk "snip file")
-  "op" '(pass :wk "pass")
+  "op" '(passage :wk "pass")
   "ot" '(ghostel :wk "ghostel")
 
   "h" '(:ignore t :wk "help")

@@ -386,7 +386,7 @@ Selects the compilation window so the cursor lands in it."
   (setq erc-fill-wrap-align-prompt nil)
   (setq erc-fill-static-center 14)
 
-  ;; track -- activity NOT in modeline (channels list clutters doom-modeline)
+  ;; track -- activity NOT in mode-line (channel list would clutter it)
   (setq erc-track-position-in-mode-line nil)
 
   ;; keep large buffer for soju history replay
@@ -553,6 +553,15 @@ Temporarily disables notifications during the fetch."
                    pass-otp-uri-copy
                    pass-view-copy-password
                    pass-view-copy-token))
+      (advice-add cmd :after #'my/elfeed-yank-to-clipboard)))
+  (with-eval-after-load 'passage
+    (dolist (cmd '(passage-copy
+                   passage-copy-field
+                   passage-copy-username
+                   passage-copy-url
+                   passage-otp-token-copy
+                   passage-otp-uri-copy
+                   passage-view-copy-password))
       (advice-add cmd :after #'my/elfeed-yank-to-clipboard))))
 
 (use-package isearch
@@ -943,6 +952,107 @@ Temporarily disables notifications during the fetch."
   (setq org-crypt-key "1ED9D600A040D0AF193AAF30B877C0AC3B080FBB")
   (setq org-tags-exclude-from-inheritance '("crypt"))
   (add-hook 'org-mode-hook (lambda () (setq-local auto-save-default nil))))
+
+(use-package age
+  :ensure t
+  :demand t
+  :custom
+  (age-program "rage")
+  (age-default-identity "~/.config/age/keys.txt")
+  (age-default-recipient
+   '("age188928acysrh9zpc3rk6q4lqmf3qlpjx3s26m6k3p6kah63gcws7sx3jeej"
+     "age1mhvdwh6cvd70hm5dcptc4xca2xnkf383g6706ful6kmrudwdysvq0eytym"))
+  :config
+  (setenv "PINENTRY_PROGRAM" "pinentry-gnome3")
+  (setenv "PASSAGE_DIR" (expand-file-name "~/pass"))
+  (age-file-enable))
+
+(defun my/org-crypt-migrate-to-age (title)
+  "Migrate all :crypt: headings in the current buffer to a new .org.age file.
+TITLE names the new denote-style file in ~/org."
+  (interactive "sTitle for new age file: ")
+  (unless (derived-mode-p 'org-mode)
+    (user-error "Not an org buffer"))
+  (save-excursion
+    (org-decrypt-entries)
+    (let ((collected (generate-new-buffer " *crypt-migration*"))
+          (count 0))
+      (org-map-entries
+       (lambda ()
+         (let ((beg (org-entry-beginning-position))
+               (end (org-entry-end-position)))
+           (with-current-buffer collected
+             (insert (buffer-substring-no-properties beg end) "\n"))
+           (setq count (1+ count))))
+       "crypt")
+      (if (zerop count)
+          (progn (kill-buffer collected)
+                 (user-error "No :crypt: headings found"))
+        (let ((target (expand-file-name
+                       (format "%s--%s__crypt.org.age"
+                               (format-time-string "%Y%m%dT%H%M%S")
+                               (replace-regexp-in-string "[^a-z0-9]+" "-" (downcase title)))
+                       "~/org")))
+          (with-current-buffer collected
+            (org-mode)
+            (write-file target)
+            (save-buffer))
+          (goto-char (point-max))
+          (org-map-entries
+           (lambda ()
+             (delete-region (org-entry-beginning-position) (org-entry-end-position)))
+           "crypt")
+          (save-buffer)
+          (message "Migrated %d crypt headings to %s" count target))))))
+
+(use-package passage
+  :ensure (:host github :repo "anticomputer/passage.el")
+  :custom
+  (auth-source-passage-filename "~/pass")
+  :config
+  (with-eval-after-load 'evil
+    (evil-define-key 'normal passage-mode-map
+
+      "J" #'passage-goto-entry
+      "U" #'passage-browse-url
+      "a" #'passage-insert
+      "G" #'passage-insert-generated
+      "R" #'passage-rename
+      "x" #'passage-kill
+      "E" #'passage-edit
+      "j" #'passage-next-entry
+      "k" #'passage-prev-entry
+      "gr" #'passage-update-buffer
+      "o" #'passage-otp-options
+      "]]" #'passage-next-directory
+      "[[" #'passage-prev-directory
+      (kbd "RET") #'passage-view
+      "q" #'passage-quit)
+    (evil-define-key 'normal passage-view-mode-map
+      "q" #'quit-window
+      "t" #'passage-view-toggle-password
+      "y" #'passage-view-copy-password))
+  (with-eval-after-load 'evil-collection
+    (evil-collection-define-operator-key 'yank 'passage-mode-map
+      "f" #'passage-copy-field
+      "n" #'passage-copy-username
+      "u" #'passage-copy-url))
+  ;; The yank-operator sub-keys ("yn"/"yu"/"yf") are invisible to
+  ;; `where-is', so hardcode their header labels (evil-collection-pass
+  ;; uses the same trick for pass).
+  (defconst my/passage-command-to-label
+    '((passage-copy-field . "yf")
+      (passage-copy-username . "yn")
+      (passage-copy-url . "yu")))
+  (defun my/passage-display-keybinding (f &rest args)
+    "Render `my/passage-command-to-label' labels in the passage header."
+    (if-let* ((label (alist-get (car args) my/passage-command-to-label)))
+        (insert (format "%8s %-13s \t "
+                        (propertize (format "<%s>" label)
+                                    'face 'font-lock-constant-face)
+                        (cadr args)))
+      (apply f args)))
+  (advice-add 'passage--display-keybinding :around #'my/passage-display-keybinding))
 
 (use-package org-appear
   :ensure t
@@ -2165,7 +2275,7 @@ Timers that expired while Emacs was closed fire immediately."
      "\\`\\*elpaca-log\\*\\'"
      "\\`\\*Native-compile-Log\\*\\'"
      "\\`\\*Async-native-compile-log\\*\\'"))
-  (helm-display-function #'helm-display-buffer-in-own-frame)
+  ;; (helm-display-function #'helm-display-buffer-in-own-frame)
   :bind (:map helm-map
               ("C-j" . helm-next-line)
               ("C-k" . helm-previous-line)))
@@ -2823,58 +2933,11 @@ so the working-tree diff stays visible until the user explicitly stages."
 
 (display-time-mode 1)
 
-(defvar-local my/doom-modeline--buffer-title nil)
-
-(defun my/doom-modeline--update-title-cache ()
-  "Update the cached #+title for the current buffer."
-  (setq-local my/doom-modeline--buffer-title
-              ;; `org-collect-keywords' runs the org element parser, which
-              ;; errors (rx range error) outside org-mode buffers.
-              (and (derived-mode-p 'org-mode)
-                   (cadar (org-collect-keywords '("TITLE"))))))
-
-(defun my/doom-modeline--buffer-title ()
-  "Return the cached #+title, computing it if necessary."
-  (unless (local-variable-p 'my/doom-modeline--buffer-title)
-    (my/doom-modeline--update-title-cache))
-  my/doom-modeline--buffer-title)
-
-(defun my/doom-modeline-set-buffer-title (&rest _)
-  "Override doom-modeline's cached file name with the Org #+title.
-If no TITLE keyword is found, leave doom-modeline's default name."
-  (when-let* ((title (my/doom-modeline--buffer-title)))
-    (setq doom-modeline--buffer-file-name
-          (propertize title
-                      'face 'doom-modeline-buffer-file
-                      'mouse-face 'mode-line-highlight
-                      'help-echo (concat (or buffer-file-truename (buffer-name))
-                                         "\nmouse-1: Previous buffer\nmouse-3: Next buffer")
-                      'local-map mode-line-buffer-identification-keymap))))
-
-(defun my/doom-modeline--invalidate-title-cache ()
-  "Invalidate the cached title so it gets recomputed on next update."
-  (kill-local-variable 'my/doom-modeline--buffer-title))
-
-(use-package doom-modeline
-  :ensure t
-  :init (doom-modeline-mode 1)
+(use-package mode-line-maker
+  :ensure (:host github :repo "rougier/mode-line-maker")
   :config
-  (setq doom-modeline-hud t
-        doom-modeline-irc t
-        doom-modeline-irc-buffers nil
-        doom-modeline-mu4e t
-        doom-modeline-buffer-file-name-style 'relative-to-project
-        doom-modeline-buffer-encoding nil
-        doom-modeline-time t
-        doom-modeline-time-live-icon t)
-
-  ;; Replace the channel-list segment with the icon-only segment in ERC buffers.
-  (doom-modeline-def-modeline 'special
-    '(eldoc bar window-state window-number modals matches buffer-info remote-host buffer-position word-count parrot selection-info)
-    '(compilation objed-state misc-info battery irc debug minor-modes input-method indent-info buffer-encoding major-mode process time))
-
-  (advice-add #'doom-modeline-update-buffer-file-name :after #'my/doom-modeline-set-buffer-title)
-  (add-hook 'before-save-hook #'my/doom-modeline--invalidate-title-cache))
+  (require 'my-mode-line)
+  (my/mode-line-install))
 
 (use-package adaptive-wrap
   :ensure t
@@ -3551,7 +3614,7 @@ workspace (e.g. *scratch*)."
   "oa" '(my/app-launcher :wk "app launcher")
   "os" '(my/snip-upload :wk "snip buffer/region")
   "oS" '(my/snip-upload-file :wk "snip file")
-  "op" '(pass :wk "pass")
+  "op" '(passage :wk "pass")
   "ot" '(ghostel :wk "ghostel")
 
   "h" '(:ignore t :wk "help")
@@ -4323,21 +4386,5 @@ opening another file in same project does not re-notify."
 (use-package zfs
   :ensure nil
   :commands (zfs))
-
-(use-package org-tree-slide
-  :ensure t)
-(when (require 'org-tree-slide nil t)
-  (global-set-key (kbd "<f8>") 'org-tree-slide-mode)
-  (global-set-key (kbd "S-<f8>") 'org-tree-slide-skip-done-toggle)
-  (define-key org-tree-slide-mode-map (kbd "<f9>")
-    'org-tree-slide-move-previous-tree)
-  (define-key org-tree-slide-mode-map (kbd "<f10>")
-    'org-tree-slide-move-next-tree)
-  (define-key org-tree-slide-mode-map (kbd "<f11>")
-    'org-tree-slide-content)
-  (setq org-tree-slide-skip-outline-level 4)
-  (org-tree-slide-narrowing-control-profile)
-  (setq org-tree-slide-skip-comments 'inherit)
-  (setq org-tree-slide-skip-done nil))
 
 (provide 'init)
