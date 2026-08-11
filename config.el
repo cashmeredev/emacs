@@ -1,4 +1,4 @@
-;;; config.el --- Emacs-Kick --- A feature rich Emacs config for (neo)vi(m)mers -*- lexical-binding: t; -*-
+;;; config.el --- Emacs-Kick --- A feature rich Emacs config with Helix keybindings -*- lexical-binding: t; -*-
 (setenv "LSP_USE_PLISTS" "true")
 ;; (setq debug-on-error t)
 ;; (setenv "LSP_USE_PLISTS" "true")
@@ -71,10 +71,25 @@ Set per-host in the gitignored `local.el'.")
   (prog-mode . display-line-numbers-mode)
   (org-mode . display-line-numbers-mode)
   (markdown-mode . display-line-numbers-mode)
+  (special-mode . my/disable-line-numbers)
+  (dired-mode . my/disable-line-numbers)
+  (dirvish-mode . my/disable-line-numbers)
+  (dirvish-directory-view-mode . my/disable-line-numbers)
+  (ghostel-mode . my/disable-line-numbers)
+  (magit-mode . my/disable-line-numbers)
+  (term-mode . my/disable-line-numbers)
+  (vterm-mode . my/disable-line-numbers)
+  (eat-mode . my/disable-line-numbers)
+  (eshell-mode . my/disable-line-numbers)
+  (shell-mode . my/disable-line-numbers)
   (text-mode . visual-line-mode)       ;; Soft-wrap prose/text files at window edge.
   (conf-mode . visual-line-mode)       ;; Soft-wrap .conf and similar config files.
 
   :config
+  (defun my/disable-line-numbers ()
+    (setq-local display-line-numbers nil)
+    (display-line-numbers-mode -1))
+
   (add-to-list 'custom-theme-load-path user-emacs-directory)
   
   (setq custom-safe-themes t)
@@ -192,10 +207,8 @@ Selects the compilation window so the cursor lands in it."
   "Focus the async-shell window and make q bury it without killing the process."
   (select-window window)
   (with-current-buffer (window-buffer window)
-    (evil-local-set-key 'normal (kbd "q") #'quit-window)
-    (evil-local-set-key 'motion (kbd "q") #'quit-window)
-    (evil-normal-state)))
-
+    )
+)
 (use-package window
   :ensure nil
   :custom
@@ -247,6 +260,7 @@ Selects the compilation window so the cursor lands in it."
     (dired-async-mode 1))
   
   (require 'mailcap)
+  (require 'dired-x)
   
   (setq mailcap-prefer-mailcap-viewers nil)
 
@@ -274,25 +288,1063 @@ Selects the compilation window so the cursor lands in it."
 
 (use-package async :ensure t)
 
-(use-package general
-  :ensure (:wait t)
+(defun my/helix-ignore-key ()
+  (interactive))
+
+(defun my/helix-make-fallback-keymap (block-characters)
+  (let ((keymap (make-keymap)))
+    (set-char-table-range
+     (cadr keymap)
+     (cons 0 26)
+     #'my/helix-ignore-key)
+    (set-char-table-range
+     (cadr keymap)
+     (cons 28 (if block-characters (max-char) 31))
+     #'my/helix-ignore-key)
+    (unless block-characters
+      (set-char-table-range (cadr keymap) 127 #'my/helix-ignore-key))
+    (dolist (modifiers '((meta) (control meta) (super) (hyper)))
+      (dotimes (character 128)
+        (define-key keymap
+                    (vector
+                     (event-convert-list
+                      (append modifiers (list character))))
+                    #'my/helix-ignore-key)))
+    keymap))
+
+(defvar my/helix-normal-fallback-keymap
+  (my/helix-make-fallback-keymap t))
+
+(defvar my/helix-insert-fallback-keymap
+  (my/helix-make-fallback-keymap nil))
+
+(defvar my/helix-terminal-insert-state-keymap
+  (let ((keymap (make-sparse-keymap)))
+    (define-key keymap [escape] #'helix-insert-exit)
+    keymap))
+
+(defun my/helix-install-fallback-keymap (keymap fallback-keymap)
+  (unless (eq (keymap-parent keymap) fallback-keymap)
+    (set-keymap-parent fallback-keymap (keymap-parent keymap))
+    (set-keymap-parent keymap fallback-keymap)))
+
+(defun my/helix-mode-binding-priority (mode)
+  (let ((mode-map (intern-soft (format "%s-map" mode))))
+    (cond
+     ((and mode-map
+           (boundp mode-map)
+           (eq (current-local-map) (symbol-value mode-map)))
+      4)
+     ((eq mode major-mode) 3)
+     ((and (memq mode minor-mode-list)
+           (boundp mode)
+           (symbol-value mode))
+      2)
+     ((derived-mode-p mode) 1))))
+
+(defun my/helix-state-base-keymap ()
+  (if (and (eq helix--current-state 'insert)
+           (derived-mode-p 'ghostel-mode))
+      my/helix-terminal-insert-state-keymap
+    (alist-get helix--current-state helix--state-to-keymap-alist)))
+
+(defun my/helix-refresh-overriding-maps ()
+  (let* ((state helix--current-state)
+         (state-mode (alist-get state helix-state-mode-alist))
+         (base-keymap (my/helix-state-base-keymap))
+         overrides)
+    (dolist (priority '(4 3 2 1))
+      (let (matches)
+        (dolist (entry helix--mode-keybindings)
+          (when (and (eq (cdar entry) state)
+                     (eq (my/helix-mode-binding-priority (caar entry))
+                         priority))
+            (push (cdr entry) matches)))
+        (setq overrides (nconc overrides (nreverse matches)))))
+    (setq minor-mode-overriding-map-alist
+          (assq-delete-all state-mode minor-mode-overriding-map-alist))
+    (push
+     (cons
+      state-mode
+      (if overrides
+          (make-composed-keymap overrides base-keymap)
+        base-keymap))
+     minor-mode-overriding-map-alist)))
+
+(defun my/helix-refresh-all-buffers ()
+  (dolist (buffer (buffer-list))
+    (with-current-buffer buffer
+      (when (or helix-normal-mode helix-insert-mode)
+        (helix--refresh-overriding-maps)))))
+
+(defun my/helix-scroll-half-page (direction)
+  (let* ((window (selected-window))
+         (lines
+          (* direction (max 1 (/ (window-body-height window) 2))))
+         (new-start
+          (save-excursion
+            (goto-char (window-start window))
+            (vertical-motion lines window)
+            (point))))
+    (vertical-motion lines window)
+    (set-window-start window new-start)))
+
+(defun my/helix-scroll-half-page-down ()
+  (interactive)
+  (my/helix-scroll-half-page 1))
+
+(defun my/helix-scroll-half-page-up ()
+  (interactive)
+  (my/helix-scroll-half-page -1))
+
+(defun my/helix-save-jump ()
+  (interactive)
+  (xref-push-marker-stack))
+
+(defun my/helix-commit-undo-checkpoint ()
+  (interactive)
+  (undo-boundary))
+
+(defun my/helix-kill-to-line-start ()
+  (interactive)
+  (kill-region (line-beginning-position) (point)))
+
+(defun my/helix-insert-tab ()
+  (interactive)
+  (insert "\t"))
+
+(defun my/helix-line-numbers-disabled-p ()
+  (derived-mode-p 'special-mode
+                  'dired-mode
+                  'dirvish-mode
+                  'dirvish-directory-view-mode
+                  'ghostel-mode
+                  'magit-mode
+                  'term-mode
+                  'vterm-mode
+                  'eat-mode
+                  'eshell-mode
+                  'shell-mode))
+
+(defun my/helix-set-line-numbers (style)
+  (if (my/helix-line-numbers-disabled-p)
+      (my/disable-line-numbers)
+    (setq display-line-numbers style)))
+
+(use-package helix
+  :ensure nil
   :demand t
+  :hook ((helix-normal-mode . (lambda () (my/helix-set-line-numbers 'relative)))
+         (helix-insert-mode . (lambda () (my/helix-set-line-numbers t))))
   :config
-  (general-evil-setup))
+  (when
+      (advice-member-p
+       #'my/helix-prioritize-state-keymap
+       #'helix--refresh-overriding-maps)
+    (advice-remove
+     #'helix--refresh-overriding-maps
+     #'my/helix-prioritize-state-keymap))
+  (unless
+      (advice-member-p
+       #'my/helix-refresh-overriding-maps
+       #'helix--refresh-overriding-maps)
+    (advice-add
+     #'helix--refresh-overriding-maps
+     :override
+     #'my/helix-refresh-overriding-maps))
+  (my/helix-install-fallback-keymap
+   helix-normal-state-keymap
+   my/helix-normal-fallback-keymap)
+  (my/helix-install-fallback-keymap
+   helix-insert-state-keymap
+   my/helix-insert-fallback-keymap)
+  (helix-define-key 'normal (kbd "C-u") #'my/helix-scroll-half-page-up)
+  (helix-define-key 'normal (kbd "C-d") #'my/helix-scroll-half-page-down)
+  (helix-define-key 'normal (kbd "C-i") #'xref-go-forward)
+  (helix-define-key 'normal (kbd "<tab>") #'xref-go-forward)
+  (helix-define-key 'normal (kbd "C-o") #'xref-go-back)
+  (helix-define-key 'normal (kbd "C-s") #'my/helix-save-jump)
+  (helix-define-key 'normal (kbd "C-r") #'undo-redo)
+  (helix-define-key 'normal (kbd "M-x") #'helm-M-x)
+  (helix-define-key 'normal (kbd "<left>") #'helix-backward-char)
+  (helix-define-key 'normal (kbd "<right>") #'helix-forward-char)
+  (helix-define-key 'normal (kbd "<down>") #'helix-next-line)
+  (helix-define-key 'normal (kbd "<up>") #'helix-previous-line)
+  (helix-define-key 'normal (kbd "<home>") #'helix-go-beginning-line)
+  (helix-define-key 'normal (kbd "<end>") #'helix-go-end-line)
+  (helix-define-key 'normal (kbd "<prior>") #'scroll-down-command)
+  (helix-define-key 'normal (kbd "<next>") #'scroll-up-command)
+  (helix-define-key 'normal (kbd "<return>") #'my/helix-ignore-key)
+  (helix-define-key 'normal (kbd "<backspace>") #'my/helix-ignore-key)
+  (helix-define-key 'normal (kbd "<delete>") #'my/helix-ignore-key)
+  (helix-define-key 'normal "ms" #'embrace-add)
+  (helix-define-key 'normal "mr" #'embrace-change)
+  (helix-define-key 'normal "md" #'embrace-delete)
+  (helix-define-key 'normal "mS" #'embrace-commander)
+  (helix-define-key 'view (kbd "C-u") #'my/helix-scroll-half-page-up)
+  (helix-define-key 'view (kbd "C-d") #'my/helix-scroll-half-page-down)
+  (helix-define-key 'view (kbd "C-b") #'scroll-down-command)
+  (helix-define-key 'view (kbd "C-f") #'scroll-up-command)
+  (helix-define-key 'view (kbd "<prior>") #'scroll-down-command)
+  (helix-define-key 'view (kbd "<next>") #'scroll-up-command)
+  (helix-define-key 'view (kbd "<backspace>") #'my/helix-scroll-half-page-up)
+  (helix-define-key 'view (kbd "SPC") #'my/helix-scroll-half-page-down)
+  (helix-define-key 'insert (kbd "C-s") #'my/helix-commit-undo-checkpoint)
+  (helix-define-key 'insert (kbd "C-x") #'completion-at-point)
+  (helix-define-key 'insert (kbd "C-r") #'insert-register)
+  (helix-define-key 'insert (kbd "M-x") #'helm-M-x)
+  (helix-define-key 'insert (kbd "C-w") #'backward-kill-word)
+  (helix-define-key 'insert (kbd "M-DEL") #'backward-kill-word)
+  (helix-define-key 'insert (kbd "M-d") #'kill-word)
+  (helix-define-key 'insert (kbd "M-<delete>") #'kill-word)
+  (helix-define-key 'insert (kbd "C-u") #'my/helix-kill-to-line-start)
+  (helix-define-key 'insert (kbd "C-k") #'kill-line)
+  (helix-define-key 'insert (kbd "C-h") #'delete-backward-char)
+  (helix-define-key 'insert (kbd "DEL") #'delete-backward-char)
+  (helix-define-key 'insert (kbd "<backspace>") #'delete-backward-char)
+  (helix-define-key 'insert (kbd "C-d") #'delete-forward-char)
+  (helix-define-key 'insert (kbd "<delete>") #'delete-forward-char)
+  (helix-define-key 'insert (kbd "C-j") #'newline-and-indent)
+  (helix-define-key 'insert (kbd "RET") #'newline-and-indent)
+  (helix-define-key 'insert (kbd "<return>") #'newline-and-indent)
+  (helix-define-key 'insert (kbd "TAB") #'indent-for-tab-command)
+  (helix-define-key 'insert (kbd "<tab>") #'indent-for-tab-command)
+  (helix-define-key 'insert (kbd "<backtab>") #'my/helix-insert-tab)
+  (helix-define-key 'insert (kbd "<left>") #'backward-char)
+  (helix-define-key 'insert (kbd "<right>") #'forward-char)
+  (helix-define-key 'insert (kbd "<down>") #'next-line)
+  (helix-define-key 'insert (kbd "<up>") #'previous-line)
+  (helix-define-key 'insert (kbd "<home>") #'beginning-of-line)
+  (helix-define-key 'insert (kbd "<end>") #'end-of-line)
+  (helix-define-key 'insert (kbd "<prior>") #'scroll-down-command)
+  (helix-define-key 'insert (kbd "<next>") #'scroll-up-command)
+  (unless helix-global-mode
+    (helix-mode))
+  (helix-jj-setup 0.2))
 
-(eval-and-compile
-  (require 'general)
+(use-package embrace
+  :defer t
+  :hook ((org-mode . embrace-org-mode-hook)
+         (emacs-lisp-mode . embrace-emacs-lisp-mode-hook))
+  :bind (("C-," . embrace-commander)))
 
-  (general-create-definer my-leader
-    :states '(normal visual insert)
-    :keymaps 'override
-    :prefix "SPC"
-    :non-normal-prefix "M-SPC")
+(use-package multiple-cursors
+  :defer t)
 
-  (general-create-definer my-local-leader
-    :states '(normal visual)
-    :keymaps 'override
-    :prefix ","))
+(with-eval-after-load 'helix
+  (helix-define-key 'space "f" nil)
+  (helix-define-key 'space "b" nil)
+  (helix-define-key 'space "d" nil)
+  (helix-define-key 'space "a" nil)
+  (helix-define-key 'space (kbd "SPC") #'my/find-file-or-switch-project)
+  (helix-define-key 'space "sp" #'helm-projectile)
+  (helix-define-key 'space "ss" #'helm-occur)
+  (helix-define-key 'space "sg" #'my/helm-rg-in)
+  (helix-define-key 'space "sf" #'my/helm-find-in)
+  (helix-define-key 'space ":" #'execute-extended-command)
+  (helix-define-key 'space "." #'helm-find-files)
+  (helix-define-key 'space "," #'helm-mini)
+  (helix-define-key 'space "u" #'universal-argument)
+  (helix-define-key 'space ";" #'embark-act)
+  (helix-define-key 'space "P" #'helm-show-kill-ring)
+  (helix-define-key 'space "x" #'org-capture)
+  (helix-define-key 'space "/" #'helm-projectile-rg)
+  (helix-define-key 'space "fd" #'dired-jump)
+  (helix-define-key 'space "fD" #'dired-jump)
+  (helix-define-key 'space "fr" #'helm-recentf)
+  (helix-define-key 'space "ff" #'helm-find-files)
+  (helix-define-key 'space "fs" #'save-buffer)
+  (helix-define-key 'space "bb" #'helm-filtered-bookmarks)
+  (helix-define-key 'space "bi" #'my/ibuffer-workspace)
+  (helix-define-key 'space "bp" #'projectile-ibuffer)
+  (helix-define-key 'space "bd" #'bookmark-delete)
+  (helix-define-key 'space "bk" #'kill-current-buffer)
+  (helix-define-key 'space "bs" #'bookmark-set)
+  (helix-define-key 'space "br" #'rename-buffer)
+  (helix-define-key 'space "pp" #'helm-projectile-switch-project)
+  (helix-define-key 'space "pf" #'helm-projectile-find-file)
+  (helix-define-key 'space "ps" #'helm-projectile-rg)
+  (helix-define-key 'space "pb" #'helm-projectile-switch-to-buffer)
+  (helix-define-key 'space "pk" #'projectile-kill-buffers)
+  (helix-define-key 'space "pd" #'projectile-remove-known-project)
+  (helix-define-key 'space "pr" #'my/project-replace)
+  (helix-define-key 'space "pa" #'projectile-add-known-project)
+  (helix-define-key 'space "pi" #'projectile-invalidate-cache)
+  (helix-define-key 'space "pt" #'projectile-run-task)
+  (helix-define-key 'space "gc" #'magit-clone)
+  (helix-define-key 'space "gg" #'magit-status)
+  (helix-define-key 'space "gl" #'magit-log-current)
+  (helix-define-key 'space "gi" #'magit-init)
+  (helix-define-key 'space "gd" #'xref-find-definitions)
+  (helix-define-key 'space "gD"
+                    (lambda ()
+                      (interactive)
+                      (let ((current-prefix-arg 4))
+                        (call-interactively #'xref-find-definitions))))
+  (helix-define-key 'space "gI"
+                    (lambda ()
+                      (interactive)
+                      (let ((current-prefix-arg 4))
+                        (call-interactively #'eglot-find-implementation))))
+  (helix-define-key 'space "gt" #'eglot-find-typeDefinition)
+  (helix-define-key 'space "gr" #'xref-find-references)
+  (helix-define-key 'space "gs" #'magit-file-stage)
+  (helix-define-key 'space "gu" #'my/magit-uncommit)
+  (helix-define-key 'space "gb" #'vc-annotate)
+  (helix-define-key 'space "gT" #'my/code-todos-harvest)
+  (helix-define-key 'space "aa" #'agent-shell)
+  (helix-define-key 'space "at" #'agent-shell-toggle)
+  (helix-define-key 'space "am" #'agent-shell-help-menu)
+  (helix-define-key 'space "ar" #'agent-shell-send-region)
+  (helix-define-key 'space "oa" #'my/app-launcher)
+  (helix-define-key 'space "oc" #'croc-ui)
+  (helix-define-key 'space "oy" #'sync-ui)
+  (helix-define-key 'space "os" #'my/snip-upload)
+  (helix-define-key 'space "oS" #'my/snip-upload-file)
+  (helix-define-key 'space "op" #'passage)
+  (helix-define-key 'space "ot" #'ghostel)
+  (helix-define-key 'space "hm" #'describe-mode)
+  (helix-define-key 'space "hf" #'describe-function)
+  (helix-define-key 'space "hv" #'describe-variable)
+  (helix-define-key 'space "hk" #'describe-key)
+  (helix-define-key 'space "wd" #'delete-window)
+  (helix-define-key 'space "wo" #'delete-other-windows)
+  (helix-define-key 'space "wv" #'split-window-right)
+  (helix-define-key 'space "ws" #'split-window-below)
+  (helix-define-key 'space "ww" #'other-window)
+  (helix-define-key 'space "wh" #'windmove-left)
+  (helix-define-key 'space "wj" #'windmove-down)
+  (helix-define-key 'space "wk" #'windmove-up)
+  (helix-define-key 'space "wl" #'windmove-right)
+  (helix-define-key 'space "wH" #'buf-move-left)
+  (helix-define-key 'space "wJ" #'buf-move-down)
+  (helix-define-key 'space "wK" #'buf-move-up)
+  (helix-define-key 'space "wL" #'buf-move-right)
+  (helix-define-key 'space "cc" #'my/compile-or-recompile)
+  (helix-define-key 'space "cC" #'ghostel-compile)
+  (helix-define-key 'space "ca" #'eglot-code-actions)
+  (helix-define-key 'space "cr" #'eglot-rename)
+  (helix-define-key 'space "cf" #'eglot-format)
+  (helix-define-key 'space "cs" #'yas-insert-snippet)
+  (helix-define-key 'space "cl" #'flycheck-list-errors)
+  (helix-define-key 'space "qq" #'save-buffers-kill-terminal)
+  (helix-define-key 'space "qr" #'restart-emacs)
+  (helix-define-key 'space "hr" #'my/reload-config)
+  (helix-define-key 'space "ee" #'eww)
+  (helix-define-key 'space "en" #'my/eww-new-buffer)
+  (helix-define-key 'space "eb" #'eww-list-bookmarks)
+  (helix-define-key 'space "eh" #'eww-list-histories)
+  (helix-define-key 'space "ef" #'elfeed)
+  (helix-define-key 'space "eL" #'link-hint-open-link)
+  (helix-define-key 'space "eC" #'link-hint-copy-link)
+  (helix-define-key 'space "ex" #'xwidget-webkit-browse-url)
+  (helix-define-key 'space "da" #'my/denote-toggle-agenda-keyword)
+  (helix-define-key 'space "dj" #'denote-journal-new-or-existing-entry)
+  (helix-define-key 'space "dd" #'denote-menu)
+  (helix-define-key 'space "dmr" #'denote-merge-region)
+  (helix-define-key 'space "dmf" #'denote-merge-file)
+  (helix-define-key 'space "dg" #'my/denote-rg)
+  (helix-define-key 'space "dl" #'denote-link-or-create)
+  (helix-define-key 'space "dn" #'denote)
+  (helix-define-key 'space "dr" #'denote-rename-file)
+  (helix-define-key 'space "ds" #'denote-solo-switch)
+  (helix-define-key 'space "dtl" #'tmr-list-timers)
+  (helix-define-key 'space "dtt" #'tmr)
+  (helix-define-key 'space (kbd "TAB") nil)
+  (helix-define-key 'space (kbd "TAB TAB") #'my/workspace-display)
+  (helix-define-key 'space (kbd "TAB .") #'my/workspace-switch-to)
+  (helix-define-key 'space (kbd "TAB `") #'my/workspace-other)
+  (helix-define-key 'space (kbd "TAB n") #'my/workspace-new)
+  (helix-define-key 'space (kbd "TAB r") #'my/workspace-rename)
+  (helix-define-key 'space (kbd "TAB d") #'my/workspace-kill)
+  (helix-define-key 'space (kbd "TAB x") #'my/workspace-kill-session)
+  (helix-define-key 'space (kbd "TAB s") #'my/workspace-save-session)
+  (helix-define-key 'space (kbd "TAB l") #'my/workspace-load-session)
+  (helix-define-key 'space (kbd "TAB [") #'my/workspace-switch-left)
+  (helix-define-key 'space (kbd "TAB ]") #'my/workspace-switch-right)
+  (dotimes (i 9)
+    (helix-define-key
+     'space
+     (kbd (format "TAB %d" (1+ i)))
+     (let ((index i))
+       (lambda ()
+         (interactive)
+         (my/workspace-switch-to-index index)))))
+  (helix-define-key 'space (kbd "TAB 0") #'my/workspace-switch-to-final)
+  (helix-define-key 'space "ma" #'org-agenda)
+  (helix-define-key 'space "mc" #'my/centered-cursor)
+  (helix-define-key 'space "mf" #'dirvish)
+  (helix-define-key 'space "mi" #'run-irc)
+  (helix-define-key 'space "mr" #'async-shell-command)
+  (helix-define-key 'space "mt" #'ghostel-project)
+  (helix-define-key 'space "mT" #'ghostel-list-buffers)
+  (helix-define-key 'space "mz" #'golden-ratio-mode)
+  (helix-define-key 'space "mo" #'my/global-olivetti-mode)
+  (helix-define-key 'space "ms" #'my-org-sidecar-left)
+  (helix--refresh-overriding-maps))
+
+(with-eval-after-load 'helix
+  (dolist
+      (binding
+       '(("j" . dired-next-line)
+         ("k" . dired-previous-line)
+         ("h" . dired-up-directory)
+         ("l" . dired-find-file)
+         ("q" . quit-window)
+         ("#" . dired-flag-auto-save-files)
+         ("." . dired-clean-directory)
+         ("A" . dired-do-find-regexp)
+         ("B" . dired-do-byte-compile)
+         ("C" . dired-do-copy)
+         ("D" . dired-do-delete)
+         ("E" . dired-do-open)
+         ("gG" . dired-do-chgrp)
+         ("H" . dired-do-hardlink)
+         ("L" . dired-do-load)
+         ("M" . dired-do-chmod)
+         ("O" . dired-do-chown)
+         ("P" . dired-do-print)
+         ("Q" . dired-do-find-regexp-and-replace)
+         ("R" . dired-do-rename)
+         ("S" . dired-do-symlink)
+         ("T" . dired-do-touch)
+         ("X" . dired-do-shell-command)
+         ("Z" . dired-do-compress)
+         ("c" . dired-do-compress-to)
+         ("!" . dired-do-shell-command)
+         ("&" . dired-do-async-shell-command)
+         ("=" . dired-diff)
+         ("M-C-?" . dired-unmark-all-files)
+         ("M-C-d" . dired-tree-down)
+         ("M-C-u" . dired-tree-up)
+         ("M-C-n" . dired-next-subdir)
+         ("M-C-p" . dired-prev-subdir)
+         ("M-{" . dired-prev-marked-file)
+         ("M-}" . dired-next-marked-file)
+         ("%u" . dired-upcase)
+         ("%l" . dired-downcase)
+         ("%d" . dired-flag-files-regexp)
+         ("%g" . dired-mark-files-containing-regexp)
+         ("%m" . dired-mark-files-regexp)
+         ("%r" . dired-do-rename-regexp)
+         ("%C" . dired-do-copy-regexp)
+         ("%H" . dired-do-hardlink-regexp)
+         ("%R" . dired-do-rename-regexp)
+         ("%S" . dired-do-symlink-regexp)
+         ("%&" . dired-flag-garbage-files)
+         ("**" . dired-mark-executables)
+         ("*/" . dired-mark-directories)
+         ("*@" . dired-mark-symlinks)
+         ("*%" . dired-mark-files-regexp)
+         ("*c" . dired-change-marks)
+         ("*s" . dired-mark-subdir-files)
+         ("*m" . dired-mark)
+         ("*u" . dired-unmark)
+         ("*?" . dired-unmark-all-files)
+         ("*!" . dired-unmark-all-marks)
+         ("* <delete>" . dired-unmark-backward)
+         ("* C-n" . dired-next-marked-file)
+         ("* C-p" . dired-prev-marked-file)
+         ("*t" . dired-toggle-marks)
+         ("a" . dired-find-alternate-file)
+         ("i" . dired-toggle-read-only)
+         ("I" . dired-maybe-insert-subdir)
+         ("r" . dired-do-redisplay)
+         ("gy" . dired-show-file-type)
+         ("Y" . dired-copy-filename-as-kill)
+         ("+" . dired-create-directory)
+         ("o" . dired-sort-toggle-or-edit)
+         ("<" . dired-prev-dirline)
+         (">" . dired-next-dirline)
+         ("^" . dired-up-directory)
+         ("-" . dired-up-directory)
+         ("g$" . dired-hide-subdir)
+         ("M-$" . dired-hide-all)
+         ("(" . dired-hide-details-mode)
+         ("M-s a C-s" . dired-do-isearch)
+         ("M-s a M-C-s" . dired-do-isearch-regexp)
+         ("M-s f C-s" . dired-isearch-filenames)
+         ("M-s f M-C-s" . dired-isearch-filenames-regexp)
+         ("<delete>" . dired-unmark-backward)
+         ("m" . dired-mark)
+         ("u" . dired-unmark)
+         ("U" . dired-unmark-all-marks)
+         ("t" . dired-toggle-marks)
+         ("~" . dired-toggle-marks)
+         ("d" . dired-flag-file-deletion)
+         ("x" . dired-do-flagged-delete)
+         ("gj" . dired-next-dirline)
+         ("gk" . dired-prev-dirline)
+         ("]]" . dired-next-dirline)
+         ("[[" . dired-prev-dirline)
+         ("RET" . dired-find-file)
+         ("<return>" . dired-find-file)
+         ("S-RET" . dired-find-file-other-window)
+         ("S-<return>" . dired-find-file-other-window)
+         ("M-RET" . dired-view-file)
+         ("M-<return>" . dired-view-file)
+         ("gf" . dired-find-file)
+         ("g?" . dired-summary)
+         ("gr" . revert-buffer)
+         ("J" . dired-goto-file)
+         ("gx" . browse-url-of-dired-file)
+         ("C-t d" . image-dired-display-thumbs)
+         ("C-t t" . image-dired-tag-files)
+         ("C-t r" . image-dired-delete-tag)
+         ("C-t j" . image-dired-jump-thumbnail-buffer)
+         ("C-t i" . image-dired-dired-display-image)
+         ("C-t x" . image-dired-dired-display-external)
+         ("C-t a" . image-dired-display-thumbs-append)
+         ("C-t ." . image-dired-display-thumb)
+         ("C-t c" . image-dired-dired-comment-files)
+         ("C-t f" . image-dired-mark-tagged-files)
+         ("C-t C-t" . image-dired-dired-toggle-marked-thumbs)
+         ("C-t e" . image-dired-dired-edit-comment-and-tags)
+         (";d" . epa-dired-do-decrypt)
+         (";v" . epa-dired-do-verify)
+         (";s" . epa-dired-do-sign)
+         (";e" . epa-dired-do-encrypt)
+         ("*(" . dired-mark-sexp)
+         ("*." . dired-mark-extension)
+         ("*O" . dired-mark-omitted)
+         ("s" . dired-do-kill-lines)))
+    (helix-define-key
+     'normal
+     (kbd (car binding))
+     (cdr binding)
+     'dired-mode))
+  (helix-define-key 'normal (kbd "<escape>") #'wdired-exit 'wdired-mode)
+  (helix-define-key 'normal "ZZ" #'wdired-finish-edit 'wdired-mode)
+  (helix-define-key 'normal "ZQ" #'wdired-abort-changes 'wdired-mode)
+  (helix-define-key 'normal "j" #'dirvish-next-file 'dirvish-mode)
+  (helix-define-key 'normal "k" #'dirvish-prev-file 'dirvish-mode)
+  (helix-define-key 'normal "h" #'dired-up-directory 'dirvish-mode)
+  (helix-define-key 'normal "l" #'dired-find-file 'dirvish-mode)
+  (helix-define-key 'normal "y" #'dired-do-copy 'dirvish-mode)
+  (helix-define-key 'normal "?" #'dirvish-dispatch 'dirvish-mode)
+  (helix-define-key 'normal "q" #'dirvish-quit 'dirvish-mode)
+  (helix-define-key 'normal "b" #'dirvish-quick-access 'dirvish-mode)
+  (helix-define-key 'normal "f" #'dirvish-file-info-menu 'dirvish-mode)
+  (helix-define-key 'normal "p" #'dirvish-yank 'dirvish-mode)
+  (helix-define-key 'normal "S" #'dirvish-quicksort 'dirvish-mode)
+  (helix-define-key 'normal "F" #'dirvish-layout-toggle 'dirvish-mode)
+  (helix-define-key 'normal "z" #'dirvish-history-jump 'dirvish-mode)
+  (helix-define-key 'normal "Z" #'zoxide-travel 'dirvish-mode)
+  (helix-define-key 'normal "gh" #'dirvish-subtree-up 'dirvish-mode)
+  (helix-define-key 'normal "gl" #'dirvish-subtree-toggle 'dirvish-mode)
+  (helix-define-key 'normal (kbd "TAB") #'dirvish-subtree-toggle 'dirvish-mode)
+  (helix-define-key 'normal "[h" #'dirvish-history-go-backward 'dirvish-mode)
+  (helix-define-key 'normal "]h" #'dirvish-history-go-forward 'dirvish-mode)
+  (helix-define-key 'normal "[e" #'dirvish-emerge-next-group 'dirvish-mode)
+  (helix-define-key 'normal "]e" #'dirvish-emerge-previous-group 'dirvish-mode)
+  (helix-define-key 'normal (kbd "M-b") #'dirvish-history-go-backward 'dirvish-mode)
+  (helix-define-key 'normal (kbd "M-f") #'dirvish-history-go-forward 'dirvish-mode)
+  (helix-define-key 'normal (kbd "M-n") #'dirvish-narrow 'dirvish-mode)
+  (helix-define-key 'normal (kbd "M-m") #'dirvish-mark-menu 'dirvish-mode)
+  (helix-define-key 'normal (kbd "M-s") #'dirvish-setup-menu 'dirvish-mode)
+  (helix-define-key 'normal (kbd "M-e") #'dirvish-emerge-menu 'dirvish-mode)
+  (helix-define-key 'normal "Yl" #'dirvish-copy-file-true-path 'dirvish-mode)
+  (helix-define-key 'normal "Yn" #'dirvish-copy-file-name 'dirvish-mode)
+  (helix-define-key 'normal "Yp" #'dirvish-copy-file-path 'dirvish-mode)
+  (helix-define-key 'normal "Yr" #'dirvish-copy-remote-path 'dirvish-mode)
+  (helix-define-key 'normal "Yy" #'dired-do-copy 'dirvish-mode)
+  (helix-define-key 'normal "ss" #'dirvish-symlink 'dirvish-mode)
+  (helix-define-key 'normal "sS" #'dirvish-relative-symlink 'dirvish-mode)
+  (helix-define-key 'normal "sh" #'dirvish-hardlink 'dirvish-mode)
+  (defun my/magit-yank-whole-line ()
+    (interactive)
+    (kill-ring-save (line-beginning-position) (line-beginning-position 2)))
+
+  (defvar my/magit-last-mode nil)
+
+  (defun my/magit-toggle-text-mode ()
+    (interactive)
+    (cond
+     ((derived-mode-p 'magit-mode)
+      (setq my/magit-last-mode major-mode)
+      (text-mode)
+      (read-only-mode -1))
+     ((and (eq major-mode 'text-mode)
+           (functionp my/magit-last-mode))
+      (funcall my/magit-last-mode)
+      (magit-refresh))
+     (t
+      (user-error "Not in a magit buffer or magit text buffer"))))
+
+  (dolist
+      (binding
+       '(("C-j" . magit-section-forward)
+         ("M-j" . magit-section-forward-sibling)
+         ("gj" . magit-section-forward-sibling)
+         ("]" . magit-section-forward-sibling)
+         ("C-k" . magit-section-backward)
+         ("M-k" . magit-section-backward-sibling)
+         ("gk" . magit-section-backward-sibling)
+         ("[" . magit-section-backward-sibling)
+         ("gr" . magit-refresh)
+         ("gR" . magit-refresh-all)
+         ("x" . magit-delete-thing)
+         ("X" . magit-file-untrack)
+         ("-" . magit-revert-no-commit)
+         ("_" . magit-revert)
+         ("p" . magit-push)
+         ("o" . magit-reset-quickly)
+         ("O" . magit-reset)
+         ("|" . magit-git-command)
+         ("'" . magit-submodule)
+         ("\"" . magit-subtree)
+         ("=" . magit-diff-less-context)
+         ("j" . next-line)
+         ("k" . previous-line)
+         ("gg" . beginning-of-buffer)
+         ("G" . end-of-buffer)
+         ("C-d" . my/helix-scroll-half-page-down)
+         ("C-u" . my/helix-scroll-half-page-up)
+         ("C-f" . scroll-up-command)
+         ("C-b" . scroll-down-command)
+         ("/" . isearch-forward)
+         ("n" . isearch-repeat-forward)
+         ("N" . isearch-repeat-backward)
+         ("q" . magit-mode-bury-buffer)
+         ("S-SPC" . magit-diff-show-or-scroll-up)
+         ("S-DEL" . magit-diff-show-or-scroll-down)
+         ("v" . set-mark-command)
+         ("V" . set-mark-command)
+         ("yy" . my/magit-yank-whole-line)
+         ("yr" . magit-show-refs)
+         ("ys" . magit-copy-section-value)
+         ("yb" . magit-copy-buffer-revision)
+         ("$" . move-end-of-line)
+         ("0" . move-beginning-of-line)
+         ("`" . magit-process-buffer)
+         ("~" . magit-diff-default-context)
+         ("C-t" . my/magit-toggle-text-mode)
+         ("\\" . my/magit-toggle-text-mode)))
+    (helix-define-key
+     'normal
+     (kbd (car binding))
+     (cdr binding)
+     'magit-mode))
+
+  (dolist
+      (binding
+       '(("M-1" . magit-section-show-level-1-all)
+         ("M-2" . magit-section-show-level-2-all)
+         ("M-3" . magit-section-show-level-3-all)
+         ("M-4" . magit-section-show-level-4-all)
+         ("C-<tab>" . magit-section-cycle)
+         ("M-<tab>" . magit-section-cycle)
+         ("gh" . magit-section-up)
+         ("1" . magit-section-show-level-1)
+         ("2" . magit-section-show-level-2)
+         ("3" . magit-section-show-level-3)
+         ("4" . magit-section-show-level-4)
+         ("[" . magit-section-backward-sibling)
+         ("]" . magit-section-forward-sibling)
+         ("TAB" . magit-section-toggle)
+         ("S-TAB" . magit-section-cycle-global)))
+    (helix-define-key
+     'normal
+     (kbd (car binding))
+     (cdr binding)
+     'magit-section-mode))
+
+  (dolist
+      (binding
+       '(("gz" . magit-jump-to-stashes)
+         ("gt" . magit-jump-to-tracked)
+         ("gn" . magit-jump-to-untracked)
+         ("gu" . magit-jump-to-unstaged)
+         ("gs" . magit-jump-to-staged)
+         ("gfu" . magit-jump-to-unpulled-from-upstream)
+         ("gfp" . magit-jump-to-unpulled-from-pushremote)
+         ("gpu" . magit-jump-to-unpushed-to-upstream)
+         ("gpp" . magit-jump-to-unpushed-to-pushremote)
+         ("gh" . magit-section-up)))
+    (helix-define-key
+     'normal
+     (kbd (car binding))
+     (cdr binding)
+     'magit-status-mode))
+
+  (helix-define-key 'normal "gd" #'magit-jump-to-diffstat-or-diff 'magit-diff-mode)
+  (helix-define-key 'normal "=" #'magit-log-toggle-commit-limit 'magit-log-mode)
+
+  (dolist
+      (binding
+       '(("j" . next-line)
+         ("k" . previous-line)
+         ("C-j" . magit-blame-next-chunk)
+         ("gj" . magit-blame-next-chunk)
+         ("gJ" . magit-blame-next-chunk-same-commit)
+         ("C-k" . magit-blame-previous-chunk)
+         ("gk" . magit-blame-previous-chunk)
+         ("gK" . magit-blame-previous-chunk-same-commit)
+         ("n" . isearch-repeat-forward)
+         ("N" . isearch-repeat-backward)
+         ("q" . magit-blame-quit)))
+    (helix-define-key
+     'normal
+     (kbd (car binding))
+     (cdr binding)
+     'magit-blame-read-only-mode))
+
+  (with-eval-after-load 'magit
+    (defun my/magit-stage-untracked-file-with-intent ()
+      (interactive)
+      (when (and (derived-mode-p 'magit-mode)
+                 (magit-apply--get-selection)
+                 (eq (magit-diff-type) 'untracked))
+        (magit-stage-untracked t)))
+    (define-key magit-file-section-map (kbd "I")
+                #'my/magit-stage-untracked-file-with-intent)
+    (define-key magit-file-section-map (kbd "RET")
+                #'magit-diff-visit-worktree-file)
+    (define-key magit-hunk-section-map (kbd "RET")
+                #'magit-diff-visit-worktree-file)
+    (define-key magit-file-section-map (kbd "S-<return>")
+                #'magit-diff-visit-file)
+    (define-key magit-hunk-section-map (kbd "S-<return>")
+                #'magit-diff-visit-file))
+
+  (helix-define-key 'normal "q" #'quit-window 'erc-mode)
+  (helix-define-key 'normal "Q" #'my/erc-quit-all 'erc-mode)
+  (helix-define-key 'normal "gb" #'my/erc-switch-channel 'erc-mode)
+  (helix-define-key 'normal "gn" #'erc-track-switch-buffer 'erc-mode)
+  (helix-define-key 'normal "gH" #'my/erc-fetch-history 'erc-mode)
+  (helix-define-key 'normal "go" #'erc-channel-names 'erc-mode)
+  (helix-define-key 'normal "gj" #'erc-join-channel 'erc-mode)
+  (helix-define-key 'normal "gl" #'my/erc-list-channels 'erc-mode)
+  (helix-define-key 'normal "gr" #'my/erc-reconnect 'erc-mode)
+  (helix-define-key 'normal (kbd "RET") #'erc-send-current-line 'erc-mode)
+  (helix-define-key 'insert (kbd "M-n") #'erc-track-switch-buffer 'erc-mode)
+  (helix-define-key 'insert (kbd "C-k") #'erc-previous-command 'erc-mode)
+  (helix-define-key 'insert (kbd "C-j") #'erc-next-command 'erc-mode)
+  (helix-define-key 'normal "q" #'quit-window 'eww-mode)
+  (helix-define-key 'normal "B" #'eww-add-bookmark 'eww-mode)
+  (helix-define-key 'normal "r" #'eww-readable 'eww-mode)
+  (helix-define-key 'normal "i" #'my/eww-toggle-images 'eww-mode)
+  (helix-define-key 'normal "y" #'my/eww-copy-as-org 'eww-mode)
+  (helix-define-key 'normal "d" #'eww-download 'eww-mode)
+  (helix-define-key 'normal "q" #'quit-window 'elfeed-search-mode)
+  (helix-define-key 'normal "q" #'quit-window 'elfeed-show-mode)
+  (helix-define-key 'normal "gr" #'elfeed-update 'elfeed-search-mode)
+  (helix-define-key 'normal "f" #'link-hint-open-link 'elfeed-search-mode)
+  (helix-define-key 'normal "F" #'link-hint-copy-link 'elfeed-search-mode)
+  (helix-define-key 'normal "f" #'link-hint-open-link 'elfeed-show-mode)
+  (helix-define-key 'normal "F" #'link-hint-copy-link 'elfeed-show-mode)
+  (dolist
+      (binding
+       '(("RET" . org-open-at-point)
+         ("<return>" . org-open-at-point)
+         ("TAB" . org-cycle)
+         ("<tab>" . org-cycle)
+         ("S-TAB" . org-global-cycle)
+         ("S-<tab>" . org-global-cycle)
+         ("<backtab>" . org-global-cycle)
+         ("C-c C-c" . org-ctrl-c-ctrl-c)
+         ("C-c C-o" . org-open-at-point)
+         ("{" . org-backward-paragraph)
+         ("}" . org-forward-paragraph)
+         ("(" . org-backward-sentence)
+         (")" . org-forward-sentence)
+         ("gj" . org-next-visible-heading)
+         ("gk" . org-previous-visible-heading)
+         ("gh" . outline-up-heading)
+         ("gH" . org-up-element)
+         ("gl" . org-next-link)
+         ("gL" . org-previous-link)
+         ("]h" . org-next-visible-heading)
+         ("[h" . org-previous-visible-heading)
+         ("]]" . org-forward-heading-same-level)
+         ("[[" . org-backward-heading-same-level)
+         ("za" . org-cycle)
+         ("zc" . outline-hide-subtree)
+         ("zo" . outline-show-subtree)
+         ("zC" . outline-hide-sublevels)
+         ("zO" . outline-show-all)
+         ("t" . org-todo)
+         ("T" . org-insert-todo-heading-respect-content)
+         ("M-RET" . org-insert-heading-respect-content)
+         ("M-S-RET" . org-insert-todo-heading-respect-content)
+         ("M-h" . org-metaleft)
+         ("M-l" . org-metaright)
+         ("M-k" . org-metaup)
+         ("M-j" . org-metadown)
+         ("M-H" . org-shiftmetaleft)
+         ("M-L" . org-shiftmetaright)
+         ("M-K" . org-shiftmetaup)
+         ("M-J" . org-shiftmetadown)
+         ("<" . org-promote-subtree)
+         (">" . org-demote-subtree)
+         ("," . org-priority)
+         ("." . org-time-stamp)
+         ("!" . org-time-stamp-inactive)
+         ("C-c C-t" . org-todo)
+         ("C-c C-s" . org-schedule)
+         ("C-c C-d" . org-deadline)
+         ("C-c C-x C-i" . org-clock-in)
+         ("C-c C-x C-o" . org-clock-out)))
+    (helix-define-key
+     'normal
+     (kbd (car binding))
+     (cdr binding)
+     'org-mode))
+  (helix-define-key 'normal "ZZ" #'org-capture-finalize 'org-capture-mode)
+  (helix-define-key 'normal "ZQ" #'org-capture-kill 'org-capture-mode)
+  (helix-define-key 'normal "ZR" #'org-capture-refile 'org-capture-mode)
+  (with-eval-after-load 'org
+    (org-defkey org-read-date-minibuffer-local-map
+                (kbd "M-l") #'org-calendar-forward-day)
+    (org-defkey org-read-date-minibuffer-local-map
+                (kbd "M-h") #'org-calendar-backward-day)
+    (org-defkey org-read-date-minibuffer-local-map
+                (kbd "M-j") #'org-calendar-forward-week)
+    (org-defkey org-read-date-minibuffer-local-map
+                (kbd "M-k") #'org-calendar-backward-week)
+    (org-defkey org-read-date-minibuffer-local-map
+                (kbd "M-L") #'org-calendar-forward-month)
+    (org-defkey org-read-date-minibuffer-local-map
+                (kbd "M-H") #'org-calendar-backward-month)
+    (org-defkey org-read-date-minibuffer-local-map
+                (kbd "M-J") #'org-calendar-forward-year)
+    (org-defkey org-read-date-minibuffer-local-map
+                (kbd "M-K") #'org-calendar-backward-year))
+  (dolist
+      (binding
+       '(("j" . ibuffer-forward-line)
+         ("k" . ibuffer-backward-line)
+         ("RET" . ibuffer-visit-buffer)
+         ("<return>" . ibuffer-visit-buffer)
+         ("l" . ibuffer-visit-buffer)
+         ("S-RET" . ibuffer-visit-buffer-other-window)
+         ("S-<return>" . ibuffer-visit-buffer-other-window)
+         ("q" . quit-window)
+         ("m" . ibuffer-mark-forward)
+         ("u" . ibuffer-unmark-forward)
+         ("U" . ibuffer-unmark-all-marks)
+         ("d" . ibuffer-mark-for-delete)
+         ("x" . ibuffer-do-kill-on-deletion-marks)
+         ("t" . ibuffer-toggle-marks)
+         ("=" . ibuffer-diff-with-file)
+         ("M-g" . ibuffer-jump-to-buffer)
+         ("J" . ibuffer-jump-to-buffer)
+         ("C-d" . my/helix-scroll-half-page-down)
+         ("C-u" . my/helix-scroll-half-page-up)
+         ("DEL" . ibuffer-unmark-backward)
+         ("M-DEL" . ibuffer-unmark-all)
+         ("* *" . ibuffer-mark-special-buffers)
+         ("* c" . ibuffer-change-marks)
+         ("* M" . ibuffer-mark-by-mode)
+         ("* m" . ibuffer-mark-modified-buffers)
+         ("* u" . ibuffer-mark-unsaved-buffers)
+         ("* s" . ibuffer-mark-special-buffers)
+         ("* r" . ibuffer-mark-read-only-buffers)
+         ("* /" . ibuffer-mark-dired-buffers)
+         ("* e" . ibuffer-mark-dissociated-buffers)
+         ("* h" . ibuffer-mark-help-buffers)
+         ("* z" . ibuffer-mark-compressed-file-buffers)
+         ("." . ibuffer-mark-old-buffers)
+         ("}" . ibuffer-forward-next-marked)
+         ("{" . ibuffer-backwards-next-marked)
+         ("M-}" . ibuffer-forward-next-marked)
+         ("M-{" . ibuffer-backwards-next-marked)
+         ("gr" . ibuffer-update)
+         ("gR" . ibuffer-redisplay)
+         ("`" . ibuffer-switch-format)
+         ("-" . ibuffer-add-to-tmp-hide)
+         ("+" . ibuffer-add-to-tmp-show)
+         ("X" . ibuffer-bury-buffer)
+         ("," . ibuffer-toggle-sorting-mode)
+         ("o i" . ibuffer-invert-sorting)
+         ("o a" . ibuffer-do-sort-by-alphabetic)
+         ("o v" . ibuffer-do-sort-by-recency)
+         ("o s" . ibuffer-do-sort-by-size)
+         ("o f" . ibuffer-do-sort-by-filename/process)
+         ("o m" . ibuffer-do-sort-by-major-mode)
+         ("s RET" . ibuffer-filter-by-mode)
+         ("s <return>" . ibuffer-filter-by-mode)
+         ("s m" . ibuffer-filter-by-used-mode)
+         ("s M" . ibuffer-filter-by-derived-mode)
+         ("s n" . ibuffer-filter-by-name)
+         ("s *" . ibuffer-filter-by-starred-name)
+         ("s f" . ibuffer-filter-by-filename)
+         ("s b" . ibuffer-filter-by-basename)
+         ("s ." . ibuffer-filter-by-file-extension)
+         ("s <" . ibuffer-filter-by-size-lt)
+         ("s >" . ibuffer-filter-by-size-gt)
+         ("s i" . ibuffer-filter-by-modified)
+         ("s v" . ibuffer-filter-by-visiting-file)
+         ("s c" . ibuffer-filter-by-content)
+         ("s e" . ibuffer-filter-by-predicate)
+         ("s r" . ibuffer-switch-to-saved-filters)
+         ("s a" . ibuffer-add-saved-filters)
+         ("s x" . ibuffer-delete-saved-filters)
+         ("s d" . ibuffer-decompose-filter)
+         ("s s" . ibuffer-save-filters)
+         ("s p" . ibuffer-pop-filter)
+         ("s <up>" . ibuffer-pop-filter)
+         ("s !" . ibuffer-negate-filter)
+         ("s t" . ibuffer-exchange-filters)
+         ("s TAB" . ibuffer-exchange-filters)
+         ("s <tab>" . ibuffer-exchange-filters)
+         ("s o" . ibuffer-or-filter)
+         ("s |" . ibuffer-or-filter)
+         ("s &" . ibuffer-and-filter)
+         ("s g" . ibuffer-filters-to-filter-group)
+         ("s P" . ibuffer-pop-filter-group)
+         ("s S-<up>" . ibuffer-pop-filter-group)
+         ("s D" . ibuffer-decompose-filter-group)
+         ("s /" . ibuffer-filter-disable)
+         ("M-n" . ibuffer-forward-filter-group)
+         ("TAB" . ibuffer-forward-filter-group)
+         ("<tab>" . ibuffer-forward-filter-group)
+         ("M-p" . ibuffer-backward-filter-group)
+         ("<backtab>" . ibuffer-backward-filter-group)
+         ("M-j" . ibuffer-jump-to-filter-group)
+         ("gx" . ibuffer-kill-line)
+         ("C-y" . ibuffer-yank)
+         ("s S" . ibuffer-save-filter-groups)
+         ("s R" . ibuffer-switch-to-saved-filter-groups)
+         ("s X" . ibuffer-delete-saved-filter-groups)
+         ("s \\" . ibuffer-clear-filter-groups)
+         ("% n" . ibuffer-mark-by-name-regexp)
+         ("% m" . ibuffer-mark-by-mode-regexp)
+         ("% f" . ibuffer-mark-by-file-name-regexp)
+         ("% g" . ibuffer-mark-by-content-regexp)
+         ("% L" . ibuffer-mark-by-locked)
+         ("C-t" . ibuffer-visit-tags-table)
+         ("|" . ibuffer-do-shell-command-pipe)
+         ("!" . ibuffer-do-shell-command-file)
+         ("A" . ibuffer-do-view)
+         ("D" . ibuffer-do-delete)
+         ("E" . ibuffer-do-eval)
+         ("F" . ibuffer-do-shell-command-file)
+         ("I" . ibuffer-do-query-replace-regexp)
+         ("H" . ibuffer-do-view-other-frame)
+         ("N" . ibuffer-do-shell-command-pipe-replace)
+         ("M" . ibuffer-do-toggle-modified)
+         ("O" . ibuffer-do-occur)
+         ("P" . ibuffer-do-print)
+         ("Q" . ibuffer-do-query-replace)
+         ("S" . ibuffer-do-save)
+         ("T" . ibuffer-do-toggle-read-only)
+         ("r" . ibuffer-do-replace-regexp)
+         ("V" . ibuffer-do-revert)
+         ("W" . ibuffer-do-view-and-eval)
+         ("K" . ibuffer-do-kill-lines)
+         ("yf" . ibuffer-copy-filename-as-kill)
+         ("yb" . ibuffer-copy-buffername-as-kill)
+         ("gv" . ibuffer-do-view)
+         ("gV" . ibuffer-do-view-horizontally)))
+    (helix-define-key
+     'normal
+     (kbd (car binding))
+     (cdr binding)
+     'ibuffer-mode))
+  (helix-define-key 'normal "K" #'my/eldoc-and-jump)
+  (helix-define-key 'normal "]d" #'flycheck-next-error)
+  (helix-define-key 'normal "[d" #'flycheck-previous-error)
+  (helix-define-key 'normal "]c" #'diff-hl-next-hunk)
+  (helix-define-key 'normal "[c" #'diff-hl-previous-hunk)
+  (helix-define-key 'normal "]b" #'switch-to-next-buffer)
+  (helix-define-key 'normal "[b" #'switch-to-prev-buffer)
+  (helix-define-key 'normal "]t" #'tab-next)
+  (helix-define-key 'normal "[t" #'tab-previous)
+  (helix-define-key 'normal "gcc"
+                    (lambda ()
+                      (interactive)
+                      (unless (use-region-p)
+                        (comment-or-uncomment-region
+                         (line-beginning-position)
+                         (line-end-position)))))
+  (helix-define-key 'normal "j" #'croc-ui-next 'croc-ui-mode)
+  (helix-define-key 'normal "k" #'croc-ui-previous 'croc-ui-mode)
+  (helix-define-key 'normal (kbd "RET") #'croc-ui-open-log 'croc-ui-mode)
+  (helix-define-key 'normal "j" #'sync-ui-next 'sync-ui-mode)
+  (helix-define-key 'normal "k" #'sync-ui-previous 'sync-ui-mode)
+  (helix-define-key 'normal (kbd "RET") #'sync-ui-magit 'sync-ui-mode)
+  (helix-define-key 'normal (kbd "RET") #'feed-ui-open-thread-at-point 'feed-ui-mode)
+  (helix-define-key 'normal "r" #'feed-ui-reply-at-point 'feed-ui-mode)
+  (helix-define-key 'normal "m" #'feed-ui-mute-at-point 'feed-ui-mode)
+  (helix-define-key 'normal "g" #'feed-ui-sync 'feed-ui-mode)
+  (helix-define-key 'normal "q" #'feed-ui-back-or-quit 'feed-ui-mode)
+  (helix-define-key 'normal (kbd "RET") #'denote-menu-open-at-point 'denote-menu-mode)
+  (helix-define-key 'normal "o" #'denote-menu-open-at-point 'denote-menu-mode)
+  (helix-define-key 'normal "/" #'denote-menu-filter 'denote-menu-mode)
+  (helix-define-key 'normal "c" #'denote-menu-clear-filter 'denote-menu-mode)
+  (helix-define-key 'normal "s" #'denote-menu-cycle-sort 'denote-menu-mode)
+  (helix-define-key 'normal "S" #'denote-menu-toggle-direction 'denote-menu-mode)
+  (helix-define-key 'normal "e" #'denote-menu-export-to-dired 'denote-menu-mode)
+  (helix-define-key 'normal "n" #'denote-menu-new-note 'denote-menu-mode)
+  (helix-define-key 'normal "r" #'denote-menu-refresh 'denote-menu-mode)
+  (helix-define-key 'normal "q" #'vui-quit 'denote-menu-mode)
+  (helix-define-key 'normal "q" #'quit-window 'pass-mode)
+  (helix-define-key 'normal "j" #'pass-next-entry 'pass-mode)
+  (helix-define-key 'normal "k" #'pass-prev-entry 'pass-mode)
+  (helix-define-key 'normal (kbd "RET") #'pass-view 'pass-mode)
+  (helix-define-key 'normal "d" #'pass-kill 'pass-mode)
+  (helix-define-key 'normal "y" #'pass-copy 'pass-mode)
+  (helix-define-key 'normal "Y" #'pass-copy-field 'pass-mode)
+  (helix-define-key 'normal "e" #'pass-edit 'pass-mode)
+  (helix-define-key 'normal "a" #'pass-insert 'pass-mode)
+  (helix-define-key 'normal "G" #'pass-insert-generated 'pass-mode)
+  (helix-define-key 'normal "o" #'pass-otp-options 'pass-mode)
+  (helix-define-key 'normal "r" #'pass-rename 'pass-mode)
+  (helix-define-key 'normal "/" #'isearch-forward 'pass-mode)
+  (helix-define-key 'normal "q" #'quit-window 'pass-view-mode)
+  (helix-define-key 'normal "t" #'pass-view-toggle-password 'pass-view-mode)
+  (helix-define-key 'normal "y" #'pass-copy 'pass-view-mode)
+  (helix-define-key 'normal "Y" #'pass-copy-field 'pass-view-mode)
+  (helix-define-key 'normal (kbd "C-r") #'my/atuin-history 'eshell-mode)
+  (helix-define-key 'normal (kbd "C-l") #'my/eshell-clear 'eshell-mode)
+  (helix-define-key 'insert (kbd "C-r") #'my/atuin-history 'eshell-mode)
+  (helix-define-key 'insert (kbd "C-l") #'my/eshell-clear 'eshell-mode)
+  (setq helix--mode-keybindings
+        (assoc-delete-all
+         (cons 'async-shell-command-mode 'normal)
+         helix--mode-keybindings))
+  (helix-define-key 'normal "q" #'quit-window 'shell-command-mode)
+  (helix-define-key 'normal "J" #'passage-goto-entry 'passage-mode)
+  (helix-define-key 'normal "U" #'passage-browse-url 'passage-mode)
+  (helix-define-key 'normal "a" #'passage-insert 'passage-mode)
+  (helix-define-key 'normal "G" #'passage-insert-generated 'passage-mode)
+  (helix-define-key 'normal "R" #'passage-rename 'passage-mode)
+  (helix-define-key 'normal "x" #'passage-kill 'passage-mode)
+  (helix-define-key 'normal "E" #'passage-edit 'passage-mode)
+  (helix-define-key 'normal "j" #'passage-next-entry 'passage-mode)
+  (helix-define-key 'normal "k" #'passage-prev-entry 'passage-mode)
+  (helix-define-key 'normal "gr" #'passage-update-buffer 'passage-mode)
+  (helix-define-key 'normal "o" #'passage-otp-options 'passage-mode)
+  (helix-define-key 'normal "y" #'passage-copy 'passage-mode)
+  (helix-define-key 'normal "Y" #'passage-copy-field 'passage-mode)
+  (helix-define-key 'normal "b" #'passage-copy-username 'passage-mode)
+  (helix-define-key 'normal "u" #'passage-copy-url 'passage-mode)
+  (helix-define-key 'normal "e" #'my/passage-copy-entry-name 'passage-mode)
+  (helix-define-key 'normal "O" #'passage-otp-token-copy 'passage-mode)
+  (helix-define-key 'normal (kbd "M-O") #'passage-otp-uri-copy 'passage-mode)
+  (helix-define-key 'normal "C" #'my/passage-clear-kill-ring 'passage-mode)
+  (helix-define-key 'normal "]]" #'passage-next-directory 'passage-mode)
+  (helix-define-key 'normal "[[" #'passage-prev-directory 'passage-mode)
+  (helix-define-key 'normal (kbd "RET") #'passage-view 'passage-mode)
+  (helix-define-key 'normal "q" #'my/passage-quit 'passage-mode)
+  (helix-define-key 'normal "Q" #'my/passage-kill-view-buffers-and-quit 'passage-mode)
+  (helix-define-key 'normal "q" #'quit-window 'passage-view-mode)
+  (helix-define-key 'normal "Q" #'kill-current-buffer 'passage-view-mode)
+  (helix-define-key 'normal "t" #'passage-view-toggle-password 'passage-view-mode)
+  (helix-define-key 'normal "y" #'passage-view-copy-password 'passage-view-mode)
+  (helix-define-key 'normal "O" #'passage-view-copy-token 'passage-view-mode)
+  (helix-define-key 'normal "gq" #'passage-view-qrcode 'passage-view-mode)
+  (helix-define-key 'normal "gt" #'ghostel-next 'ghostel-mode)
+  (helix-define-key 'normal "gT" #'ghostel-previous 'ghostel-mode)
+  (helix-define-key 'normal "gn" #'ghostel 'ghostel-mode)
+  (helix-define-key 'normal "gb" #'ghostel-list-buffers 'ghostel-mode)
+  (helix-define-key 'normal "gt" #'my/workspace-switch-right)
+  (helix-define-key 'normal "gT" #'my/workspace-switch-left)
+  (my/helix-refresh-all-buffers))
+
+(with-eval-after-load 'helix
+  (helix-define-key 'goto "%" #'sp-forward-sexp))
 
 ;; Always-available IRC entry points so `M-x run-irc` works from any daemon
 ;; (hub, work, standalone). Calling `erc-tls` autoloads ERC on demand.
@@ -487,23 +1539,7 @@ Temporarily disables notifications during the fetch."
                    (format "ERC buffer %s is connected. Really kill (will part channel)? "
                            (buffer-name)))
                 t)))
-
-  (general-def 'normal erc-mode-map
-    "q"   'quit-window
-    "Q"   'my/erc-quit-all
-    "gb"  'my/erc-switch-channel
-    "gn"  'erc-track-switch-buffer
-    "gH"  'my/erc-fetch-history
-    "go"  'erc-channel-names
-    "gj"  'erc-join-channel
-    "gl"  'my/erc-list-channels
-    "gr"  'my/erc-reconnect
-    "RET" 'erc-send-current-line)
-
-  (general-def '(normal insert) erc-mode-map
-    "M-n" 'erc-track-switch-buffer
-    "C-k" 'erc-previous-command
-    "C-j" 'erc-next-command))
+)
 
 (defvar my/centered-cursor-enabled nil)
 
@@ -527,7 +1563,6 @@ Temporarily disables notifications during the fetch."
 
 (use-package clipetty
   :ensure t
-  :after evil
   :config
   (setq interprogram-cut-function nil)
   (defun my/send-to-clipboard (text)
@@ -535,13 +1570,9 @@ Temporarily disables notifications during the fetch."
       (if (display-graphic-p)
           (gui-select-text text)
         (clipetty-cut #'ignore text))))
-  (defun my/evil-yank-to-clipboard (_beg _end &optional _type register _yank-handler)
-    (when (and (not register)
-               (memq this-command '(evil-yank evil-yank-line)))
-      (my/send-to-clipboard (car kill-ring))))
-  (advice-add 'evil-yank :after #'my/evil-yank-to-clipboard)
   (defun my/elfeed-yank-to-clipboard (&rest _)
     (my/send-to-clipboard (car kill-ring)))
+  (advice-add 'helix-kill-ring-save :after #'my/elfeed-yank-to-clipboard)
   (advice-add 'elfeed-search-yank :after #'my/elfeed-yank-to-clipboard)
   (advice-add 'link-hint-copy-link :after #'my/elfeed-yank-to-clipboard)
   (with-eval-after-load 'pass
@@ -954,7 +1985,7 @@ Temporarily disables notifications during the fetch."
   (add-hook 'org-mode-hook (lambda () (setq-local auto-save-default nil))))
 
 (use-package age
-  :ensure t
+  :ensure (:wait t)
   :demand t
   :custom
   (age-program "rage")
@@ -1005,45 +2036,51 @@ TITLE names the new denote-style file in ~/org."
           (save-buffer)
           (message "Migrated %d crypt headings to %s" count target))))))
 
+(use-package f
+  :ensure (:wait t))
+
+(use-package s
+  :ensure (:wait t))
+
+(use-package with-editor
+  :ensure (:wait t))
+
 (use-package passage
-  :ensure (:host github :repo "anticomputer/passage.el")
+  :ensure (:host nil :repo "ssh://git@git.cashmere.rs/cashmere/passage.el.git")
   :custom
   (auth-source-passage-filename "~/pass")
+  (passage-username-fallback-on-filename t)
   :config
-  (with-eval-after-load 'evil
-    (evil-define-key 'normal passage-mode-map
-
-      "J" #'passage-goto-entry
-      "U" #'passage-browse-url
-      "a" #'passage-insert
-      "G" #'passage-insert-generated
-      "R" #'passage-rename
-      "x" #'passage-kill
-      "E" #'passage-edit
-      "j" #'passage-next-entry
-      "k" #'passage-prev-entry
-      "gr" #'passage-update-buffer
-      "o" #'passage-otp-options
-      "]]" #'passage-next-directory
-      "[[" #'passage-prev-directory
-      (kbd "RET") #'passage-view
-      "q" #'passage-quit)
-    (evil-define-key 'normal passage-view-mode-map
-      "q" #'quit-window
-      "t" #'passage-view-toggle-password
-      "y" #'passage-view-copy-password))
-  (with-eval-after-load 'evil-collection
-    (evil-collection-define-operator-key 'yank 'passage-mode-map
-      "f" #'passage-copy-field
-      "n" #'passage-copy-username
-      "u" #'passage-copy-url))
-  ;; The yank-operator sub-keys ("yn"/"yu"/"yf") are invisible to
-  ;; `where-is', so hardcode their header labels (evil-collection-pass
-  ;; uses the same trick for pass).
   (defconst my/passage-command-to-label
-    '((passage-copy-field . "yf")
-      (passage-copy-username . "yn")
-      (passage-copy-url . "yu")))
+    '((passage-copy . "y")
+      (passage-copy-field . "Y")
+      (passage-copy-username . "b")
+      (passage-copy-url . "u")
+      (passage-otp-token-copy . "O")
+      (passage-otp-uri-copy . "M-O")))
+
+  (defun my/passage-copy-entry-name ()
+    (interactive)
+    (passage--with-closest-entry entry
+      (kill-new entry)
+      (message "Copied entry name: %s" entry)))
+
+  (defun my/passage-clear-kill-ring ()
+    (interactive)
+    (passage-store-clear))
+
+  (defun my/passage-quit ()
+    (interactive)
+    (quit-window))
+
+  (defun my/passage-kill-view-buffers-and-quit ()
+    (interactive)
+    (dolist (buffer (buffer-list))
+      (with-current-buffer buffer
+        (when (eq major-mode 'passage-view-mode)
+          (kill-buffer buffer))))
+    (quit-window))
+
   (defun my/passage-display-keybinding (f &rest args)
     "Render `my/passage-command-to-label' labels in the passage header."
     (if-let* ((label (alist-get (car args) my/passage-command-to-label)))
@@ -1442,10 +2479,6 @@ Skips capture tasks and projects."
 
 (defun my/org-capture-meeting-to-journal ()
   (my/org-capture-to-journal "\n* Meeting: "))
-
-(with-eval-after-load 'eglot
-  (add-to-list 'eglot-server-programs
-               '(org-mode . ("harper-ls" "--stdio"))))
 
 (defun my/org-capture-task-to-journal ()
   (let* ((context (read-string "Task: "))
@@ -2700,37 +3733,11 @@ so the working-tree diff stays visible until the user explicitly stages."
                (<= (window-start) (point-max)))
       (funcall orig))))
 
-(use-package evil
-  :ensure (:wait t)
-  :init
-  (setq evil-want-integration t)
-  (setq evil-want-keybinding nil)
-  (setq evil-want-C-u-delete t)
-  (setq evil-want-C-u-scroll t)
-  (setq evil-undo-system 'undo-redo)
-  (setq evil-split-window-below t)
-  (setq evil-vsplit-window-right t)
-  (setq evil-paste-from-register nil)
-  :config
-  (evil-mode 1)
-  (evil-set-initial-state 'help-mode 'emacs)
-  (evil-set-initial-state 'messages-buffer-mode 'normal)
-  (evil-set-initial-state 'dired-mode 'normal)
-  (evil-set-initial-state 'ibuffer-mode 'normal)
-  (evil-set-initial-state 'erc-mode 'normal)
-  (define-key evil-insert-state-map (kbd "C-w") 'evil-window-map))
-
 (modify-syntax-entry ?_ "w")
 
 (defun my/eldoc-and-jump ()
-  "Show documentation at point. Works in both GUI and terminal."
   (interactive)
-  ;; (if (display-graphic-p)
-  ;;     (eldoc-box-help-at-point)
-  ;;   (eldoc-doc-buffer t))
   (eldoc-doc-buffer t))
-
-(define-key evil-normal-state-map (kbd "K") #'my/eldoc-and-jump)
 
 (use-package smartparens
   :ensure t
@@ -2739,129 +3746,6 @@ so the working-tree diff stays visible until the user explicitly stages."
   :config
   (require 'smartparens-config)
   (sp-local-pair 'org-mode "~" nil :actions nil))
-(use-package evil-smartparens
-  :ensure t
-  :after evil-collection
-  :hook (smartparens-global-mode . evil-smartparens-mode))
-
-(use-package evil-collection
-  :after evil
-  :ensure (:wait t)
-  :config
-  (evil-collection-init))
-
-(use-package evil-surround
-  :ensure t
-  :after evil-collection
-  :config
-  (global-evil-surround-mode 1))
-
-(use-package evil-matchit
-  :ensure t
-  :after evil-collection
-  :config
-  (global-evil-matchit-mode 1))
-
-(use-package evil-textobj-anyblock
-  :ensure t
-  :after evil
-  :config
-  (define-key evil-inner-text-objects-map "b" 'evil-textobj-anyblock-inner-block)
-  (define-key evil-outer-text-objects-map "b" 'evil-textobj-anyblock-a-block)
-  
-  (setq evil-textobj-anyblock-blocks
-        '(("(" . ")")
-          ("{" . "}")
-          ("\\[" . "\\]")
-          ("<" . ">"))))
-
-(evil-define-text-object my-evil-textobj-anyblock-inner-quote
-  (count &optional beg end type)
-  "Select the closest outer quote."
-  (let ((evil-textobj-anyblock-blocks
-         '(("'" . "'")
-           ("\"" . "\"")
-           ("`" . "'")
-           ("“" . "”"))))
-    (evil-textobj-anyblock--make-textobj beg end type count nil)))
-
-(evil-define-text-object my-evil-textobj-anyblock-a-quote
-  (count &optional beg end type)
-  "Select the closest outer quote."
-  (let ((evil-textobj-anyblock-blocks
-         '(("'" . "'")
-           ("\"" . "\"")
-           ("`" . "'")
-           ("“" . "”"))))
-    (evil-textobj-anyblock--make-textobj beg end type count t)))
-
-(define-key evil-inner-text-objects-map "q" 'my-evil-textobj-anyblock-inner-quote)
-(define-key evil-outer-text-objects-map "q" 'my-evil-textobj-anyblock-a-quote)
-
-(use-package evil-mc
-  :ensure t
-  :after evil
-  :config
-  (global-evil-mc-mode 1)
-  
-  (defun my/evil-visual-block-p ()
-    (and (bound-and-true-p evil-visual-selection)
-         (eq evil-visual-selection 'block)))
-
-  (defun my/evil-mc-visual-block-insert ()
-    "Erstellt Cursor am Anfang des Blocks und wechselt in Insert-Mode."
-    (interactive)
-    (if (my/evil-visual-block-p)
-        (progn
-          (evil-mc-make-cursor-in-visual-selection-beg)
-          (evil-insert 1))
-      (call-interactively 'evil-insert)))
-
-  (defun my/evil-mc-visual-block-append ()
-    "Erstellt Cursor am Ende des Blocks und wechselt in Insert-Mode."
-    (interactive)
-    (if (my/evil-visual-block-p)
-        (progn
-          (evil-mc-make-cursor-in-visual-selection-end)
-          (evil-append 1))
-      ;; Fallback: normales Verhalten
-      (call-interactively 'evil-append)))
-
-  (define-key evil-visual-state-map (kbd "I") 'my/evil-mc-visual-block-insert)
-  (define-key evil-visual-state-map (kbd "A") 'my/evil-mc-visual-block-append))
-
-(use-package flash
-  :ensure (:host github :repo "Prgebish/flash")
-  :after evil
-  :custom
-  (flash-multi-window t)
-  (flash-backdrop t)
-  (flash-case-fold t)
-  (flash-autojump t)
-  (flash-highlight-matches t)
-  (flash-label-position 'overlay)
-  (flash-jump-position 'start)
-  (flash-char-jump-labels t)
-  (flash-char-multi-line nil)
-  (flash-nohlsearch t)
-  (flash-jumplist t)
-  (flash-rainbow t)
-  (flash-rainbow-shade 5)
-  :config
-  ;; Evil integration: binds gs in normal/visual/operator + enhanced f/t/F/T
-  (require 'flash-evil)
-  (flash-evil-setup t)
-
-  ;; Restore ; and , after flash-char overwrites them
-  ;; ; is used as prefix for prev-navigation (;b, ;d)
-  ;; , is the local leader
-  (evil-define-key* '(normal visual motion) 'global
-    (kbd ";") nil
-    (kbd ",") nil)
-
-  ;; Search integration: labels during C-s, /, ?
-  (require 'flash-isearch)
-  (flash-isearch-mode 1))
 
 (setq undo-limit 800000
       undo-strong-limit 12000000
@@ -2893,14 +3777,6 @@ so the working-tree diff stays visible until the user explicitly stages."
 		  (todo . " %i ")
 		  (tags . " %i ")
 		  (search . " %i "))))
-
-(use-package evil-org
-  :ensure t
-  :after org
-  :hook (org-mode . evil-org-mode)
-  :config
-  (require 'evil-org-agenda)
-  (evil-org-agenda-set-keys))
 
 (use-package nerd-icons-dired
   :if ek-use-nerd-fonts                   ;; Load the package only if the user has configured to use nerd fonts.
@@ -2978,7 +3854,7 @@ created later still get them."
 (use-package batppuccin
   :ensure t
   :config
-  (load-theme 'batppuccin-mocha t))
+  (load-theme 'batppuccin-latte t))
 
 ;; (use-package solarized-theme
 ;;   :ensure t
@@ -3013,9 +3889,12 @@ created later still get them."
    "-l --almost-all --human-readable --group-directories-first --no-group")
 
   :config
+  (require 'dirvish-extras)
+  (require 'dirvish-emerge)
   (setq dired-dwim-target t)
   (setq delete-by-moving-to-trash t)
   (setq dired-mouse-drag-files t)
+  (add-hook 'dirvish-setup-hook #'helix--refresh-overriding-maps)
 
   (define-advice dirvish--preview-dps-validate
       (:around (fn &optional dps) tty-media-filter)
@@ -3041,16 +3920,11 @@ created later still get them."
   :ensure nil
   :commands (croc-ui croc-ui-send-files croc-ui-send-directory
              croc-ui-send-text croc-ui-receive)
-  :init
-  (with-eval-after-load 'general
-    (my-leader "oc" '(croc-ui :wk "croc"))))
+)
 
 (use-package sync-ui
   :ensure nil
   :commands (sync-ui))
-  :init
-  (with-eval-after-load 'general
-    (my-leader "oy" '(sync-ui :wk "sync")))
 
 (defun my/reload-config ()
   "Re-tangle config.org and reload the generated config.el in place.
@@ -3328,12 +4202,11 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 
   (defun my/workspace-close-window-or-workspace ()
     (interactive)
-    (let ((delete-fn (if (featurep 'evil) #'evil-window-delete #'delete-window)))
-      (if (or (window-dedicated-p)
-              (my/workspace-protected-p (my/workspace-current-name))
-              (cdr (window-list)))
-          (funcall delete-fn)
-        (my/workspace-kill (my/workspace-current-name)))))
+    (if (or (window-dedicated-p)
+            (my/workspace-protected-p (my/workspace-current-name))
+            (cdr (window-list)))
+        (delete-window)
+      (my/workspace-kill (my/workspace-current-name))))
 
   (defun my/workspace-init-main (&rest _)
     (when persp-mode
@@ -3363,13 +4236,6 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 
   (define-key persp-mode-map [remap delete-window]
               #'my/workspace-close-window-or-workspace)
-  (with-eval-after-load 'evil
-    (define-key persp-mode-map [remap evil-window-delete]
-                #'my/workspace-close-window-or-workspace))
-
-  (add-hook 'persp-filter-save-buffers-functions
-            (lambda (buf)
-              (with-current-buffer buf (derived-mode-p 'erc-mode))))
 
   (defun my/workspace--inhibit-irc-part (orig &rest args)
     (let ((erc-kill-channel-hook nil)
@@ -3395,47 +4261,6 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
       (ibuffer nil (format "*ibuffer: %s*" name)
                (list (cons 'persp t))))))
 
-(my-leader
-  "TAB"     '(:ignore t :wk "workspace")
-  "TAB TAB" '(my/workspace-display :wk "display")
-  "TAB ."   '(my/workspace-switch-to :wk "switch to…")
-  "TAB `"   '(my/workspace-other :wk "last")
-  "TAB n"   '(my/workspace-new :wk "new")
-  "TAB r"   '(my/workspace-rename :wk "rename")
-  "TAB d"   '(my/workspace-kill :wk "delete")
-  "TAB x"   '(my/workspace-kill-session :wk "kill session")
-  "TAB s"   '(my/workspace-save-session :wk "save session")
-  "TAB l"   '(my/workspace-load-session :wk "load session")
-  "TAB ["   '(my/workspace-switch-left :wk "prev")
-  "TAB ]"   '(my/workspace-switch-right :wk "next")
-  "TAB 1"   '((lambda () (interactive) (my/workspace-switch-to-index 0)) :wk "1")
-  "TAB 2"   '((lambda () (interactive) (my/workspace-switch-to-index 1)) :wk "2")
-  "TAB 3"   '((lambda () (interactive) (my/workspace-switch-to-index 2)) :wk "3")
-  "TAB 4"   '((lambda () (interactive) (my/workspace-switch-to-index 3)) :wk "4")
-  "TAB 5"   '((lambda () (interactive) (my/workspace-switch-to-index 4)) :wk "5")
-  "TAB 6"   '((lambda () (interactive) (my/workspace-switch-to-index 5)) :wk "6")
-  "TAB 7"   '((lambda () (interactive) (my/workspace-switch-to-index 6)) :wk "7")
-  "TAB 8"   '((lambda () (interactive) (my/workspace-switch-to-index 7)) :wk "8")
-  "TAB 9"   '((lambda () (interactive) (my/workspace-switch-to-index 8)) :wk "9")
-  "TAB 0"   '(my/workspace-switch-to-final :wk "last"))
-
-(general-def '(normal motion)
-  "gt" 'my/workspace-switch-right
-  "gT" 'my/workspace-switch-left)
-
-(dotimes (i 9)
-  (general-define-key
-   :states '(normal visual)
-   :keymaps 'override
-   :prefix ","
-   (number-to-string (1+ i))
-   `(lambda () (interactive) (my/workspace-switch-to-index ,i))))
-(general-define-key
- :states '(normal visual)
- :keymaps 'override
- :prefix ","
- "0" #'my/workspace-switch-to-final)
-
 (use-package pass
   :ensure t
   :defer t
@@ -3448,27 +4273,7 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
                '("\\*Pass.*\\*"
                  (display-buffer-full-frame)))
 
-  (with-eval-after-load 'evil
-    (general-def 'normal pass-mode-map
-      "q"   'quit-window
-      "j"   'pass-next-entry
-      "k"   'pass-prev-entry
-      "RET" 'pass-view
-      "d"   'pass-kill
-      "y"   'pass-copy
-      "Y"   'pass-copy-field
-      "e"   'pass-edit
-      "a"   'pass-insert
-      "G"   'pass-insert-generated
-      "o"   'pass-otp-options
-      "r"   'pass-rename
-      "/"   'isearch-forward)
-
-    (general-def 'normal pass-view-mode-map
-      "q"   'quit-window
-      "t"   'pass-view-toggle-password
-      "y"   'pass-copy
-      "Y"   'pass-copy-field)))
+)
 
 (use-package auth-source
   :ensure nil                                  ;; This is built-in, no need to fetch it.
@@ -3531,240 +4336,38 @@ workspace (e.g. *scratch*)."
       (helm-projectile-find-file)
     (helm-projectile-switch-project)))
 
-(my-leader
-  "SPC" '(my/find-file-or-switch-project :wk "find file/switch project")
-  "sp" '(helm-projectile :wk "search project")
-  "ss" '(helm-occur :wk "search line")
-  "sg" '(my/helm-rg-in :wk "rg in dir")
-  "sf" '(my/helm-find-in :wk "find file in dir")
-  "/" '(helm-projectile-rg :wk "search project")
-  "." '(helm-find-files :wk "find file")
-  "," '(helm-mini :wk "switch buffer")
-  ":" (lambda () (interactive) (execute-extended-command nil))
-  "u" '(universal-argument :wk "universal argument")
+(with-eval-after-load 'helix
+  (helix-define-key 'space "omt" #'org-todo)
+  (helix-define-key 'space "oma" #'org-add-note)
+  (helix-define-key 'space "omC" #'org-capture)
+  (helix-define-key 'space "omk" #'kitty-graphics-org-heading-sizes)
+  (helix-define-key 'space "omd" #'org-deadline)
+  (helix-define-key 'space "oms" #'org-schedule)
+  (helix-define-key 'space "ome" #'org-set-effort)
+  (helix-define-key 'space "omr" #'org-clock-report)
+  (helix-define-key 'space "om," #'org-priority)
+  (helix-define-key 'space "omI" #'org-clock-in)
+  (helix-define-key 'space "omO" #'org-clock-out)
+  (helix-define-key 'space "olc" #'org-cliplink)
+  (helix-define-key 'space "oli" #'org-download-clipboard)
+  (helix-define-key 'space "oll" #'org-insert-link)
+  (helix-define-key 'space "on" #'org-toggle-narrow-to-subtree))
 
-  "d" '(:ignore t :wk "denote")
-  "da" '(my/denote-toggle-agenda-keyword :wk "toggle agenda tag")
-  "dj" '(denote-journal-new-or-existing-entry :wk "journal")
-  "dd" '(denote-menu t :wk "List all notes")
-  "dm" '(:ignore t :wk "Merge Notes")
-  "dmr" '(denote-merge-region :wk "Merge Region")
-  "dmf" '(denote-merge-file :wk "Merge File")
-  "dg" '(my/denote-rg :wk "grep denotes")
-  "dl" '(denote-link-or-create t :wk "Link Note")
-  "dn" '(denote t :wk "Create a new note")
-  "dr" '(denote-rename-file t :wk "Rename Note")
-  "ds" '(denote-solo-switch :wk "switch silo")
-  "dtl" '(tmr-list-timers :wk "list timer")
-  "dtt" '(tmr :wk "set timer")
+(with-eval-after-load 'helix
+  (helix-define-key 'space "orr" #'rust-run)
+  (helix-define-key 'space "orc" #'rust-run-clippy)
+  (helix-define-key 'space "orC" #'rust-check))
 
-  "f" '(:ignore t :wk "files")
-  "fd" '(dired-jump :wk "dired")
-  "fD" '(dired-jump :wk "dired jump")
-  "fr" '(helm-recentf :wk "recent files")
-  "ff" '(helm-find-files :wk "find file")
-  "fs" '(save-buffer :wk "save file")
-
-  "b" '(:ignore t :wk "buffer/bookmarks")
-  "bb" '(helm-filtered-bookmarks :wk "display current bookmarks")
-  "bi" '(my/ibuffer-workspace :wk "ibuffer (workspace)")
-  "bp" '(projectile-ibuffer :wk "ibuffer project")
-  "bd" '(bookmark-delete :wk "delete bookmark")
-  "bk" '(kill-current-buffer :wk "kill buffer")
-  "bs" '(bookmark-set :wk "save bookmark")
-  "br" '(rename-buffer :wk "rename buffer")
-
-  "p" '(:ignore t :wk "project")
-  "pp" '(helm-projectile-switch-project :wk "switch project workspace")
-  "pf" '(helm-projectile-find-file :wk "find file")
-  "ps" '(helm-projectile-rg :wk "search")
-  "pb" '(helm-projectile-switch-to-buffer :wk "buffers")
-  "pk" '(projectile-kill-buffers :wk "kill buffers") 
-  "pd" '(projectile-remove-known-project :wk "delete project")
-  "pr" '(my/project-replace :wk "project replace (wgrep)")
-  "pa" '(projectile-add-known-project :wk "add project")
-  "pi" '(projectile-invalidate-cache :wk "invalidate cache")
-  "pt" '(projectile-run-task :wk "tasks")
-
-  "g" '(:ignore t :wk "git")
-  "gc" '(magit-clone :wk "clone")
-  "gg" '(magit-status :wk "status")
-  "gl" '(magit-log-current :wk "log")
-  "gi" '(magit-init :wk "init")
-  "gd" '(xref-find-definitions :wk "go to definition") 
-  "gD" '((lambda () (interactive) 
-           (let ((current-prefix-arg 4))
-             (call-interactively #'xref-find-definitions)))
-         :wk "definition other window")
-  "gI" '((lambda () (interactive) 
-           (let ((current-prefix-arg 4))
-             (call-interactively #'eglot-find-implementation)))
-         :wk "implementation other window")
-  "gt" '(eglot-find-typeDefinition :wk "go to type definition")
-  "gr" '(xref-find-references :wk "find references")
-  "gs" '(magit-file-stage :wk "stage file")
-  "gu" '(my/magit-uncommit :wk "uncommit (keep & unstage)")
-  "gb" '(vc-annotate :wk "blame")
-  "gT" '(my/code-todos-harvest :wk "harvest code TODOs")
-  "aa" '(agent-shell :wk "start")
-  "at" '(agent-shell-toggle :wk "toggle")
-  "am" '(agent-shell-help-menu :wk "open session")
-  "ar" '(agent-shell-send-region :wk "send region")
-  "o" '(:ignore t :wk "open")
-  "oa" '(my/app-launcher :wk "app launcher")
-  "os" '(my/snip-upload :wk "snip buffer/region")
-  "oS" '(my/snip-upload-file :wk "snip file")
-  "op" '(passage :wk "pass")
-  "ot" '(ghostel :wk "ghostel")
-
-  "h" '(:ignore t :wk "help")
-  "hm" '(describe-mode :wk "mode")
-  "hf" '(describe-function :wk "function")
-  "hv" '(describe-variable :wk "variable")
-  "hk" '(describe-key :wk "key")
-  ;; "ht" '(load-theme :wk "load theme")
-
-  "w w" '(evil-window-next :wk "Close window")
-  "w c" '(evil-window-delete :wk "Close window")
-  "w o" '(delete-other-windows :wk "Maximize window")
-  "w n" '(evil-window-new :wk "New window")
-  "w s" '(evil-window-split :wk "Horizontal split window")
-  "w v" '(evil-window-vsplit :wk "Vertical split window")
-  "w h" '(evil-window-left :wk "Window left")
-  "w j" '(evil-window-down :wk "Window down")
-  "w k" '(evil-window-up :wk "Window up")
-  "w l" '(evil-window-right :wk "Window right")
-  "w w" '(evil-window-next :wk "Goto next window")
-  "w H" '(buf-move-left :wk "Buffer move left")
-  "w J" '(buf-move-down :wk "Buffer move down")
-  "w K" '(buf-move-up :wk "Buffer move up")
-  "w L" '(buf-move-right :wk "Buffer move right")
-
-  "c" '(:ignore t :wk "code")
-  "cc" '(my/compile-or-recompile :wk "compile")
-  "cC" '(ghostel-compile :wk "recompile")
-  "ca" '(eglot-code-actions :wk "code actions")
-  "cr" '(eglot-rename :wk "lsp rename")
-  "cf" '(eglot-format :wk "format buffer")
-  "cs" '(yas-insert-snippet :wk "snippets")
-  "cl" '(flycheck-list-errors :wk "list errors")
-
-  "q" '(:ignore t :wk "quit")
-  "qq" '(save-buffers-kill-terminal :wk "quit emacs")
-  "qr" '(restart-emacs :wk "restart")
-  "hr" '(my/reload-config :wk "reload config")
-
-  "x" '(org-capture :wk "capture")
-
-  ";" '(embark-act :wk "embark")
-  "P" '(helm-show-kill-ring :wk "paste history")
-
-  ;; "t" '(:ignore t :wk "treesitter")
-  ;; "ts" '(flash-treesitter :wk "flash treesitter")
-
-
-  "e"   '(:ignore t :wk "eww/web")
-  "e e" '(eww :wk "eww browse / search")
-  "e n" '(my/eww-new-buffer :wk "new eww buffer")
-  "e b" '(eww-list-bookmarks :wk "bookmarks")
-  "e h" '(eww-list-histories :wk "history")
-  "e f" '(elfeed :wk "elfeed (rss)")
-  "e L" '(link-hint-open-link :wk "hint open link")
-  "e C" '(link-hint-copy-link :wk "hint copy link")
-  "e x" '(xwidget-webkit-browse-url :wk "webkit browser")
-  )
-
-(defun my/flash-enabled-p ()
-  (and (not (derived-mode-p 'magit-mode 'dired-mode 'ibuffer-mode))
-       (not (eq major-mode 'dirvish-mode))))
-
-(defun my/s-key-dispatch ()
-  (interactive)
-  (if (derived-mode-p 'magit-mode)
-      (call-interactively 'magit-stage)
-    (when (my/flash-enabled-p)
-      (let ((scroll-margin 0)
-            (maximum-scroll-margin 0))
-        (call-interactively 'flash-evil-jump)))))
-
-(general-def '(normal visual operator) 'override
-  :predicate '(not (derived-mode-p 'mu4e-main-mode 'mu4e-headers-mode
-                                    'mu4e-view-mode 'mu4e-compose-mode
-                                    'croc-ui-mode 'sync-ui-mode))
-  "s" 'my/s-key-dispatch)
-
-
-(general-def 'normal 'override
-  "K" 'my/eldoc-and-jump
-  "]d" 'flycheck-next-error
-  "[d" 'flycheck-previous-error
-  "]c" 'diff-hl-next-hunk
-  "[c" 'diff-hl-previous-hunk
-  "]b" 'switch-to-next-buffer
-  "[b" 'switch-to-prev-buffer
-  "]t" 'tab-next
-  "[t" 'tab-previous
-  "P" 'helm-show-kill-ring
-  ;; "?" 'casual-avy-tmenu
-  "gcc" (lambda ()
-          (interactive)
-          (unless (use-region-p)
-            (comment-or-uncomment-region
-             (line-beginning-position)
-             (line-end-position)))))
-
-(general-def 'visual 'override
-  "gc" (lambda ()
-         (interactive)
-         (when (use-region-p)
-           (comment-or-uncomment-region
-            (region-beginning)
-            (region-end)))))
-
-(my-leader
-  :keymaps 'org-mode-map
-  "m" '(:ignore :wk "org")
-
-  "mt" '(org-todo :wk "TODO")
-  "ma" '(org-add-note :wk "add note")
-  "mC" '(org-capture :wk "capture")
-
-  "mc" '(:wk "set" :ignore)
-  "mk" '(kitty-graphics-org-heading-sizes :wk "kgfx headlines")
-  "mcd" '(org-deadline :wk "deadline")
-  "mcs" '(org-schedule :wk "schedule")
-  "mce" '(org-set-effort :wk "effort")
-  "mcr" '(org-clock-report :wk "clock report")
-  "m," '(org-priority :wk "priority")
-  "mI" '(org-clock-in :wk "clock in")
-  "mO" '(org-clock-out :wk "clock out")
-
-  "l" '(:ignore :wk "link")
-  "lc" '(org-cliplink :wk "cliplink")
-  "li" '(org-download-clipboard :wk "image")
-  "ll" '(org-insert-link :wk "link various things")
-
-  "n" '(org-toggle-narrow-to-subtree :wk "narrow"))
-
-(evil-define-key 'normal org-mode-map (kbd "RET") 'org-open-at-point)
-
-(my-leader
-  :keymaps '(rust-ts-mode-map)
-  "m" '(:wk "rust mode" :ignore)
-  "mr" '(rust-run :wk "run")
-  "mc" '(rust-run-clippy :wk "clippy")
-  "mC" '(rust-check :wk "check"))
-
-(with-eval-after-load 'tmr
-  (general-def 'normal tmr-tabulated-mode-map
-    "y" 'tmr-clone
-    "c" 'tmr-cancel
-    "d" 'tmr-remove
-    "D" 'tmr-remove-finished
-    "n" 'tmr
-    "N" 'tmr-with-details
-    "e" 'tmr-edit-description
-    "r" 'tmr-reschedule))
+(with-eval-after-load 'helix
+  (helix-define-key 'normal "y" #'tmr-clone 'tmr-tabulated-mode)
+  (helix-define-key 'normal "c" #'tmr-cancel 'tmr-tabulated-mode)
+  (helix-define-key 'normal "d" #'tmr-remove 'tmr-tabulated-mode)
+  (helix-define-key 'normal "D" #'tmr-remove-finished 'tmr-tabulated-mode)
+  (helix-define-key 'normal "n" #'tmr 'tmr-tabulated-mode)
+  (helix-define-key 'normal "N" #'tmr-with-details 'tmr-tabulated-mode)
+  (helix-define-key 'normal "e" #'tmr-edit-description 'tmr-tabulated-mode)
+  (helix-define-key 'normal "r" #'tmr-reschedule 'tmr-tabulated-mode)
+  (my/helix-refresh-all-buffers))
 
 (defun dirvish-next-file (arg)
   "Move down ARG lines, landing on the filename column.
@@ -3780,41 +4383,6 @@ date) and the dired header are never skipped."
   (forward-line (- arg))
   (dired-move-to-filename))
 
-(general-def 'normal dired-mode-map
-  "h" 'dired-up-directory
-  "l" 'dired-find-file)
-
-(general-def 'normal dirvish-mode-map
-  "?" 'dirvish-dispatch
-  "q" 'dirvish-quit
-  "b" 'dirvish-quick-access
-  "f" 'dirvish-file-info-menu
-  "p" 'dirvish-yank
-  "S" 'dirvish-quicksort
-  "F" 'dirvish-layout-toggle
-  "z" 'zoxide-travel
-  "j" 'dirvish-next-file
-  "k" 'dirvish-prev-file
-  "gh" 'dirvish-subtree-up
-  "gl" 'dirvish-subtree-toggle
-  "h" 'dired-up-directory
-  "l" 'dired-find-file
-  "TAB" 'dirvish-subtree-toggle
-  "[h" 'dirvish-history-go-backward
-  "]h" 'dirvish-history-go-forward)
-
-(general-def '(normal visual) dirvish-mode-map
-  :prefix "y"
-  "l" 'dirvish-copy-file-true-path
-  "n" 'dirvish-copy-file-name
-  "p" 'dirvish-copy-file-path
-  "y" 'dired-do-copy)
-
-(general-def 'normal dirvish-mode-map
-  :prefix "s"
-  "s" 'dirvish-symlink
-  "S" 'dirvish-relative-symlink
-  "h" 'dirvish-hardlink)
 
 (defun my/dirvish-copy-to-clipboard (&rest _)
   (my/send-to-clipboard (car kill-ring)))
@@ -3837,25 +4405,6 @@ date) and the dired header are never skipped."
             (lambda ()
               (local-set-key (kbd "C-l") 'my/eshell-clear)
               (local-set-key (kbd "C-r") 'my/atuin-history))))
-
-(with-eval-after-load 'evil
-  (with-eval-after-load 'eshell
-    (evil-define-key '(normal insert) eshell-mode-map
-      (kbd "C-r") 'my/atuin-history
-      (kbd "C-l") 'my/eshell-clear)))
-
-(my-local-leader
-  "a" '(org-agenda :wk "org agenda")
-  "c" '(my/centered-cursor :wk "center cursor")
-  "f" '(dirvish :wk "file manager")
-  "m" '(mu4e :wk "mu4e")
-  "i" '(run-irc :wk "irc")
-  "r" '(async-shell-command :wk "run async")
-  "t" '(ghostel-project :wk "terminal (project)")
-  "T" '(ghostel-list-buffers :wk "terminal (switch)")
-  "z" '(golden-ratio-mode :wk "zoom/golden ratio")
-  "o" '(my/global-olivetti-mode :wk "center buffer")
-  "s" '(my-org-sidecar-left :wk "org sidecar"))
 
 (global-set-key (kbd "C-=") 'text-scale-increase)
 (global-set-key (kbd "C--") 'text-scale-decrease)
@@ -3989,14 +4538,7 @@ reset is unnecessary, so do the handler resolution ourselves and skip
                 shr-cookie-policy nil)
   (make-directory eww-bookmarks-directory t)
 
-  (with-eval-after-load 'general
-    (my-local-leader
-      :keymaps 'eww-mode-map
-      "B" '(eww-add-bookmark :wk "add bookmark")
-      "r" '(eww-readable :wk "reader mode")
-      "i" '(my/eww-toggle-images :wk "toggle images")
-      "y" '(my/eww-copy-as-org :wk "copy page as org")
-      "d" '(eww-download :wk "download"))))
+)
 
 (defun my/eww-new-buffer (url)
   "Open URL in a fresh eww buffer (keep current)."
@@ -4042,12 +4584,6 @@ reset is unnecessary, so do the handler resolution ourselves and skip
 (use-package link-hint
   :ensure t
   :commands (link-hint-open-link link-hint-copy-link))
-
-(with-eval-after-load 'general
-  (general-def :states '(normal visual)
-    :keymaps '(eww-mode-map elfeed-show-mode-map elfeed-search-mode-map)
-    "f" #'link-hint-open-link
-    "F" #'link-hint-copy-link))
 
 (use-package mu4e
   :ensure nil
@@ -4248,32 +4784,10 @@ opening another file in same project does not re-notify."
   (ghostel-compile-global-mode 1)
   (setq-default window-adjust-process-window-size-function
                 #'window-adjust-process-window-size-largest)
-  (evil-define-key 'normal ghostel-mode-map
-    (kbd "g t") #'ghostel-next
-    (kbd "g T") #'ghostel-previous
-    (kbd "g n") #'ghostel
-    (kbd "g b") #'ghostel-list-buffers)
-  (defun my/ghostel-transparent-buffer-face (fg _bg)
-    (unless (equal fg ghostel--face-cookie-fg-bg)
-      (when ghostel--face-cookie
-        (face-remap-remove-relative ghostel--face-cookie))
-      (setq ghostel--face-cookie
-            (face-remap-add-relative 'default :foreground fg))
-      (setq ghostel--face-cookie-fg-bg fg)))
-  (advice-add 'ghostel--set-buffer-face :override
-              #'my/ghostel-transparent-buffer-face)
   (advice-add 'enable-theme :after
               (lambda (&rest _)
                 (when (fboundp 'ghostel-sync-theme)
                   (ghostel-sync-theme)))))
-
-(use-package evil-ghostel
-  :ensure (:host github :repo "dakra/ghostel"
-           :files ("extensions/evil-ghostel/*.el"))
-  :after (ghostel evil)
-  :custom
-  (evil-ghostel-escape 'evil)
-  :hook (ghostel-mode . evil-ghostel-mode))
 
 (use-package inheritenv
   :ensure t
@@ -4309,8 +4823,8 @@ opening another file in same project does not re-notify."
   (add-hook 'org-mode-hook #'denote-capf-setup)
 
   (defun my/denote-capf-tab-in-insert ()
-    (when (featurep 'evil)
-      (evil-local-set-key 'insert (kbd "TAB") #'indent-for-tab-command)))
+    (when (bound-and-true-p helix-insert-mode)
+      (local-set-key (kbd "TAB") #'indent-for-tab-command)))
   (add-hook 'org-mode-hook #'my/denote-capf-tab-in-insert))
 
 (use-package sops
@@ -4336,7 +4850,7 @@ opening another file in same project does not re-notify."
   (setq pulsar-pulse t)
   (setq pulsar-delay 0.025)
   (setq pulsar-iterations 10)
-  (setq pulsar-face 'evil-ex-lazy-highlight)
+  (setq pulsar-face 'highlight)
   (setq pulsar-tty-color "white")
 
   (let ((orig-face-background (symbol-function 'face-background)))
@@ -4366,17 +4880,10 @@ opening another file in same project does not re-notify."
             (funcall common-fn locus face))))))
   (advice-add 'pulsar--create-pulse :override #'my/pulsar--create-pulse)
 
-  (add-to-list 'pulsar-pulse-functions 'evil-scroll-down)
   (add-to-list 'pulsar-pulse-functions 'flymake-goto-next-error)
   (add-to-list 'pulsar-pulse-functions 'flymake-goto-prev-error)
-  (add-to-list 'pulsar-pulse-functions 'evil-yank)
-  (add-to-list 'pulsar-pulse-functions 'evil-yank-line)
-  (add-to-list 'pulsar-pulse-functions 'evil-delete)
-  (add-to-list 'pulsar-pulse-functions 'evil-delete-line)
-  (add-to-list 'pulsar-pulse-functions 'evil-jump-item)
   (add-to-list 'pulsar-pulse-functions 'diff-hl-next-hunk)
   (add-to-list 'pulsar-pulse-functions 'diff-hl-previous-hunk)
-
   (pulsar-global-mode))
 
 (use-package org-auto-tangle
