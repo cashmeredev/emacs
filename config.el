@@ -491,6 +491,9 @@ Selects the compilation window so the cursor lands in it."
    helix-insert-state-keymap)
   (helix-define-key 'normal (kbd "C-u") #'my/helix-scroll-half-page-up)
   (helix-define-key 'normal (kbd "C-d") #'my/helix-scroll-half-page-down)
+  ;; Helix defaults bind digits as keyboard macros through C-u; C-u scrolls here.
+  (dolist (key '("1" "2" "3" "4" "5" "6" "7" "8" "9" "0"))
+    (helix-define-key 'normal (kbd key) #'digit-argument))
   (helix-define-key 'normal (kbd "C-i") #'xref-go-forward)
   (helix-define-key 'normal (kbd "<tab>") #'xref-go-forward)
   (helix-define-key 'normal (kbd "C-o") #'xref-go-back)
@@ -847,9 +850,17 @@ Selects the compilation window so the cursor lands in it."
      (kbd (car binding))
      (cdr binding)
      'dired-mode))
+
+)
+
+(with-eval-after-load 'helix
   (helix-define-key 'normal (kbd "<escape>") #'wdired-exit 'wdired-mode)
   (helix-define-key 'normal "ZZ" #'wdired-finish-edit 'wdired-mode)
   (helix-define-key 'normal "ZQ" #'wdired-abort-changes 'wdired-mode)
+
+)
+
+(with-eval-after-load 'helix
   (helix-define-key 'normal "j" #'dirvish-next-file 'dirvish-mode)
   (helix-define-key 'normal "k" #'dirvish-prev-file 'dirvish-mode)
   (helix-define-key 'normal "h" #'dired-up-directory 'dirvish-mode)
@@ -885,6 +896,10 @@ Selects the compilation window so the cursor lands in it."
   (helix-define-key 'normal "ss" #'dirvish-symlink 'dirvish-mode)
   (helix-define-key 'normal "sS" #'dirvish-relative-symlink 'dirvish-mode)
   (helix-define-key 'normal "sh" #'dirvish-hardlink 'dirvish-mode)
+
+)
+
+(with-eval-after-load 'helix
   (defun my/magit-yank-whole-line ()
     (interactive)
     (kill-ring-save (line-beginning-position) (line-beginning-position 2)))
@@ -905,6 +920,9 @@ Selects the compilation window so the cursor lands in it."
      (t
       (user-error "Not in a magit buffer or magit text buffer"))))
 
+)
+
+(with-eval-after-load 'helix
   (dolist
       (binding
        '(("C-j" . magit-section-forward)
@@ -962,6 +980,9 @@ Selects the compilation window so the cursor lands in it."
      (cdr binding)
      'magit-mode))
 
+)
+
+(with-eval-after-load 'helix
   (dolist
       (binding
        '(("M-1" . magit-section-show-level-1-all)
@@ -987,6 +1008,9 @@ Selects the compilation window so the cursor lands in it."
      (cdr binding)
      'magit-section-mode))
 
+)
+
+(with-eval-after-load 'helix
   (dolist
       (binding
        '(("gz" . magit-jump-to-stashes)
@@ -1005,9 +1029,15 @@ Selects the compilation window so the cursor lands in it."
      (cdr binding)
      'magit-status-mode))
 
+)
+
+(with-eval-after-load 'helix
   (helix-define-key 'normal "gd" #'magit-jump-to-diffstat-or-diff 'magit-diff-mode)
   (helix-define-key 'normal "=" #'magit-log-toggle-commit-limit 'magit-log-mode)
 
+)
+
+(with-eval-after-load 'helix
   (dolist
       (binding
        '(("j" . next-line)
@@ -1027,6 +1057,9 @@ Selects the compilation window so the cursor lands in it."
      (cdr binding)
      'magit-blame-read-only-mode))
 
+)
+
+(with-eval-after-load 'helix
   (with-eval-after-load 'magit
     (defun my/magit-stage-untracked-file-with-intent ()
       (interactive)
@@ -1045,6 +1078,9 @@ Selects the compilation window so the cursor lands in it."
     (define-key magit-hunk-section-map (kbd "S-<return>")
                 #'magit-diff-visit-file))
 
+)
+
+(with-eval-after-load 'helix
   (helix-define-key 'normal "q" #'quit-window 'erc-mode)
   (helix-define-key 'normal "Q" #'my/erc-quit-all 'erc-mode)
   (helix-define-key 'normal "gb" #'my/erc-switch-channel 'erc-mode)
@@ -1058,12 +1094,20 @@ Selects the compilation window so the cursor lands in it."
   (helix-define-key 'insert (kbd "M-n") #'erc-track-switch-buffer 'erc-mode)
   (helix-define-key 'insert (kbd "C-k") #'erc-previous-command 'erc-mode)
   (helix-define-key 'insert (kbd "C-j") #'erc-next-command 'erc-mode)
+
+)
+
+(with-eval-after-load 'helix
   (helix-define-key 'normal "q" #'quit-window 'eww-mode)
   (helix-define-key 'normal "B" #'eww-add-bookmark 'eww-mode)
   (helix-define-key 'normal "r" #'eww-readable 'eww-mode)
   (helix-define-key 'normal "i" #'my/eww-toggle-images 'eww-mode)
   (helix-define-key 'normal "y" #'my/eww-copy-as-org 'eww-mode)
   (helix-define-key 'normal "d" #'eww-download 'eww-mode)
+
+)
+
+(with-eval-after-load 'helix
   (helix-define-key 'normal "q" #'quit-window 'elfeed-search-mode)
   (helix-define-key 'normal "q" #'quit-window 'elfeed-show-mode)
   (helix-define-key 'normal "gr" #'elfeed-update 'elfeed-search-mode)
@@ -1071,6 +1115,10 @@ Selects the compilation window so the cursor lands in it."
   (helix-define-key 'normal "F" #'link-hint-copy-link 'elfeed-search-mode)
   (helix-define-key 'normal "f" #'link-hint-open-link 'elfeed-show-mode)
   (helix-define-key 'normal "F" #'link-hint-copy-link 'elfeed-show-mode)
+
+)
+
+(with-eval-after-load 'helix
   (dolist
       (binding
        '(("RET" . org-open-at-point)
@@ -1128,9 +1176,17 @@ Selects the compilation window so the cursor lands in it."
      (kbd (car binding))
      (cdr binding)
      'org-mode))
+
+)
+
+(with-eval-after-load 'helix
   (helix-define-key 'normal "ZZ" #'org-capture-finalize 'org-capture-mode)
   (helix-define-key 'normal "ZQ" #'org-capture-kill 'org-capture-mode)
   (helix-define-key 'normal "ZR" #'org-capture-refile 'org-capture-mode)
+
+)
+
+(with-eval-after-load 'helix
   (with-eval-after-load 'org
     (org-defkey org-read-date-minibuffer-local-map
                 (kbd "M-l") #'org-calendar-forward-day)
@@ -1148,6 +1204,10 @@ Selects the compilation window so the cursor lands in it."
                 (kbd "M-J") #'org-calendar-forward-year)
     (org-defkey org-read-date-minibuffer-local-map
                 (kbd "M-K") #'org-calendar-backward-year))
+
+)
+
+(with-eval-after-load 'helix
   (dolist
       (binding
        '(("j" . ibuffer-forward-line)
@@ -1280,17 +1340,23 @@ Selects the compilation window so the cursor lands in it."
      (kbd (car binding))
      (cdr binding)
      'ibuffer-mode))
-  (helix-define-key 'normal "K" #'my/eldoc-and-jump)
-  (helix-define-key 'normal "]d" #'flycheck-next-error)
-  (helix-define-key 'normal "[d" #'flycheck-previous-error)
-  (helix-define-key 'normal "]c" #'diff-hl-next-hunk)
-  (helix-define-key 'normal "[c" #'diff-hl-previous-hunk)
-  (helix-define-key 'normal "]b" #'switch-to-next-buffer)
-  (helix-define-key 'normal "[b" #'switch-to-prev-buffer)
-  (helix-define-key 'normal "]t" #'tab-next)
-  (helix-define-key 'normal "[t" #'tab-previous)
-  (helix-define-key 'normal (kbd "C-w C-w") #'other-window)
-  (helix-define-key 'normal (kbd "C-w c") #'delete-window)
+)
+
+(with-eval-after-load 'helix
+  (dolist
+      (binding
+       '(("K" . my/eldoc-and-jump)
+         ("]d" . flycheck-next-error)
+         ("[d" . flycheck-previous-error)
+         ("]c" . diff-hl-next-hunk)
+         ("[c" . diff-hl-previous-hunk)
+         ("]b" . switch-to-next-buffer)
+         ("[b" . switch-to-prev-buffer)
+         ("]t" . tab-next)
+         ("[t" . tab-previous)
+         ("C-w C-w" . other-window)
+         ("C-w c" . delete-window)))
+    (helix-define-key 'normal (kbd (car binding)) (cdr binding)))
   (helix-define-key 'normal "gcc"
                     (lambda ()
                       (interactive)
@@ -1298,93 +1364,173 @@ Selects the compilation window so the cursor lands in it."
                         (comment-or-uncomment-region
                          (line-beginning-position)
                          (line-end-position)))))
-  (helix-define-key 'normal "j" #'croc-ui-next 'croc-ui-mode)
-  (helix-define-key 'normal "k" #'croc-ui-previous 'croc-ui-mode)
-  (helix-define-key 'normal (kbd "RET") #'croc-ui-open-log 'croc-ui-mode)
-  (helix-define-key 'normal (kbd "<return>") #'croc-ui-open-log 'croc-ui-mode)
-  (helix-define-key 'normal "j" #'sync-ui-next 'sync-ui-mode)
-  (helix-define-key 'normal "k" #'sync-ui-previous 'sync-ui-mode)
-  (helix-define-key 'normal (kbd "RET") #'sync-ui-magit 'sync-ui-mode)
-  (helix-define-key 'normal (kbd "<return>") #'sync-ui-magit 'sync-ui-mode)
-  (helix-define-key 'normal (kbd "RET") #'feed-ui-open-thread-at-point 'feed-ui-mode)
-  (helix-define-key 'normal "r" #'feed-ui-reply-at-point 'feed-ui-mode)
-  (helix-define-key 'normal "m" #'feed-ui-mute-at-point 'feed-ui-mode)
-  (helix-define-key 'normal "g" #'feed-ui-sync 'feed-ui-mode)
-  (helix-define-key 'normal "q" #'feed-ui-back-or-quit 'feed-ui-mode)
-  (helix-define-key 'normal (kbd "RET") #'denote-menu-open-at-point 'denote-menu-mode)
-  (helix-define-key 'normal "o" #'denote-menu-open-at-point 'denote-menu-mode)
-  (helix-define-key 'normal "/" #'denote-menu-filter 'denote-menu-mode)
-  (helix-define-key 'normal "c" #'denote-menu-clear-filter 'denote-menu-mode)
-  (helix-define-key 'normal "s" #'denote-menu-cycle-sort 'denote-menu-mode)
-  (helix-define-key 'normal "S" #'denote-menu-toggle-direction 'denote-menu-mode)
-  (helix-define-key 'normal "e" #'denote-menu-export-to-dired 'denote-menu-mode)
-  (helix-define-key 'normal "n" #'denote-menu-new-note 'denote-menu-mode)
-  (helix-define-key 'normal "r" #'denote-menu-refresh 'denote-menu-mode)
-  (helix-define-key 'normal "q" #'vui-quit 'denote-menu-mode)
-  (helix-define-key 'normal "q" #'quit-window 'pass-mode)
-  (helix-define-key 'normal "j" #'pass-next-entry 'pass-mode)
-  (helix-define-key 'normal "k" #'pass-prev-entry 'pass-mode)
-  (helix-define-key 'normal (kbd "RET") #'pass-view 'pass-mode)
-  (helix-define-key 'normal "d" #'pass-kill 'pass-mode)
-  (helix-define-key 'normal "y" #'pass-copy 'pass-mode)
-  (helix-define-key 'normal "Y" #'pass-copy-field 'pass-mode)
-  (helix-define-key 'normal "e" #'pass-edit 'pass-mode)
-  (helix-define-key 'normal "a" #'pass-insert 'pass-mode)
-  (helix-define-key 'normal "G" #'pass-insert-generated 'pass-mode)
-  (helix-define-key 'normal "o" #'pass-otp-options 'pass-mode)
-  (helix-define-key 'normal "r" #'pass-rename 'pass-mode)
-  (helix-define-key 'normal "/" #'isearch-forward 'pass-mode)
-  (helix-define-key 'normal "q" #'quit-window 'pass-view-mode)
-  (helix-define-key 'normal "t" #'pass-view-toggle-password 'pass-view-mode)
-  (helix-define-key 'normal "y" #'pass-copy 'pass-view-mode)
-  (helix-define-key 'normal "Y" #'pass-copy-field 'pass-view-mode)
-  (helix-define-key 'normal (kbd "C-r") #'my/atuin-history 'eshell-mode)
-  (helix-define-key 'normal (kbd "C-l") #'my/eshell-clear 'eshell-mode)
-  (helix-define-key 'insert (kbd "C-r") #'my/atuin-history 'eshell-mode)
-  (helix-define-key 'insert (kbd "C-l") #'my/eshell-clear 'eshell-mode)
+
+)
+
+(with-eval-after-load 'helix
+  (dolist
+      (binding
+       '(("j" . croc-ui-next)
+         ("k" . croc-ui-previous)
+         ("RET" . croc-ui-open-log)
+         ("<return>" . croc-ui-open-log)))
+    (helix-define-key 'normal (kbd (car binding)) (cdr binding) 'croc-ui-mode))
+
+)
+
+(with-eval-after-load 'helix
+  (dolist
+      (binding
+       '(("j" . sync-ui-next)
+         ("k" . sync-ui-previous)
+         ("RET" . sync-ui-magit)
+         ("<return>" . sync-ui-magit)))
+    (helix-define-key 'normal (kbd (car binding)) (cdr binding) 'sync-ui-mode))
+
+)
+
+(with-eval-after-load 'helix
+  (dolist
+      (binding
+       '(("RET" . feed-ui-open-thread-at-point)
+         ("r" . feed-ui-reply-at-point)
+         ("m" . feed-ui-mute-at-point)
+         ("g" . feed-ui-sync)
+         ("q" . feed-ui-back-or-quit)))
+    (helix-define-key 'normal (kbd (car binding)) (cdr binding) 'feed-ui-mode))
+
+)
+
+(with-eval-after-load 'helix
+  (dolist
+      (binding
+       '(("RET" . denote-menu-open-at-point)
+         ("o" . denote-menu-open-at-point)
+         ("/" . denote-menu-filter)
+         ("c" . denote-menu-clear-filter)
+         ("s" . denote-menu-cycle-sort)
+         ("S" . denote-menu-toggle-direction)
+         ("e" . denote-menu-export-to-dired)
+         ("n" . denote-menu-new-note)
+         ("r" . denote-menu-refresh)
+         ("q" . vui-quit)))
+    (helix-define-key 'normal (kbd (car binding)) (cdr binding) 'denote-menu-mode))
+
+)
+
+(with-eval-after-load 'helix
+  (dolist
+      (binding
+       '(("q" . quit-window)
+         ("j" . pass-next-entry)
+         ("k" . pass-prev-entry)
+         ("RET" . pass-view)
+         ("d" . pass-kill)
+         ("y" . pass-copy)
+         ("Y" . pass-copy-field)
+         ("e" . pass-edit)
+         ("a" . pass-insert)
+         ("G" . pass-insert-generated)
+         ("o" . pass-otp-options)
+         ("r" . pass-rename)
+         ("/" . isearch-forward)))
+    (helix-define-key 'normal (kbd (car binding)) (cdr binding) 'pass-mode))
+
+)
+
+(with-eval-after-load 'helix
+  (dolist
+      (binding
+       '(("q" . quit-window)
+         ("t" . pass-view-toggle-password)
+         ("y" . pass-copy)
+         ("Y" . pass-copy-field)))
+    (helix-define-key 'normal (kbd (car binding)) (cdr binding) 'pass-view-mode))
+
+)
+
+(with-eval-after-load 'helix
+  (dolist
+      (state '(normal insert))
+    (dolist
+        (binding
+         '(("C-r" . my/atuin-history)
+           ("C-l" . my/eshell-clear)))
+      (helix-define-key state (kbd (car binding)) (cdr binding) 'eshell-mode)))
+
   (setq helix--mode-keybindings
         (assoc-delete-all
          (cons 'async-shell-command-mode 'normal)
          helix--mode-keybindings))
+
+)
+
+(with-eval-after-load 'helix
   (helix-define-key 'normal "q" #'quit-window 'shell-command-mode)
-  (helix-define-key 'normal "J" #'passage-goto-entry 'passage-mode)
-  (helix-define-key 'normal "U" #'passage-browse-url 'passage-mode)
-  (helix-define-key 'normal "a" #'passage-insert 'passage-mode)
-  (helix-define-key 'normal "G" #'passage-insert-generated 'passage-mode)
-  (helix-define-key 'normal "R" #'passage-rename 'passage-mode)
-  (helix-define-key 'normal "x" #'passage-kill 'passage-mode)
-  (helix-define-key 'normal "E" #'passage-edit 'passage-mode)
-  (helix-define-key 'normal "j" #'passage-next-entry 'passage-mode)
-  (helix-define-key 'normal "k" #'passage-prev-entry 'passage-mode)
-  (helix-define-key 'normal "gr" #'passage-update-buffer 'passage-mode)
-  (helix-define-key 'normal "o" #'passage-otp-options 'passage-mode)
-  (helix-define-key 'normal "y" #'passage-copy 'passage-mode)
-  (helix-define-key 'normal "Y" #'passage-copy-field 'passage-mode)
-  (helix-define-key 'normal "b" #'passage-copy-username 'passage-mode)
-  (helix-define-key 'normal "u" #'passage-copy-url 'passage-mode)
-  (helix-define-key 'normal "e" #'my/passage-copy-entry-name 'passage-mode)
-  (helix-define-key 'normal "O" #'passage-otp-token-copy 'passage-mode)
-  (helix-define-key 'normal (kbd "M-O") #'passage-otp-uri-copy 'passage-mode)
-  (helix-define-key 'normal "C" #'my/passage-clear-kill-ring 'passage-mode)
-  (helix-define-key 'normal "]]" #'passage-next-directory 'passage-mode)
-  (helix-define-key 'normal "[[" #'passage-prev-directory 'passage-mode)
-  (helix-define-key 'normal (kbd "RET") #'passage-view 'passage-mode)
-  (helix-define-key 'normal (kbd "<return>") #'passage-view 'passage-mode)
-  (helix-define-key 'normal "q" #'my/passage-quit 'passage-mode)
-  (helix-define-key 'normal "Q" #'my/passage-kill-view-buffers-and-quit 'passage-mode)
-  (helix-define-key 'normal "q" #'quit-window 'passage-view-mode)
-  (helix-define-key 'normal "Q" #'kill-current-buffer 'passage-view-mode)
-  (helix-define-key 'normal "t" #'passage-view-toggle-password 'passage-view-mode)
-  (helix-define-key 'normal "y" #'passage-view-copy-password 'passage-view-mode)
-  (helix-define-key 'normal "O" #'passage-view-copy-token 'passage-view-mode)
-  (helix-define-key 'normal "gq" #'passage-view-qrcode 'passage-view-mode)
-  (helix-define-key 'normal "gt" #'ghostel-next 'ghostel-mode)
-  (helix-define-key 'normal "gT" #'ghostel-previous 'ghostel-mode)
-  (helix-define-key 'normal "gn" #'ghostel 'ghostel-mode)
-  (helix-define-key 'normal "gb" #'ghostel-list-buffers 'ghostel-mode)
+
+)
+
+(with-eval-after-load 'helix
+  (dolist
+      (binding
+       '(("J" . passage-goto-entry)
+         ("U" . passage-browse-url)
+         ("a" . passage-insert)
+         ("G" . passage-insert-generated)
+         ("R" . passage-rename)
+         ("x" . passage-kill)
+         ("E" . passage-edit)
+         ("j" . passage-next-entry)
+         ("k" . passage-prev-entry)
+         ("gr" . passage-update-buffer)
+         ("o" . passage-otp-options)
+         ("y" . passage-copy)
+         ("Y" . passage-copy-field)
+         ("b" . passage-copy-username)
+         ("u" . passage-copy-url)
+         ("e" . my/passage-copy-entry-name)
+         ("O" . passage-otp-token-copy)
+         ("M-O" . passage-otp-uri-copy)
+         ("C" . my/passage-clear-kill-ring)
+         ("]]" . passage-next-directory)
+         ("[[" . passage-prev-directory)
+         ("RET" . passage-view)
+         ("<return>" . passage-view)
+         ("q" . my/passage-quit)
+         ("Q" . my/passage-kill-view-buffers-and-quit)))
+    (helix-define-key 'normal (kbd (car binding)) (cdr binding) 'passage-mode))
+
+)
+
+(with-eval-after-load 'helix
+  (dolist
+      (binding
+       '(("q" . quit-window)
+         ("Q" . kill-current-buffer)
+         ("t" . passage-view-toggle-password)
+         ("y" . passage-view-copy-password)
+         ("O" . passage-view-copy-token)
+         ("gq" . passage-view-qrcode)))
+    (helix-define-key 'normal (kbd (car binding)) (cdr binding) 'passage-view-mode))
+
+)
+
+(with-eval-after-load 'helix
+  (dolist
+      (binding
+       '(("gt" . ghostel-next)
+         ("gT" . ghostel-previous)
+         ("gn" . ghostel)
+         ("gb" . ghostel-list-buffers)))
+    (helix-define-key 'normal (kbd (car binding)) (cdr binding) 'ghostel-mode))
+
+)
+
+(with-eval-after-load 'helix
   (helix-define-key 'normal "gt" #'my/workspace-switch-right)
   (helix-define-key 'normal "gT" #'my/workspace-switch-left)
-  (my/helix-refresh-all-buffers))
+  (my/helix-refresh-all-buffers)
+)
 
 (with-eval-after-load 'helix
   (helix-define-key 'goto "%" #'sp-forward-sexp))
