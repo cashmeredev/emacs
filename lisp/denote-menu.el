@@ -5,11 +5,11 @@
 
 ;;; Commentary:
 
-;; A keyboard-first, evil-native browser for Denote notes built on vui.el.
+;; A keyboard-first browser for Denote notes built on vui.el.
 ;; Lists notes from `denote-directory' (silo-aware) in a borderless table with
 ;; live filtering, column sorting, and one-key actions.  Ships its own
 ;; `denote-menu-mode' derived from `vui-mode' and registers normal-state
-;; keys with evil when it is available.
+;; keys with helix when it is available.
 
 ;;; Code:
 
@@ -319,22 +319,18 @@ across re-renders.
   :group 'denote-menu
   (hl-line-mode 1))
 
-(declare-function evil-set-initial-state "evil")
-(declare-function evil-define-key "evil")
 
-(with-eval-after-load 'evil
-  (evil-set-initial-state 'denote-menu-mode 'normal)
-  (evil-define-key 'normal denote-menu-mode-map
-    (kbd "RET") #'denote-menu-open-at-point
-    (kbd "o") #'denote-menu-open-at-point
-    (kbd "/") #'denote-menu-filter
-    (kbd "c") #'denote-menu-clear-filter
-    (kbd "s") #'denote-menu-cycle-sort
-    (kbd "S") #'denote-menu-toggle-sort-direction
-    (kbd "e") #'denote-menu-export-to-dired
-    (kbd "n") #'denote-menu-new-note
-    (kbd "r") #'denote-menu-refresh
-    (kbd "q") #'vui-quit))
+(with-eval-after-load 'helix
+  (helix-define-key 'normal "RET" #'denote-menu-open-at-point 'denote-menu-mode)
+  (helix-define-key 'normal "o" #'denote-menu-open-at-point 'denote-menu-mode)
+  (helix-define-key 'normal "/" #'denote-menu-filter 'denote-menu-mode)
+  (helix-define-key 'normal "c" #'denote-menu-clear-filter 'denote-menu-mode)
+  (helix-define-key 'normal "s" #'denote-menu-cycle-sort 'denote-menu-mode)
+  (helix-define-key 'normal "S" #'denote-menu-toggle-sort-direction 'denote-menu-mode)
+  (helix-define-key 'normal "e" #'denote-menu-export-to-dired 'denote-menu-mode)
+  (helix-define-key 'normal "n" #'denote-menu-new-note 'denote-menu-mode)
+  (helix-define-key 'normal "r" #'denote-menu-refresh 'denote-menu-mode)
+  (helix-define-key 'normal "q" #'vui-quit 'denote-menu-mode))
 
 ;;;###autoload
 (defun denote-menu ()

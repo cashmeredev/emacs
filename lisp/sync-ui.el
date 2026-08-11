@@ -31,7 +31,7 @@
 ;;   t auto/ask     a add repo    d remove     g refresh
 ;;   n/p next/prev  q quit
 ;;
-;; Evil: normal state gets j/k plus the same one-key actions.
+;; Helix: normal state gets j/k plus the same one-key actions.
 
 ;;; Code:
 
@@ -916,18 +916,11 @@ A ⁺ marks a remote that has no copy of the branch yet."
   (face-remap-set-base 'hl-line 'sync-ui-selected)
   (hl-line-mode 1))
 
-(declare-function evil-set-initial-state "evil")
-(declare-function evil-define-key* "evil-core")
 
-(with-eval-after-load 'evil
-  (evil-set-initial-state 'sync-ui-mode 'normal)
-  ;; `evil-define-key' is a macro: calling it from a file byte-compiled
-  ;; without evil loaded yields (invalid-function evil-define-key).
-  ;; `evil-define-key*' is the function underneath and is always safe.
-  (evil-define-key* 'normal sync-ui-mode-map
-    (kbd "j") #'sync-ui-next
-    (kbd "k") #'sync-ui-previous
-    (kbd "RET") #'sync-ui-magit))
+(with-eval-after-load 'helix
+  (helix-define-key 'normal "j" #'sync-ui-next 'sync-ui-mode)
+  (helix-define-key 'normal "k" #'sync-ui-previous 'sync-ui-mode)
+  (helix-define-key 'normal "RET" #'sync-ui-magit 'sync-ui-mode))
 
 ;;; § 8 Entry points
 

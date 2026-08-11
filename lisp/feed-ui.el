@@ -762,14 +762,12 @@ above and the actions row below."
   "Major mode for the feed.org vui client."
   (hl-line-mode 1))
 
-(with-eval-after-load 'evil
-  (evil-set-initial-state 'feed-ui-mode 'normal)
-  (evil-define-key 'normal feed-ui-mode-map
-    (kbd "RET") #'feed-ui-open-thread-at-point
-    "r" #'feed-ui-reply-at-point
-    "m" #'feed-ui-mute-at-point
-    "g" #'feed-ui-sync
-    "q" #'feed-ui-back-or-quit))
+(with-eval-after-load 'helix
+  (helix-define-key 'normal "RET" #'feed-ui-open-thread-at-point 'feed-ui-mode)
+  (helix-define-key 'normal "r" #'feed-ui-reply-at-point 'feed-ui-mode)
+  (helix-define-key 'normal "m" #'feed-ui-mute-at-point 'feed-ui-mode)
+  (helix-define-key 'normal "g" #'feed-ui-sync 'feed-ui-mode)
+  (helix-define-key 'normal "q" #'feed-ui-back-or-quit 'feed-ui-mode))
 
 ;;;###autoload
 (defun feed ()

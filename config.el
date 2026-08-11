@@ -291,6 +291,10 @@ Selects the compilation window so the cursor lands in it."
 (defun my/helix-ignore-key ()
   (interactive))
 
+(defconst my/helix-emacs-prefix-keys
+  (list ?\C-c ?\C-x)
+  "Prefix keys that should fall through to normal Emacs keymaps.")
+
 (defun my/helix-make-fallback-keymap (block-characters)
   (let ((keymap (make-keymap)))
     (set-char-table-range
@@ -310,7 +314,14 @@ Selects the compilation window so the cursor lands in it."
                      (event-convert-list
                       (append modifiers (list character))))
                     #'my/helix-ignore-key)))
+    (dolist (key my/helix-emacs-prefix-keys)
+      (set-char-table-range (cadr keymap) key nil))
     keymap))
+
+(defun my/helix-let-emacs-prefixes-through (&rest keymaps)
+  (dolist (keymap keymaps)
+    (dolist (key my/helix-emacs-prefix-keys)
+      (define-key keymap (vector key) nil))))
 
 (defvar my/helix-normal-fallback-keymap
   (my/helix-make-fallback-keymap t))
@@ -348,10 +359,19 @@ Selects the compilation window so the cursor lands in it."
       my/helix-terminal-insert-state-keymap
     (alist-get helix--current-state helix--state-to-keymap-alist)))
 
+(defvar my/helix-preserve-local-map-modes
+  '(magit-mode magit-section-mode magit-blame-read-only-mode)
+  "Modes whose local keymaps should stay behind Helix mode overrides.")
+
+(defun my/helix-preserve-local-map-p ()
+  (seq-some #'derived-mode-p my/helix-preserve-local-map-modes))
+
 (defun my/helix-refresh-overriding-maps ()
   (let* ((state helix--current-state)
          (state-mode (alist-get state helix-state-mode-alist))
          (base-keymap (my/helix-state-base-keymap))
+         (local-keymap (when (my/helix-preserve-local-map-p)
+                         (current-local-map)))
          overrides)
     (dolist (priority '(4 3 2 1))
       (let (matches)
@@ -366,9 +386,15 @@ Selects the compilation window so the cursor lands in it."
     (push
      (cons
       state-mode
-      (if overrides
-          (make-composed-keymap overrides base-keymap)
-        base-keymap))
+      (cond
+       ((and overrides local-keymap)
+        (make-composed-keymap overrides
+                              (make-composed-keymap local-keymap base-keymap)))
+       (overrides
+        (make-composed-keymap overrides base-keymap))
+       (local-keymap
+        (make-composed-keymap local-keymap base-keymap))
+       (t base-keymap)))
      minor-mode-overriding-map-alist)))
 
 (defun my/helix-refresh-all-buffers ()
@@ -424,7 +450,8 @@ Selects the compilation window so the cursor lands in it."
                   'vterm-mode
                   'eat-mode
                   'eshell-mode
-                  'shell-mode))
+                  'shell-mode
+                  'agent-shell-mode))
 
 (defun my/helix-set-line-numbers (style)
   (if (my/helix-line-numbers-disabled-p)
@@ -432,7 +459,7 @@ Selects the compilation window so the cursor lands in it."
     (setq display-line-numbers style)))
 
 (use-package helix
-  :ensure nil
+  :ensure (:wait t)
   :demand t
   :hook ((helix-normal-mode . (lambda () (my/helix-set-line-numbers 'relative)))
          (helix-insert-mode . (lambda () (my/helix-set-line-numbers t))))
@@ -458,6 +485,9 @@ Selects the compilation window so the cursor lands in it."
   (my/helix-install-fallback-keymap
    helix-insert-state-keymap
    my/helix-insert-fallback-keymap)
+  (my/helix-let-emacs-prefixes-through
+   helix-normal-state-keymap
+   helix-insert-state-keymap)
   (helix-define-key 'normal (kbd "C-u") #'my/helix-scroll-half-page-up)
   (helix-define-key 'normal (kbd "C-d") #'my/helix-scroll-half-page-down)
   (helix-define-key 'normal (kbd "C-i") #'xref-go-forward)
@@ -493,6 +523,7 @@ Selects the compilation window so the cursor lands in it."
   (helix-define-key 'insert (kbd "C-x") #'completion-at-point)
   (helix-define-key 'insert (kbd "C-r") #'insert-register)
   (helix-define-key 'insert (kbd "M-x") #'helm-M-x)
+  (helix-define-key 'insert (kbd "M-SPC") 'helix-space-map)
   (helix-define-key 'insert (kbd "C-w") #'backward-kill-word)
   (helix-define-key 'insert (kbd "M-DEL") #'backward-kill-word)
   (helix-define-key 'insert (kbd "M-d") #'kill-word)
@@ -523,12 +554,14 @@ Selects the compilation window so the cursor lands in it."
   (helix-jj-setup 0.2))
 
 (use-package embrace
+  :ensure (:wait t)
   :defer t
   :hook ((org-mode . embrace-org-mode-hook)
          (emacs-lisp-mode . embrace-emacs-lisp-mode-hook))
   :bind (("C-," . embrace-commander)))
 
 (use-package multiple-cursors
+  :ensure (:wait t)
   :defer t)
 
 (with-eval-after-load 'helix
@@ -905,6 +938,8 @@ Selects the compilation window so the cursor lands in it."
          ("/" . isearch-forward)
          ("n" . isearch-repeat-forward)
          ("N" . isearch-repeat-backward)
+         ("RET" . magit-visit-thing)
+         ("<return>" . magit-visit-thing)
          ("q" . magit-mode-bury-buffer)
          ("S-SPC" . magit-diff-show-or-scroll-up)
          ("S-DEL" . magit-diff-show-or-scroll-down)
@@ -942,7 +977,9 @@ Selects the compilation window so the cursor lands in it."
          ("[" . magit-section-backward-sibling)
          ("]" . magit-section-forward-sibling)
          ("TAB" . magit-section-toggle)
-         ("S-TAB" . magit-section-cycle-global)))
+         ("<tab>" . magit-section-toggle)
+         ("S-TAB" . magit-section-cycle-global)
+         ("<backtab>" . magit-section-cycle-global)))
     (helix-define-key
      'normal
      (kbd (car binding))
@@ -1828,6 +1865,7 @@ Temporarily disables notifications during the fetch."
 
 (use-package agent-shell
   :ensure t
+  :hook (agent-shell-mode . my/disable-line-numbers)
   :config
   (advice-add 'shell-maker-submit :after #'my/agent-shell-autoscroll)
   (dolist (rule (my/agent-shell-display-buffer-rules))
@@ -1841,6 +1879,10 @@ Temporarily disables notifications during the fetch."
   (setq agent-shell-activity-group-header-label-function
       #'agent-shell-activity-group-descriptive-label)
 
+  (with-eval-after-load 'helix
+    (helix-define-key 'normal (kbd "RET") #'agent-shell-submit 'agent-shell-mode)
+    (helix-define-key 'normal (kbd "<return>") #'agent-shell-submit 'agent-shell-mode)
+    (my/helix-refresh-all-buffers))
 
   ;; Work around agent-shell's `window-system' guard so clipboard images
   ;; work in terminal Emacs (`emacs -nw').  The underlying save routine
@@ -1989,12 +2031,11 @@ Temporarily disables notifications during the fetch."
   :demand t
   :custom
   (age-program "rage")
-  (age-default-identity "~/.config/age/keys.txt")
+  (age-default-identity "~/.config/passage/identities")
   (age-default-recipient
    '("age188928acysrh9zpc3rk6q4lqmf3qlpjx3s26m6k3p6kah63gcws7sx3jeej"
      "age1mhvdwh6cvd70hm5dcptc4xca2xnkf383g6706ful6kmrudwdysvq0eytym"))
   :config
-  (setenv "PINENTRY_PROGRAM" "pinentry-gnome3")
   (setenv "PASSAGE_DIR" (expand-file-name "~/pass"))
   (age-file-enable))
 
@@ -2040,7 +2081,8 @@ TITLE names the new denote-style file in ~/org."
   :ensure (:wait t))
 
 (use-package s
-  :ensure (:wait t))
+  :ensure nil
+  :demand t)
 
 (use-package with-editor
   :ensure (:wait t))

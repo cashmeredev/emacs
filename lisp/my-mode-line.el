@@ -2,33 +2,13 @@
 
 (require 'mode-line-maker)
 
-(defface my/mode-line-evil-normal
+(defface my/mode-line-helix-normal
   '((t (:background "#89b4fa" :foreground "#1e1e2e" :weight bold)))
-  "Face for the evil normal state indicator.")
+  "Face for the helix normal state indicator.")
 
-(defface my/mode-line-evil-insert
+(defface my/mode-line-helix-insert
   '((t (:background "#a6e3a1" :foreground "#1e1e2e" :weight bold)))
-  "Face for the evil insert state indicator.")
-
-(defface my/mode-line-evil-visual
-  '((t (:background "#cba6f7" :foreground "#1e1e2e" :weight bold)))
-  "Face for the evil visual state indicator.")
-
-(defface my/mode-line-evil-replace
-  '((t (:background "#f38ba8" :foreground "#1e1e2e" :weight bold)))
-  "Face for the evil replace state indicator.")
-
-(defface my/mode-line-evil-operator
-  '((t (:background "#fab387" :foreground "#1e1e2e" :weight bold)))
-  "Face for the evil operator state indicator.")
-
-(defface my/mode-line-evil-motion
-  '((t (:background "#94e2d5" :foreground "#1e1e2e" :weight bold)))
-  "Face for the evil motion state indicator.")
-
-(defface my/mode-line-evil-emacs
-  '((t (:background "#b4befe" :foreground "#1e1e2e" :weight bold)))
-  "Face for the evil emacs state indicator.")
+  "Face for the helix insert state indicator.")
 
 (defface my/mode-line-irc-face
   '((t (:foreground "#94e2d5" :weight bold)))
@@ -94,12 +74,12 @@ the project root, falling back to the plain buffer name."
              (ignore-errors (nerd-icons-icon-for-file buffer-file-name)))
         (ignore-errors (nerd-icons-icon-for-mode major-mode)))))
 
-(defun my/mode-line-evil-state ()
-  "Colored single-letter indicator for the current evil state."
-  (when (and (boundp 'evil-state) evil-state)
-    (let* ((tag (upcase (substring (symbol-name evil-state) 0 1)))
-           (face (intern-soft (format "my/mode-line-evil-%s" evil-state))))
-      (propertize (format " %s " tag) 'face (or face 'my/mode-line-evil-normal)))))
+(defun my/mode-line-helix-state ()
+  "Colored single-letter indicator for the current helix state."
+  (when (and (boundp 'helix--current-state) helix--current-state)
+    (let* ((tag (upcase (substring (symbol-name helix--current-state) 0 1)))
+           (face (intern-soft (format "my/mode-line-helix-%s" helix--current-state))))
+      (propertize (format " %s " tag) 'face (or face 'my/mode-line-helix-normal)))))
 
 (defun my/mode-line-buffer-state ()
   "Buffer state icon: lock (read-only), pencil-alert (modified), save (saved)."
@@ -163,7 +143,7 @@ the bottom mode-line is hidden."
   (setq-default mode-line-format nil)
   (setq-default header-line-format
                 (mode-line-maker
-                 '((:eval (my/mode-line-evil-state)) " "
+                 '((:eval (my/mode-line-helix-state)) " "
                    (:eval (my/mode-line-buffer-state)) mode-line-remote " "
                    (:eval (my/mode-line-buffer-icon)) " "
                    (:eval (propertize (my/mode-line-buffer-name)

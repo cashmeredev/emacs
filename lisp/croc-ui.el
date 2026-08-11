@@ -31,7 +31,7 @@
 ;;   RET log          w copy code     Q qr          x kill
 ;;   X clear done     n/p next/prev   g refresh     q quit
 ;;
-;; Evil: normal state gets j/k plus the same one-key actions.
+;; Helix: normal state gets j/k plus the same one-key actions.
 
 ;;; Code:
 
@@ -971,28 +971,21 @@ stay square; MARGIN (default 4) modules of quiet zone wrap the code."
   (face-remap-set-base 'hl-line 'croc-ui-selected)
   (hl-line-mode 1))
 
-(declare-function evil-set-initial-state "evil")
-(declare-function evil-define-key* "evil-core")
 
-(with-eval-after-load 'evil
-  (evil-set-initial-state 'croc-ui-mode 'normal)
-  ;; `evil-define-key' is a macro: calling it from a file byte-compiled
-  ;; without evil loaded yields (invalid-function evil-define-key).
-  ;; `evil-define-key*' is the function underneath and is always safe.
-  (evil-define-key* 'normal croc-ui-mode-map
-    (kbd "j") #'croc-ui-next
-    (kbd "k") #'croc-ui-previous
-    (kbd "RET") #'croc-ui-open-log
-    (kbd "s") #'croc-ui-send-files
-    (kbd "d") #'croc-ui-send-directory
-    (kbd "t") #'croc-ui-send-text
-    (kbd "r") #'croc-ui-receive
-    (kbd "w") #'croc-ui-copy-code
-    (kbd "Q") #'croc-ui-toggle-qr
-    (kbd "x") #'croc-ui-kill
-    (kbd "X") #'croc-ui-clear-done
-    (kbd "g") #'croc-ui-refresh
-    (kbd "q") #'quit-window))
+(with-eval-after-load 'helix
+  (helix-define-key 'normal "j" #'croc-ui-next 'croc-ui-mode)
+  (helix-define-key 'normal "k" #'croc-ui-previous 'croc-ui-mode)
+  (helix-define-key 'normal "RET" #'croc-ui-open-log 'croc-ui-mode)
+  (helix-define-key 'normal "s" #'croc-ui-send-files 'croc-ui-mode)
+  (helix-define-key 'normal "d" #'croc-ui-send-directory 'croc-ui-mode)
+  (helix-define-key 'normal "t" #'croc-ui-send-text 'croc-ui-mode)
+  (helix-define-key 'normal "r" #'croc-ui-receive 'croc-ui-mode)
+  (helix-define-key 'normal "w" #'croc-ui-copy-code 'croc-ui-mode)
+  (helix-define-key 'normal "Q" #'croc-ui-toggle-qr 'croc-ui-mode)
+  (helix-define-key 'normal "x" #'croc-ui-kill 'croc-ui-mode)
+  (helix-define-key 'normal "X" #'croc-ui-clear-done 'croc-ui-mode)
+  (helix-define-key 'normal "g" #'croc-ui-refresh 'croc-ui-mode)
+  (helix-define-key 'normal "q" #'quit-window 'croc-ui-mode))
 
 ;;; § 9 Entry points
 
