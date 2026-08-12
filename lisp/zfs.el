@@ -4,6 +4,8 @@
 (require 'vui-components)
 (require 'async)
 (require 'zfs-cli)
+(declare-function evil-define-key* "evil-core" (state keymap key def &rest bindings))
+(declare-function evil-set-initial-state "evil-core" (mode state))
 
 (defcustom zfs-buffer-name "*zfs*"
   "Name of the ZFS management buffer."
@@ -23,6 +25,8 @@ Same plist shape as documented there."
 
 (defvar-local zfs-ui--row-actions nil)
 (defvar-local zfs-ui--refresh-fn nil)
+(defvar-local zfs-ui--back-action nil)
+
 
 (defun zfs-ui--targets-load ()
   (if (file-exists-p zfs-targets-file)
@@ -145,7 +149,8 @@ Same plist shape as documented there."
    (vui-set-state :backup-progress nil)
    (vui-set-state :backup-done nil)
    (vui-set-state :create-status nil)
-   (vui-set-state :format-disk nil)
+   (vui-set-state :copy-status nil)
+   (vui-set-state :risk-status nil)
    (vui-set-state :format-status nil)))
 
 (defun zfs-ui--fail (err)
@@ -161,25 +166,6 @@ Same plist shape as documented there."
           (zfs-ui--refresh host))
       (error (zfs-ui--fail err)))))
 
-(defun zfs-ui--do-destroy (host target has-dependents)
-  (when (yes-or-no-p (if has-dependents
-                         (format "Destroy %s including its children and snapshots? " target)
-                       (format "Destroy %s? " target)))
-    (condition-case err
-        (progn
-          (zfs-cli-destroy host target has-dependents)
-          (vui-set-state :message (cons (format "Destroyed %s" target) 'success))
-          (zfs-ui--refresh host))
-      (error (zfs-ui--fail err)))))
-
-(defun zfs-ui--do-rollback (host snapshot)
-  (when (yes-or-no-p (format "Roll back to %s? Snapshots taken after it are destroyed. " snapshot))
-    (condition-case err
-        (progn
-          (zfs-cli-rollback host snapshot)
-          (vui-set-state :message (cons (format "Rolled back to %s" snapshot) 'success))
-          (zfs-ui--refresh host))
-      (error (zfs-ui--fail err)))))
 
 (defun zfs-ui--do-mount (host dataset)
   (condition-case err
@@ -208,15 +194,38 @@ Same plist shape as documented there."
         (zfs-ui--refresh host))
     (error (zfs-ui--fail err))))
 
+(defun zfs-ui--do-rollback (host snapshot)
+  (condition-case err
+      (progn
+        (zfs-cli-rollback host snapshot)
+        (vui-set-state :message (cons (format "Rolled back to %s" snapshot) 'success))
+        (zfs-ui--refresh host)
+        (zfs-ui--go 'overview))
+    (error (vui-set-state :risk-status (cons (error-message-string err) 'error)))))
+
 (defun zfs-ui--do-export (host pool)
-  (when (yes-or-no-p (format "Export %s? The pool goes offline until imported again. " pool))
-    (condition-case err
-        (progn
-          (zfs-cli-export host pool)
-          (vui-set-state :message (cons (format "Exported %s" pool) 'success))
-          (zfs-ui--go 'overview)
-          (zfs-ui--refresh host))
-      (error (zfs-ui--fail err)))))
+  (condition-case err
+      (progn
+        (zfs-cli-export host pool)
+        (vui-set-state :message (cons (format "Exported %s" pool) 'success))
+        (zfs-ui--refresh host)
+        (zfs-ui--go 'overview))
+    (error (vui-set-state :risk-status (cons (error-message-string err) 'error)))))
+
+(defun zfs-ui--do-format (device pool-name encrypted passphrase)
+  (let ((mapper (concat "luks-" (plist-get device :name))))
+    (vui-set-state :format-status (cons "Formatting… this takes a moment" 'shadow))
+    (zfs-cli-format-disk-async
+     (plist-get device :path) pool-name mapper (and encrypted passphrase)
+     (vui-async-callback (status err)
+       (if (zerop status)
+           (vui-batch
+            (vui-set-state :message (cons (format "Pool %s created on %s" pool-name (plist-get device :name))
+                                          'success))
+            (zfs-ui--refresh nil)
+            (zfs-ui--go 'overview))
+         (vui-set-state :format-status (cons (format "Format failed: %s" err) 'error)))))))
+
 
 (defun zfs-ui--do-unlock (device)
   (let ((passphrase (read-passwd (format "LUKS passphrase for %s: " (plist-get device :name)))))
@@ -243,20 +252,6 @@ Same plist shape as documented there."
           (vui-set-state :message (cons "No ZFS pool found on the device" 'warning))))
     (error (zfs-ui--fail err))))
 
-(defun zfs-ui--do-lock (device pools)
-  (let* ((mapper (zfs-cli-disk-mapper device))
-         (pool (zfs-cli-pool-on-device (concat "/dev/mapper/" mapper))))
-    (when (yes-or-no-p (if (and pool (assoc pool pools))
-                           (format "Export %s and lock %s? " pool (plist-get device :name))
-                         (format "Lock %s? " (plist-get device :name))))
-      (condition-case err
-          (progn
-            (when (and pool (assoc pool pools))
-              (zfs-cli-export nil pool))
-            (zfs-cli-luks-close mapper)
-            (vui-set-state :message (cons (format "Locked %s" (plist-get device :name)) 'success))
-            (zfs-ui--refresh nil))
-        (error (zfs-ui--fail err))))))
 
 (defun zfs-ui--common-base (snaps target-snap-names dataset)
   (let* ((own (zfs--snapshots-of snaps dataset))
@@ -316,10 +311,13 @@ Same plist shape as documented there."
 (defun zfs-ui--field-string (key)
   (or (vui-field-value key) ""))
 
+(defun zfs-ui--ack-p (key)
+  (equal (zfs-ui--field-string key) "ack"))
+
 (defun zfs-ui--start-move (host dataset mountpoint move-dir)
   (vui-set-state :create-status (cons "Copying… 0%" 'shadow))
   (zfs-cli-rsync-async
-   move-dir mountpoint
+   move-dir mountpoint 'contents nil
    (vui-async-callback (event)
      (pcase (car event)
        (:progress
@@ -337,14 +335,88 @@ Same plist shape as documented there."
         (zfs-ui--go 'dataset dataset)
         (zfs-ui--refresh host))))))
 
+(defconst zfs-ui--copy-modes
+  '((contents "Copy folder contents" "Put a folder's contents into the target. Source stays untouched.")
+    (item "Copy selected item" "Place the selected file or folder inside the target.")
+    (move "Move files safely" "Copy first, then remove copied files; folders stay for review.")))
+
+(defun zfs-ui--copy-mode-title (mode)
+  (cadr (assoc mode zfs-ui--copy-modes)))
+
+(defun zfs-ui--copy-preview-line (line)
+  (truncate-string-to-width line (max 24 (min 76 (- (window-width) 4))) nil nil "…"))
+
+(defun zfs-ui--copy-preview (output)
+  (let* ((lines (mapcar #'string-trim (split-string (or output "") "\n")))
+         (useful (seq-filter (lambda (line)
+                               (and (not (string-empty-p line))
+                                    (not (string-prefix-p "sending incremental file list" line))
+                                    (not (string-prefix-p "sent " line))
+                                    (not (string-prefix-p "total size" line))))
+                             lines))
+         (shown (seq-take useful 14))
+         (more (- (length useful) (length shown))))
+    (if useful
+        (concat "\n\nPreview:\n"
+                (string-join (mapcar (lambda (line)
+                                       (concat "  " (zfs-ui--copy-preview-line line)))
+                                     shown)
+                             "\n")
+                (if (> more 0) (format "\n  … %d more" more) ""))
+      "\n\nPreview: rsync found no file changes.")))
+
+(defun zfs-ui--copy-event (source target dry-run event)
+  (pcase (car event)
+    (:progress
+     (if (string-match "\\([0-9]+%\\)" (nth 1 event))
+         (vui-set-state :copy-status
+                        (cons (format "%s… %s"
+                                      (if dry-run "Checking" "Copying")
+                                      (match-string 1 (nth 1 event)))
+                              'shadow))
+       (when dry-run
+         (vui-set-state :copy-status (cons "Checking… building preview" 'shadow)))))
+    (:done
+     (if (zerop (nth 1 event))
+         (vui-set-state :copy-status
+                        (cons (if dry-run
+                                  (concat (format "Dry run complete: %s → %s, no files changed" source target)
+                                          (zfs-ui--copy-preview (nth 3 event)))
+                                (format "Transfer complete: %s → %s" source target))
+                              'success))
+       (vui-set-state :copy-status (cons (format "Transfer failed: %s" (nth 2 event)) 'error))))))
+
+(defun zfs-ui--do-copy (&optional mode dry-run source target)
+  (if mode
+      nil
+    (setq mode 'contents))
+  (let* ((field-source (vui-field-value :copy-source))
+         (field-target (vui-field-value :copy-target))
+         (source (if (or (null source) (string-blank-p source))
+                     (or field-source (zfs-ui--field-string 'copy-source))
+                   source))
+         (target (if (or (null target) (string-blank-p target))
+                     (or field-target (zfs-ui--field-string 'copy-target))
+                   target)))
+    (cond
+     ((string-blank-p source)
+      (vui-set-state :copy-status (cons "Source is empty" 'error)))
+     ((string-blank-p target)
+      (vui-set-state :copy-status (cons "Target is empty" 'error)))
+     (t
+      (vui-set-state :copy-status (cons (if dry-run "Checking… reading file list" "Copying… 0%") 'shadow))
+      (zfs-cli-rsync-async source target mode dry-run
+                           (vui-async-callback (event)
+                             (zfs-ui--copy-event source target dry-run event)))))))
+
 (defun zfs-ui--do-create-dataset (host parent)
-  (let* ((leaf (zfs-ui--field-string "create-name"))
-         (mountpoint (zfs-ui--field-string "create-mountpoint"))
-         (quota (zfs-ui--field-string "create-quota"))
-         (passphrase (zfs-ui--field-string "create-passphrase"))
+  (let* ((leaf (zfs-ui--field-string 'create-name))
+         (mountpoint (zfs-ui--field-string 'create-mountpoint))
+         (quota (zfs-ui--field-string 'create-quota))
+         (passphrase (zfs-ui--field-string 'create-passphrase))
          (encrypted (not (string-blank-p passphrase)))
-         (compression (zfs-ui--field-string "create-compression"))
-         (move-dir (zfs-ui--field-string "create-move"))
+         (compression (zfs-ui--field-string 'create-compression))
+         (move-dir (zfs-ui--field-string 'create-move))
          (dataset (concat parent "/" leaf)))
     (cond
      ((string-blank-p leaf)
@@ -375,24 +447,11 @@ Same plist shape as documented there."
                 (zfs-ui--refresh host)))
           (error (vui-set-state :create-status (cons (error-message-string err) 'error)))))))))
 
-(defun zfs-ui--do-format (device pool-name encrypted passphrase)
-  (let ((mapper (concat "luks-" (plist-get device :name))))
-    (vui-set-state :format-status (cons "Formatting… this takes a moment" 'shadow))
-    (zfs-cli-format-disk-async
-     (plist-get device :path) pool-name mapper (and encrypted passphrase)
-     (vui-async-callback (status err)
-       (if (zerop status)
-           (vui-batch
-            (vui-set-state :format-status (cons (format "Pool %s created on %s" pool-name (plist-get device :name))
-                                                'success))
-            (vui-set-state :format-disk nil)
-            (zfs-ui--refresh nil))
-         (vui-set-state :format-status (cons (format "Format failed: %s" err) 'error)))))))
 
 (defconst zfs-ui--property-glossary
   '(("used" . "live data + snapshots + children together")
     ("referenced" . "live data right now, snapshots excluded")
-    ("usedbysnapshots" . "only reachable through snapshots; freed when you delete them")
+    ("usedbysnapshots" . "only reachable through snapshots; freed only by snapshot removal outside this UI")
     ("usedbychildren" . "used by datasets below this one")
     ("available" . "room this dataset can still grow into")
     ("compressratio" . "how much smaller data is stored; 1.31x ≈ 24% saved")
@@ -475,9 +534,8 @@ Same plist shape as documented there."
          (imported (and pool (assoc pool pools))))
     (push (cons (concat "lock:" name)
                 (if unlocked
-                    (append (unless imported
-                              (list :import (vui-with-async-context (zfs-ui--do-import device))))
-                            (list :lock (vui-with-async-context (zfs-ui--do-lock device pools))))
+                    (unless imported
+                      (list :import (vui-with-async-context (zfs-ui--do-import device))))
                   (list :unlock (vui-with-async-context (zfs-ui--do-unlock device)))))
           zfs-ui--row-actions)
     (vui-hstack
@@ -490,14 +548,15 @@ Same plist shape as documented there."
      (vui-box (vui-text (or (plist-get device :model) "?") :face 'shadow) :width 24)
      (vui-box (vui-text (zfs--format-bytes (plist-get device :size)) :face 'shadow) :width 8)
      (vui-text (cond
-                (imported (format "pool %s imported · L ejects and locks" pool))
-                (unlocked (format "unlocked as %s · i imports pool %s · L locks" mapper (or pool "?")))
+                (imported (format "pool %s imported" pool))
+                (unlocked (format "unlocked as %s · i imports pool %s" mapper (or pool "?")))
                 (t "locked · u unlock"))
                :face 'shadow))))
 
 (defun zfs-ui--page-overview (pools datasets snaps locked)
   (push (cons 'page
-              (list :format (vui-with-async-context (zfs-ui--go 'new-pool))
+              (list :copy (vui-with-async-context (zfs-ui--go 'copy))
+                    :admin (vui-with-async-context (zfs-ui--go 'admin))
                     :targets (vui-with-async-context (zfs-ui--go 'targets))))
         zfs-ui--row-actions)
   (let ((roots (seq-filter (lambda (entry) (not (string-match-p "/" (car entry)))) datasets)))
@@ -515,9 +574,26 @@ Same plist shape as documented there."
       (list
        (vui-vstack
         :spacing 0
+        (vui-heading-3 "Utilities")
+        (vui-hstack
+         :spacing 2
+         (vui-box (vui-text "C" :face 'success) :width 3)
+         (vui-button "Copy files" :no-decoration t :face 'success
+                     :on-click (lambda () (zfs-ui--go 'copy)))
+         (vui-text "dry-run, copy, or move paths with rsync" :face 'shadow))
+        (vui-hstack
+         :spacing 2
+         (vui-box (vui-text "A" :face 'warning) :width 3)
+         (vui-button "Admin actions" :no-decoration t :face 'warning
+                     :on-click (lambda () (zfs-ui--go 'admin)))
+         (vui-text "ack-gated export and format tools" :face 'shadow)))
+       (vui-vstack
+        :spacing 0
         (vui-heading-3 "Pools")
-        (vui-muted "teams of disks; datasets live inside them · RET details · F format a disk")
-        (apply #'vui-vstack :spacing 0 (mapcar #'zfs-ui--pool-row pools)))
+        (vui-muted "teams of disks; datasets live inside them · RET details")
+        (if pools
+            (apply #'vui-vstack :spacing 0 (mapcar #'zfs-ui--pool-row pools))
+          (vui-muted "No pools found. Kernel module loaded, pools imported?")))
        (vui-vstack
         :spacing 0
         (vui-heading-3 "Datasets")
@@ -551,9 +627,8 @@ Same plist shape as documented there."
          (leaf (zfs--snapshot-leaf full-name)))
     (push (cons (concat "snap:" full-name)
                 (list :diff (vui-with-async-context (zfs-ui--do-diff host full-name))
-                      :rollback (vui-with-async-context (zfs-ui--do-rollback host full-name))
-                      :backup (vui-with-async-context (zfs-ui--go 'backup (cons dataset full-name)))
-                      :destroy (vui-with-async-context (zfs-ui--do-destroy host full-name nil))))
+                      :rollback (vui-with-async-context (zfs-ui--go 'rollback full-name))
+                      :backup (vui-with-async-context (zfs-ui--go 'backup (cons dataset full-name)))))
           zfs-ui--row-actions)
     (vui-hstack
      (vui-box (vui-button (concat "@" leaf) :no-decoration t :face 'shadow
@@ -571,7 +646,6 @@ Same plist shape as documented there."
                   (list :snapshot (vui-with-async-context (zfs-ui--do-snapshot host name))
                         :backup (vui-with-async-context (zfs-ui--go 'backup name))
                         :create-child (vui-with-async-context (zfs-ui--go 'create name))
-                        :destroy (vui-with-async-context (zfs-ui--do-destroy host name t))
                         :mount (vui-with-async-context (zfs-ui--do-mount host name))))
             zfs-ui--row-actions))
     (if (null entry)
@@ -586,7 +660,7 @@ Same plist shape as documented there."
                      (vui-text (downcase (or (alist-get 'type (cdr entry)) "")) :face 'shadow))
          (vui-muted (format "Everything in this dataset and its snapshots uses %s."
                             (zfs--format-bytes (zfs-cli-prop entry 'used))))
-         (vui-text "s snapshot · b backup · c new dataset inside · m mount · D destroy" :face 'shadow)
+         (vui-text "s snapshot · b backup · c new dataset inside · m mount" :face 'shadow)
          (apply #'vui-vstack :spacing 0
                 (mapcar (lambda (property) (zfs-ui--property-row entry property))
                         '("used" "referenced" "usedbysnapshots" "usedbychildren" "available"
@@ -598,7 +672,7 @@ Same plist shape as documented there."
           :spacing 0
           (append
            (list (vui-heading-3 (format "Snapshots (%d)" (length own-snaps)))
-                 (vui-muted "frozen moments · d what changed since · r roll back to · D delete"))
+                 (vui-muted "frozen moments · d diff · b backup · R rollback opens an ack page"))
            (if own-snaps
                (mapcar (lambda (snap) (zfs-ui--snapshot-row snap name host)) own-snaps)
              (list (vui-muted "none yet — press s to freeze this moment")))))))))))
@@ -621,7 +695,7 @@ Same plist shape as documented there."
       (push (cons 'page
                   (list :scrub-start (vui-with-async-context (zfs-ui--do-scrub host name nil))
                         :scrub-stop (vui-with-async-context (zfs-ui--do-scrub host name t))
-                        :export (vui-with-async-context (zfs-ui--do-export host name))))
+                        :export (vui-with-async-context (zfs-ui--go 'export name))))
             zfs-ui--row-actions))
     (if (null status)
         (vui-text (format "Could not read status of %s" name) :face 'error)
@@ -641,7 +715,7 @@ Same plist shape as documented there."
                        (format "Scan: %s" (or (alist-get 'state scan) "recorded"))
                      "Scrub: never run here — it reads everything and verifies checksums")
                    :face 'shadow)
-         (vui-text "1 scrub start · 2 scrub stop · x export (take offline)" :face 'shadow)
+         (vui-text "1 scrub start · 2 scrub stop · x export opens an ack page" :face 'shadow)
          (vui-vstack
           :spacing 0
           (vui-heading-3 "Devices")
@@ -662,25 +736,25 @@ Same plist shape as documented there."
    (vui-heading-3 (format "New dataset inside %s" parent))
    (vui-muted "A dataset is a drawer: its own compression, quota and snapshots.")
    (zfs-ui--form-row "Name"
-                     (vui-field :size 24 :key "create-name" :placeholder "music")
+                     (vui-field :size 24 :key 'create-name :placeholder "music")
                      (format "→ %s/<name>" parent))
    (zfs-ui--form-row "Mountpoint"
-                     (vui-field :size 24 :key "create-mountpoint"
+                     (vui-field :size 24 :key 'create-mountpoint
                                 :placeholder (expand-file-name "~/music"))
                      "where it appears; empty = not mounted")
    (zfs-ui--form-row "Compression"
-                     (vui-field :size 24 :key "create-compression" :value "zstd"
+                     (vui-field :size 24 :key 'create-compression :value "zstd"
                                 :placeholder "zstd")
                      "zstd squeezes better, lz4 is faster, off disables")
    (zfs-ui--form-row "Passphrase"
-                     (vui-field :size 24 :key "create-passphrase" :secret t
+                     (vui-field :size 24 :key 'create-passphrase :secret t
                                 :placeholder "empty = not encrypted")
                      "dataset-level, on top of disk LUKS")
    (zfs-ui--form-row "Quota"
-                     (vui-field :size 24 :key "create-quota" :placeholder "empty = no limit")
+                     (vui-field :size 24 :key 'create-quota :placeholder "empty = no limit")
                      "e.g. 50G")
    (zfs-ui--form-row "Move folder in"
-                     (vui-field :size 24 :key "create-move"
+                     (vui-field :size 24 :key 'create-move
                                 :placeholder "empty = start empty")
                      "rsync copy with progress; original is kept")
    (vui-hstack
@@ -688,6 +762,199 @@ Same plist shape as documented there."
     (vui-button "Create dataset" :on-click (lambda () (zfs-ui--do-create-dataset host parent))))
    (when create-status
      (vui-text (car create-status) :face (cdr create-status)))))
+
+(defun zfs-ui--copy-field-width ()
+  (max 24 (min 58 (- (window-width) 8))))
+
+(defun zfs-ui--copy-path-field (label key value placeholder)
+  (vui-vstack
+   :spacing 0
+   (vui-text label :face 'shadow)
+   (vui-field :size (zfs-ui--copy-field-width)
+              :key key
+              :value value
+              :placeholder placeholder
+              :on-change (lambda (next)
+                           (vui-batch
+                            (vui-set-state key next)
+                            (vui-set-state :copy-status nil))))))
+
+(defun zfs-ui--copy-mode-card (mode selected)
+  (let ((entry (assoc mode zfs-ui--copy-modes)))
+    (vui-vstack
+     :spacing 0
+     (vui-button (format "%s %s"
+                         (if (eq mode selected) "●" "○")
+                         (cadr entry))
+                 :no-decoration t
+                 :face (when (eq mode selected) 'success)
+                 :on-click (lambda ()
+                             (vui-batch
+                              (vui-set-state :copy-source (zfs-ui--field-string :copy-source))
+                              (vui-set-state :copy-target (zfs-ui--field-string :copy-target))
+                              (vui-set-state :copy-mode mode)
+                              (vui-set-state :copy-status nil))))
+     (vui-box (vui-text (caddr entry) :face 'shadow)
+              :width (max 24 (min 48 (- (window-width) 8)))))))
+
+(defun zfs-ui--page-copy (copy-status &optional copy-mode copy-dry-run copy-source copy-target)
+  (if copy-mode
+      nil
+    (setq copy-mode 'contents))
+  (push (cons 'page (list :submit (vui-with-async-context
+                                    (zfs-ui--do-copy copy-mode copy-dry-run copy-source copy-target))))
+        zfs-ui--row-actions)
+  (vui-vstack
+   :spacing 1
+   (vui-heading-3 "Copy files")
+   (vui-muted "Preview or transfer files with rsync. Long paths stay on their own lines.")
+   (zfs-ui--copy-path-field "Source" :copy-source copy-source "~/Downloads/media")
+   (zfs-ui--copy-path-field "Target" :copy-target copy-target "/mnt/tank/media")
+   (vui-vstack
+    :spacing 1
+    (vui-text "Mode" :face 'shadow)
+    (apply #'vui-vstack
+           :spacing 1
+           (mapcar (lambda (entry) (zfs-ui--copy-mode-card (car entry) copy-mode))
+                   zfs-ui--copy-modes)))
+   (vui-checkbox :checked copy-dry-run
+                 :label "Dry run — preview the plan without changing files"
+                 :on-change (lambda (value)
+                              (vui-batch
+                               (vui-set-state :copy-source (zfs-ui--field-string :copy-source))
+                               (vui-set-state :copy-target (zfs-ui--field-string :copy-target))
+                               (vui-set-state :copy-dry-run value)
+                               (vui-set-state :copy-status nil))))
+   (vui-hstack
+    :spacing 2
+    (vui-button (if copy-dry-run "Preview transfer" "Start transfer")
+                :on-click (lambda () (zfs-ui--do-copy copy-mode copy-dry-run copy-source copy-target)))
+    (vui-text (or (zfs-ui--copy-mode-title copy-mode) "") :face 'shadow))
+   (when copy-status
+     (vui-text (car copy-status) :face (cdr copy-status)))))
+
+(defun zfs-ui--page-admin ()
+  (push (cons 'page (list :format (vui-with-async-context (zfs-ui--go 'format))))
+        zfs-ui--row-actions)
+  (vui-vstack
+   :spacing 1
+   (vui-heading-3 "Admin actions")
+   (vui-text "These actions live one level away and require typing ack before they run." :face 'warning)
+   (vui-hstack
+    :spacing 2
+    (vui-button "Format unused disk" :face 'warning :on-click (lambda () (zfs-ui--go 'format))))
+   (vui-muted "Pool export is on a pool page. Snapshot rollback is on a snapshot row.")))
+
+(defun zfs-ui--page-export (pool host risk-status)
+  (push (cons 'page
+              (list :confirm (vui-with-async-context
+                               (if (zfs-ui--ack-p 'export-ack)
+                                   (zfs-ui--do-export host pool)
+                                 (vui-set-state :risk-status (cons "Type ack to export this pool" 'error))))))
+        zfs-ui--row-actions)
+  (vui-vstack
+   :spacing 1
+   (vui-heading-3 (format "Export %s" pool))
+   (vui-text "Export takes the pool offline for this system until it is imported again." :face 'warning)
+   (zfs-ui--form-row "Confirm" (vui-field :size 10 :key 'export-ack :placeholder "ack")
+                     "type ack")
+   (vui-hstack
+    (vui-box (vui-text "") :width 14)
+    (vui-button "Export pool"
+                :face 'warning
+                :on-click (lambda ()
+                            (if (zfs-ui--ack-p 'export-ack)
+                                (zfs-ui--do-export host pool)
+                              (vui-set-state :risk-status (cons "Type ack to export this pool" 'error))))))
+   (when risk-status
+     (vui-text (car risk-status) :face (cdr risk-status)))))
+
+(defun zfs-ui--page-rollback (snapshot host risk-status)
+  (push (cons 'page
+              (list :confirm (vui-with-async-context
+                               (if (zfs-ui--ack-p 'rollback-ack)
+                                   (zfs-ui--do-rollback host snapshot)
+                                 (vui-set-state :risk-status (cons "Type ack to roll back" 'error))))))
+        zfs-ui--row-actions)
+  (vui-vstack
+   :spacing 1
+   (vui-heading-3 (format "Rollback to @%s" (zfs--snapshot-leaf snapshot)))
+   (vui-text "This discards live changes made after the snapshot." :face 'warning)
+   (vui-muted "The UI calls plain zfs rollback without -r: if newer snapshots exist, ZFS refuses instead of deleting them.")
+   (zfs-ui--form-row "Confirm" (vui-field :size 10 :key 'rollback-ack :placeholder "ack")
+                     "type ack")
+   (vui-hstack
+    (vui-box (vui-text "") :width 14)
+    (vui-button "Rollback"
+                :face 'warning
+                :on-click (lambda ()
+                            (if (zfs-ui--ack-p 'rollback-ack)
+                                (zfs-ui--do-rollback host snapshot)
+                              (vui-set-state :risk-status (cons "Type ack to roll back" 'error))))))
+   (when risk-status
+     (vui-text (car risk-status) :face (cdr risk-status)))))
+
+(defun zfs-ui--page-format (format-status)
+  (let ((candidates (zfs-cli-disk-candidates)))
+    (apply
+     #'vui-vstack
+     :spacing 1
+     (append
+      (list
+       (vui-heading-3 "Format unused disk")
+       (vui-text "Only unused disks are listed here. The next page still requires ack." :face 'warning))
+      (if candidates
+          (mapcar (lambda (device)
+                    (vui-button (format "%s — %s — %s"
+                                        (plist-get device :name)
+                                        (or (plist-get device :model) "?")
+                                        (zfs--format-bytes (plist-get device :size)))
+                                :no-decoration t
+                                :on-click (lambda () (zfs-ui--go 'format-confirm device))))
+                  candidates)
+        (list (vui-muted "No unused disks found. Plug one in and press g.")))
+      (when format-status
+        (list (vui-text (car format-status) :face (cdr format-status))))))))
+
+(defun zfs-ui--page-format-confirm (device format-status)
+  (vui-vstack
+   :spacing 1
+   (vui-heading-3 (format "Format %s" (plist-get device :name)))
+   (vui-text (format "%s · %s — all data on it is erased"
+                     (or (plist-get device :model) "?")
+                     (zfs--format-bytes (plist-get device :size)))
+             :face 'error)
+   (zfs-ui--form-row "Pool name" (vui-field :size 24 :key 'format-pool :placeholder "tank"))
+   (zfs-ui--form-row "Passphrase" (vui-field :size 24 :key 'format-pass :secret t
+                                             :placeholder "empty = no encryption")
+                     "LUKS passphrase; empty leaves the disk unencrypted")
+   (zfs-ui--form-row "Disk name" (vui-field :size 24 :key 'format-confirm
+                                            :placeholder (plist-get device :name))
+                     "type the disk name")
+   (zfs-ui--form-row "Confirm" (vui-field :size 10 :key 'format-ack :placeholder "ack")
+                     "type ack")
+   (vui-hstack
+    (vui-box (vui-text "") :width 14)
+    (vui-button "Format"
+                :face 'error
+                :on-click
+                (lambda ()
+                  (let ((pool-name (zfs-ui--field-string 'format-pool))
+                        (passphrase (zfs-ui--field-string 'format-pass)))
+                    (cond
+                     ((string-blank-p pool-name)
+                      (vui-set-state :format-status (cons "Pool name is empty" 'error)))
+                     ((not (equal (zfs-ui--field-string 'format-confirm) (plist-get device :name)))
+                      (vui-set-state :format-status (cons "Type the disk name to confirm" 'error)))
+                     ((not (zfs-ui--ack-p 'format-ack))
+                      (vui-set-state :format-status (cons "Type ack to format this disk" 'error)))
+                     (t
+                      (zfs-ui--do-format device
+                                         pool-name
+                                         (not (string-blank-p passphrase))
+                                         passphrase)))))))
+   (when format-status
+     (vui-text (car format-status) :face (cdr format-status)))))
 
 (defun zfs-ui--page-backup (arg host datasets snaps targets backup-target backup-preview backup-progress backup-done)
   (let* ((dataset (if (consp arg) (car arg) arg))
@@ -738,18 +1005,18 @@ Same plist shape as documented there."
                  targets)))
        (vui-hstack
         (vui-box (vui-text "One-off" :face 'shadow) :width 14 :align :right)
-        (vui-field :size 18 :key "oneoff-ssh" :placeholder "user@host — empty = local")
+        (vui-field :size 18 :key 'oneoff-ssh :placeholder "user@host — empty = local")
         (vui-space 1)
-        (vui-field :size 18 :key "oneoff-prefix" :placeholder "pool/prefix")
+        (vui-field :size 18 :key 'oneoff-prefix :placeholder "pool/prefix")
         (vui-space 1)
         (vui-button "Use once"
                     :on-click
                     (lambda ()
-                      (let ((prefix (zfs-ui--field-string "oneoff-prefix")))
+                      (let ((prefix (zfs-ui--field-string 'oneoff-prefix)))
                         (if (string-blank-p prefix)
                             (vui-set-state :message (cons "One-off target needs a dataset prefix" 'error))
                           (let ((target (list :name "one-off" :dataset prefix))
-                                (ssh (zfs-ui--field-string "oneoff-ssh")))
+                                (ssh (zfs-ui--field-string 'oneoff-ssh)))
                             (unless (string-blank-p ssh)
                               (setq target (append target (list :ssh ssh))))
                             (vui-set-state :backup-target target)
@@ -785,67 +1052,13 @@ Same plist shape as documented there."
               (vui-text "Backup complete." :face 'success)
             (vui-text (format "Backup failed: %s" backup-done) :face 'error))))))))
 
-(defun zfs-ui--page-format (format-disk format-status)
-  (if (null format-disk)
-      (let ((candidates (zfs-cli-disk-candidates)))
-        (vui-vstack
-         :spacing 1
-         (vui-heading-3 "Format a disk as ZFS")
-         (vui-muted "Everything on the chosen disk is erased. Only unused disks are listed.")
-         (if candidates
-             (apply
-              #'vui-vstack
-              :spacing 0
-              (mapcar (lambda (device)
-                        (vui-button (format "%s — %s — %s"
-                                            (plist-get device :name)
-                                            (or (plist-get device :model) "?")
-                                            (zfs--format-bytes (plist-get device :size)))
-                                    :no-decoration t
-                                    :on-click (lambda () (vui-set-state :format-disk device))))
-                      candidates))
-           (vui-muted "No unused disks found. Plug one in and press g."))))
-    (vui-vstack
-     :spacing 1
-     (vui-heading-3 (format "Format %s" (plist-get format-disk :name)))
-     (vui-text (format "%s · %s — all data on it is erased"
-                       (or (plist-get format-disk :model) "?")
-                       (zfs--format-bytes (plist-get format-disk :size)))
-               :face 'warning)
-     (zfs-ui--form-row "Pool name" (vui-field :size 24 :key "format-pool" :placeholder "tank"))
-     (zfs-ui--form-row "Passphrase" (vui-field :size 24 :key "format-pass" :secret t
-                                               :placeholder "empty = no encryption")
-                       "LUKS passphrase; empty leaves the disk unencrypted")
-     (zfs-ui--form-row "Type disk name" (vui-field :size 24 :key "format-confirm"
-                                                   :placeholder (plist-get format-disk :name))
-                       "confirms you picked the right disk")
-     (vui-hstack
-      (vui-box (vui-text "") :width 14)
-      (vui-button "Format"
-                  :face 'error
-                  :on-click
-                  (lambda ()
-                    (let ((pool-name (zfs-ui--field-string "format-pool"))
-                          (passphrase (zfs-ui--field-string "format-pass")))
-                      (cond
-                       ((string-blank-p pool-name)
-                        (vui-set-state :format-status (cons "Pool name is empty" 'error)))
-                       ((not (equal (zfs-ui--field-string "format-confirm") (plist-get format-disk :name)))
-                        (vui-set-state :format-status (cons "Type the disk name to confirm" 'error)))
-                       (t
-                        (zfs-ui--do-format format-disk
-                                           pool-name
-                                           (not (string-blank-p passphrase))
-                                           passphrase)))))))
-     (when format-status
-       (vui-text (car format-status) :face (cdr format-status))))))
 
 (defun zfs-ui--page-targets (targets)
   (push (cons 'page
               (list :add (vui-with-async-context
-                           (let ((name (zfs-ui--field-string "target-name"))
-                                 (ssh (zfs-ui--field-string "target-ssh"))
-                                 (prefix (zfs-ui--field-string "target-prefix")))
+                           (let ((name (zfs-ui--field-string 'target-name))
+                                 (ssh (zfs-ui--field-string 'target-ssh))
+                                 (prefix (zfs-ui--field-string 'target-prefix)))
                              (if (or (string-blank-p name) (string-blank-p prefix))
                                  (vui-set-state :message (cons "Name and dataset prefix are required" 'error))
                                (let ((new (list :name name :dataset prefix)))
@@ -873,24 +1086,16 @@ Same plist shape as documented there."
                           :spacing 2
                           (vui-box (vui-text (plist-get target :name)) :width 16)
                           (vui-box (vui-text (or (plist-get target :ssh) "this machine") :face 'shadow) :width 24)
-                          (vui-box (vui-text (plist-get target :dataset) :face 'shadow) :width 28)
-                          (vui-button "Delete" :face 'error
-                                      :on-click
-                                      (lambda ()
-                                        (when (yes-or-no-p (format "Delete target %s? " (plist-get target :name)))
-                                          (let ((updated (seq-remove (lambda (other) (equal other target)) targets)))
-                                            (zfs-ui--targets-save updated)
-                                            (vui-set-state :targets updated)
-                                            (vui-set-state :message (cons "Target deleted" 'success))))))))
+                          (vui-text (plist-get target :dataset) :face 'shadow)))
                        targets)))
       (list (vui-muted "No targets yet — add one below.")))
     (list
      (vui-vstack
       :spacing 1
       (vui-heading-3 "Add target")
-      (zfs-ui--form-row "Name" (vui-field :size 24 :key "target-name" :placeholder "interserver"))
-      (zfs-ui--form-row "SSH" (vui-field :size 24 :key "target-ssh" :placeholder "user@host — empty = this machine"))
-      (zfs-ui--form-row "Dataset prefix" (vui-field :size 24 :key "target-prefix" :placeholder "backuppool/mainframe")
+      (zfs-ui--form-row "Name" (vui-field :size 24 :key 'target-name :placeholder "interserver"))
+      (zfs-ui--form-row "SSH" (vui-field :size 24 :key 'target-ssh :placeholder "user@host — empty = this machine"))
+      (zfs-ui--form-row "Dataset prefix" (vui-field :size 24 :key 'target-prefix :placeholder "backuppool/mainframe")
                         "must exist on the target; the dataset's leaf name is appended")
       (vui-hstack
        (vui-box (vui-text "") :width 14)
@@ -917,7 +1122,12 @@ Same plist shape as documented there."
           (backup-progress nil)
           (backup-done nil)
           (create-status nil)
-          (format-disk nil)
+          (copy-status nil)
+          (copy-mode 'contents)
+          (copy-dry-run t)
+          (copy-source "")
+          (copy-target "")
+          (risk-status nil)
           (format-status nil))
   :render
   (progn
@@ -926,28 +1136,28 @@ Same plist shape as documented there."
       nil)
     (setq zfs-ui--row-actions nil)
     (setq zfs-ui--refresh-fn (vui-with-async-context (zfs-ui--refresh host)))
-    (push (cons 'nav
-                (list :back (vui-with-async-context
-                              (if (eq page 'overview)
-                                  (bury-buffer)
-                                (zfs-ui--go 'overview)))))
-          zfs-ui--row-actions)
+    (setq zfs-ui--back-action
+          (vui-with-async-context
+           (if (eq page 'overview)
+               (bury-buffer)
+             (zfs-ui--go 'overview))))
     (let ((content
            (cond
             (loading (vui-text "Loading…" :face 'shadow))
             ((eq page 'overview)
-             (if pools
-                 (zfs-ui--page-overview pools datasets snaps locked)
-               (vui-vstack :spacing 1
-                           (vui-heading-3 "No pools found")
-                           (vui-muted "ZFS returned no pools. Kernel module loaded, pools imported?"))))
+             (zfs-ui--page-overview (or pools nil) (or datasets nil) (or snaps nil) locked))
             ((eq page 'dataset) (zfs-ui--page-dataset page-arg host datasets snaps))
             ((eq page 'pool) (zfs-ui--page-pool page-arg host))
             ((eq page 'create) (zfs-ui--page-create page-arg host create-status))
+            ((eq page 'copy) (zfs-ui--page-copy copy-status copy-mode copy-dry-run copy-source copy-target))
+            ((eq page 'admin) (zfs-ui--page-admin))
+            ((eq page 'export) (zfs-ui--page-export page-arg host risk-status))
+            ((eq page 'rollback) (zfs-ui--page-rollback page-arg host risk-status))
+            ((eq page 'format) (zfs-ui--page-format format-status))
+            ((eq page 'format-confirm) (zfs-ui--page-format-confirm page-arg format-status))
             ((eq page 'backup) (zfs-ui--page-backup page-arg host datasets snaps targets
                                                     backup-target backup-preview
                                                     backup-progress backup-done))
-            ((eq page 'new-pool) (zfs-ui--page-format format-disk format-status))
             ((eq page 'targets) (zfs-ui--page-targets targets))
             (t (vui-text "unknown page" :face 'error)))))
       (vui-vstack
@@ -965,11 +1175,11 @@ Same plist shape as documented there."
          (vui-text " "))
        content
        (vui-text (pcase page
-                   ('overview "RET open · u unlock · F format disk · T targets · g refresh · q quit")
-                   ('dataset "q back · s snapshot · b backup · c new dataset · d diff · r rollback · D destroy · g refresh")
-                   ('pool "q back · 1 scrub start · 2 scrub stop · x export · g refresh")
-                   ('backup "q back · click a target · g refresh")
-                   (_ "q back · g refresh"))
+                   ('overview "RET open · C copy · A admin · u unlock · T targets · r refresh · q quit")
+                   ('dataset "q back · s snapshot · b backup · c new dataset · d diff · R rollback · r refresh")
+                   ('pool "q back · 1 scrub start · 2 scrub stop · x export · r refresh")
+                   ('backup "q back · click a target · r refresh")
+                   (_ "q back · r refresh"))
                  :face 'shadow)))))
 
 (defun zfs-ui--key-on-line ()
@@ -995,23 +1205,136 @@ Same plist shape as documented there."
 (define-derived-mode zfs-mode vui-mode "ZFS"
   (hl-line-mode 1))
 
-(define-key zfs-mode-map (kbd "q") (lambda () (interactive) (zfs-ui--invoke :back)))
-(define-key zfs-mode-map (kbd "g") (lambda () (interactive) (when zfs-ui--refresh-fn (funcall zfs-ui--refresh-fn))))
-(define-key zfs-mode-map (kbd "s") (lambda () (interactive) (zfs-ui--invoke :snapshot)))
-(define-key zfs-mode-map (kbd "b") (lambda () (interactive) (zfs-ui--invoke :backup)))
-(define-key zfs-mode-map (kbd "c") (lambda () (interactive) (zfs-ui--invoke :create-child)))
-(define-key zfs-mode-map (kbd "d") (lambda () (interactive) (zfs-ui--invoke :diff)))
-(define-key zfs-mode-map (kbd "r") (lambda () (interactive) (zfs-ui--invoke :rollback)))
-(define-key zfs-mode-map (kbd "D") (lambda () (interactive) (zfs-ui--invoke :destroy)))
-(define-key zfs-mode-map (kbd "m") (lambda () (interactive) (zfs-ui--invoke :mount)))
-(define-key zfs-mode-map (kbd "u") (lambda () (interactive) (zfs-ui--invoke :unlock)))
-(define-key zfs-mode-map (kbd "i") (lambda () (interactive) (zfs-ui--invoke :import)))
-(define-key zfs-mode-map (kbd "L") (lambda () (interactive) (zfs-ui--invoke :lock)))
-(define-key zfs-mode-map (kbd "F") (lambda () (interactive) (zfs-ui--invoke :format)))
-(define-key zfs-mode-map (kbd "T") (lambda () (interactive) (zfs-ui--invoke :targets)))
-(define-key zfs-mode-map (kbd "1") (lambda () (interactive) (zfs-ui--invoke :scrub-start)))
-(define-key zfs-mode-map (kbd "2") (lambda () (interactive) (zfs-ui--invoke :scrub-stop)))
-(define-key zfs-mode-map (kbd "x") (lambda () (interactive) (zfs-ui--invoke :export)))
+(defun zfs-ui-open ()
+  (interactive)
+  (or (vui-activate)
+      (zfs-ui--invoke :open)))
+
+(defun zfs-ui-back ()
+  (interactive)
+  (if zfs-ui--back-action
+      (funcall zfs-ui--back-action)
+    (zfs-ui--invoke :back)))
+
+(defun zfs-ui-refresh ()
+  (interactive)
+  (when zfs-ui--refresh-fn
+    (funcall zfs-ui--refresh-fn)))
+
+(defun zfs-ui-snapshot ()
+  (interactive)
+  (zfs-ui--invoke :snapshot))
+
+(defun zfs-ui-backup ()
+  (interactive)
+  (zfs-ui--invoke :backup))
+
+(defun zfs-ui-create-child ()
+  (interactive)
+  (zfs-ui--invoke :create-child))
+
+(defun zfs-ui-copy ()
+  (interactive)
+  (zfs-ui--invoke :copy))
+
+(defun zfs-ui-admin ()
+  (interactive)
+  (zfs-ui--invoke :admin))
+
+(defun zfs-ui-diff ()
+  (interactive)
+  (zfs-ui--invoke :diff))
+
+(defun zfs-ui-rollback ()
+  (interactive)
+  (zfs-ui--invoke :rollback))
+
+(defun zfs-ui-mount ()
+  (interactive)
+  (zfs-ui--invoke :mount))
+
+(defun zfs-ui-unlock ()
+  (interactive)
+  (zfs-ui--invoke :unlock))
+
+(defun zfs-ui-import ()
+  (interactive)
+  (zfs-ui--invoke :import))
+
+(defun zfs-ui-targets ()
+  (interactive)
+  (zfs-ui--invoke :targets))
+
+(defun zfs-ui-format ()
+  (interactive)
+  (zfs-ui--invoke :format))
+
+(defun zfs-ui-export ()
+  (interactive)
+  (zfs-ui--invoke :export))
+
+(defun zfs-ui-scrub-start ()
+  (interactive)
+  (zfs-ui--invoke :scrub-start))
+
+(defun zfs-ui-scrub-stop ()
+  (interactive)
+  (zfs-ui--invoke :scrub-stop))
+
+(define-key zfs-mode-map (kbd "RET") #'zfs-ui-open)
+(define-key zfs-mode-map (kbd "<return>") #'zfs-ui-open)
+(define-key zfs-mode-map (kbd "l") #'zfs-ui-open)
+(define-key zfs-mode-map (kbd "q") #'zfs-ui-back)
+(define-key zfs-mode-map (kbd "h") #'zfs-ui-back)
+(define-key zfs-mode-map (kbd "<left>") #'zfs-ui-back)
+(define-key zfs-mode-map (kbd "DEL") #'zfs-ui-back)
+(define-key zfs-mode-map (kbd "<backspace>") #'zfs-ui-back)
+(define-key zfs-mode-map (kbd "g") #'zfs-ui-refresh)
+(define-key zfs-mode-map (kbd "r") #'zfs-ui-refresh)
+(define-key zfs-mode-map (kbd "s") #'zfs-ui-snapshot)
+(define-key zfs-mode-map (kbd "b") #'zfs-ui-backup)
+(define-key zfs-mode-map (kbd "c") #'zfs-ui-create-child)
+(define-key zfs-mode-map (kbd "C") #'zfs-ui-copy)
+(define-key zfs-mode-map (kbd "A") #'zfs-ui-admin)
+(define-key zfs-mode-map (kbd "d") #'zfs-ui-diff)
+(define-key zfs-mode-map (kbd "R") #'zfs-ui-rollback)
+(define-key zfs-mode-map (kbd "m") #'zfs-ui-mount)
+(define-key zfs-mode-map (kbd "u") #'zfs-ui-unlock)
+(define-key zfs-mode-map (kbd "i") #'zfs-ui-import)
+(define-key zfs-mode-map (kbd "T") #'zfs-ui-targets)
+(define-key zfs-mode-map (kbd "F") #'zfs-ui-format)
+(define-key zfs-mode-map (kbd "x") #'zfs-ui-export)
+(define-key zfs-mode-map (kbd "1") #'zfs-ui-scrub-start)
+(define-key zfs-mode-map (kbd "2") #'zfs-ui-scrub-stop)
+
+(with-eval-after-load 'evil
+  (evil-set-initial-state 'zfs-mode 'normal)
+  (evil-define-key* '(normal motion) zfs-mode-map
+    (kbd "RET") #'zfs-ui-open
+    (kbd "<return>") #'zfs-ui-open
+    (kbd "l") #'zfs-ui-open
+    (kbd "q") #'zfs-ui-back
+    (kbd "h") #'zfs-ui-back
+    (kbd "<left>") #'zfs-ui-back
+    (kbd "DEL") #'zfs-ui-back
+    (kbd "<backspace>") #'zfs-ui-back
+    (kbd "g") #'zfs-ui-refresh
+    (kbd "r") #'zfs-ui-refresh
+    (kbd "s") #'zfs-ui-snapshot
+    (kbd "b") #'zfs-ui-backup
+    (kbd "c") #'zfs-ui-create-child
+    (kbd "C") #'zfs-ui-copy
+    (kbd "A") #'zfs-ui-admin
+    (kbd "d") #'zfs-ui-diff
+    (kbd "R") #'zfs-ui-rollback
+    (kbd "m") #'zfs-ui-mount
+    (kbd "u") #'zfs-ui-unlock
+    (kbd "i") #'zfs-ui-import
+    (kbd "T") #'zfs-ui-targets
+    (kbd "F") #'zfs-ui-format
+    (kbd "x") #'zfs-ui-export
+    (kbd "1") #'zfs-ui-scrub-start
+    (kbd "2") #'zfs-ui-scrub-stop))
 
 ;;;###autoload
 (defun zfs ()

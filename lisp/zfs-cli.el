@@ -402,14 +402,27 @@ Example: ((:name \"vps1\" :ssh \"cashmere@1.2.3.4\"))"
                                (delete-file key-file))
                              (funcall callback status err))))))
 
-(defun zfs-cli-rsync-async (source target callback)
-  (zfs-cli--pipe-async
-   (format "rsync -a --info=progress2 %s %s"
-           (shell-quote-argument (file-name-as-directory (expand-file-name source)))
-           (shell-quote-argument (file-name-as-directory (expand-file-name target))))
-   'stdout
-   (lambda (chunk) (funcall callback (list :progress chunk)))
-   (lambda (status err _out) (funcall callback (list :done status err)))))
+(defun zfs-cli--rsync-source (source mode)
+  (let ((path (expand-file-name source)))
+    (cond
+     ((and (eq mode 'contents) (file-directory-p path))
+      (file-name-as-directory path))
+     ((file-directory-p path)
+      (directory-file-name path))
+     (t path))))
+
+(defun zfs-cli-rsync-async (source target mode dry-run callback)
+  (let* ((source-arg (zfs-cli--rsync-source source mode))
+         (target-arg (file-name-as-directory (expand-file-name target)))
+         (args (append '("rsync" "-rlt" "--info=progress2")
+                       (and dry-run '("--dry-run" "--itemize-changes"))
+                       (and (eq mode 'move) '("--remove-source-files"))
+                       (list source-arg target-arg))))
+    (zfs-cli--pipe-async
+     (mapconcat #'shell-quote-argument args " ")
+     'stdout
+     (lambda (chunk) (funcall callback (list :progress chunk)))
+     (lambda (status err out) (funcall callback (list :done status err out))))))
 
 (provide 'zfs-cli)
 ;;; zfs-cli.el ends here

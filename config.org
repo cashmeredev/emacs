@@ -878,6 +878,34 @@ let's give agent-shell another try
               (save-excursion (goto-char (point-max)) (point)))
       (set-window-point win (point-max)))))
 
+(defun my/agent-shell-ret-binding ()
+  (let ((keymap (get-text-property (point) 'keymap)))
+    (when keymap
+      (let ((binding (lookup-key keymap (kbd "RET"))))
+        (when (commandp binding)
+          binding)))))
+
+(defun my/agent-shell-output-at-point-p ()
+  (or (get-text-property (point) 'agent-shell-ui-state)
+      (and (> (point) (point-min))
+           (get-text-property (1- (point)) 'agent-shell-ui-state))))
+
+(defun my/agent-shell-ret ()
+  (interactive)
+  (if-let* ((binding (my/agent-shell-ret-binding)))
+      (call-interactively binding)
+    (cond
+     ((my/agent-shell-output-at-point-p)
+      (agent-shell-ui-toggle-fragment))
+     ((and (derived-mode-p 'agent-shell-mode)
+           (shell-maker-point-at-last-prompt-p))
+      (agent-shell-submit))
+     ((derived-mode-p 'agent-shell-viewport-view-mode)
+      (agent-shell-viewport-next-item))
+     ((derived-mode-p 'agent-shell-mode)
+      (agent-shell-next-item)))))
+
+
 (defun my/agent-shell-display-buffer-rules ()
   '(("\\*Kimi\\(?:\\*\\|:[^*]*\\*\\)"
      (display-buffer-in-side-window)
@@ -901,15 +929,30 @@ let's give agent-shell another try
   :config
   (advice-add 'shell-maker-submit :after #'my/agent-shell-autoscroll)
   (dolist (rule (my/agent-shell-display-buffer-rules))
-    (add-to-list 'display-buffer-alist rule)) 
+    (add-to-list 'display-buffer-alist rule))
   (setq agent-shell-tool-use-expand-by-default t)
   (setq agent-shell-thought-process-expand-by-default t)
   (setq agent-shell-user-message-expand-by-default t)
+  (setq agent-shell-activity-group-expand-by-default t)
   (setq agent-shell-diff-delta-command
         (when (executable-find "delta")
           '("delta" "--no-gitconfig" "--color-only")))
   (setq agent-shell-activity-group-header-label-function
-      #'agent-shell-activity-group-descriptive-label)
+        #'agent-shell-activity-group-descriptive-label)
+  (define-key agent-shell-mode-map (kbd "RET") #'my/agent-shell-ret)
+  (define-key agent-shell-mode-map (kbd "<return>") #'my/agent-shell-ret)
+  (define-key agent-shell-viewport-view-mode-map (kbd "RET") #'my/agent-shell-ret)
+  (define-key agent-shell-viewport-view-mode-map (kbd "<return>") #'my/agent-shell-ret)
+  (with-eval-after-load 'evil
+    (evil-define-key '(normal motion) agent-shell-mode-map
+      (kbd "RET") #'my/agent-shell-ret
+      (kbd "<return>") #'my/agent-shell-ret)
+    (evil-define-key 'insert agent-shell-mode-map
+      (kbd "RET") #'agent-shell-submit
+      (kbd "<return>") #'agent-shell-submit)
+    (evil-define-key '(normal motion) agent-shell-viewport-view-mode-map
+      (kbd "RET") #'my/agent-shell-ret
+      (kbd "<return>") #'my/agent-shell-ret))
 
 
   ;; Work around agent-shell's `window-system' guard so clipboard images
@@ -3653,7 +3696,7 @@ moved to local.el
 
 #+end_src
 
-** batppuccin
+** COMMENT batppuccin
 
 #+begin_src emacs-lisp
 (use-package batppuccin
@@ -3746,6 +3789,21 @@ moved to local.el
   :init
   (with-eval-after-load 'general
     (my-leader "oc" '(croc-ui :wk "croc"))))
+#+end_src
+
+* yggdrasil
+
+#+begin_src emacs-lisp
+(use-package textui
+  :ensure (:host github :repo "yibie/textui" :files ("*.el")))
+
+(use-package yggdrasil-ui
+  :ensure nil
+  :after textui
+  :commands (yggdrasil-ui)
+  :init
+  (with-eval-after-load 'general
+    (my-leader "ov" '(yggdrasil-ui :wk "yggdrasil"))))
 #+end_src
 
 * sync
@@ -4382,8 +4440,9 @@ workspace (e.g. *scratch*)."
   "oa" '(my/app-launcher :wk "app launcher")
   "os" '(my/snip-upload :wk "snip buffer/region")
   "oS" '(my/snip-upload-file :wk "snip file")
-  "op" '(passage :wk "pass")
+  "op" '(pass :wk "pass")
   "ot" '(ghostel :wk "ghostel")
+  "oz" '(zfs :wk "zfs")
 
   "h" '(:ignore t :wk "help")
   "hm" '(describe-mode :wk "mode")
@@ -5335,4 +5394,3 @@ opening another file in same project does not re-notify."
 #+begin_src emacs-lisp
 (provide 'init)
 #+end_src
-
