@@ -19,15 +19,15 @@
 (deftheme tinty "Noctalia theme with proper color contrast.")
 
 (let* (;; Tinted8 UI surface colors
-       (ui-bg "#d9e0ee")
-       (ui-fg "#1e1e2e")
-       (ui-fg-dim "#b7bfce")
+       (ui-bg "#eff1f5")
+       (ui-fg "#4c4f69")
+       (ui-fg-dim "#bcc0cc")
        ;; Use dim foreground for borders/muted chrome so they stay visible in
        ;; light variants (the raw border color is nearly white on latte).
-       (ui-border "#b7bfce")
-       (ui-line-highlight "#cdd3e0")
-       (ui-bg-dark "#45475a")
-       (ui-bg-light "#585b70")
+       (ui-border "#bcc0cc")
+       (ui-line-highlight "#e6e8ee")
+       (ui-bg-dark "#5c5f77")
+       (ui-bg-light "#6c6f85")
 
        ;; Tinted8 UI accent/status colors
        (ui-accent "#179299")
@@ -38,21 +38,21 @@
        (ui-warning "#df8e1d")
 
        ;; Tinted8 UI container colors (for BACKGROUNDS only)
-       (ui-selection-bg "#b7bfce")
-       (ui-selection-fg "#1e1e2e")
-       (ui-button-bg "#585b70")
-       (ui-button-fg "#d9e0ee")
-       (ui-tooltip-bg "#c4cbd9")
-       (ui-tooltip-fg "#1e1e2e")
-       (ui-active-text-bg "#6c7086")
-       (ui-active-text-fg "#d9e0ee")
+       (ui-selection-bg "#bcc0cc")
+       (ui-selection-fg "#4c4f69")
+       (ui-button-bg "#6c6f85")
+       (ui-button-fg "#eff1f5")
+       (ui-tooltip-bg "#ccd0da")
+       (ui-tooltip-fg "#4c4f69")
+       (ui-active-text-bg "#7c7f93")
+       (ui-active-text-fg "#eff1f5")
        (ui-search-bg "#179299")
-       (ui-search-fg "#d9e0ee")
+       (ui-search-fg "#eff1f5")
 
        ;; Tinted8 syntax colors
        ;; Comments use dim foreground instead of the raw syntax-comment gray,
        ;; which becomes almost invisible in light variants.
-       (syntax-comment "#b7bfce")
+       (syntax-comment "#bcc0cc")
        (syntax-constant "#fe640b")
        (syntax-function "#1e66f5")
        (syntax-keyword "#8839ef")
@@ -77,9 +77,9 @@
        (pal-cyan "#179299")
        (pal-blue "#1e66f5")
        (pal-magenta "#8839ef")
-       (pal-gray "#6c7086")
-       (pal-white "#1e1e2e")
-       (pal-black "#d9e0ee"))
+       (pal-gray "#7c7f93")
+       (pal-white "#4c4f69")
+       (pal-black "#eff1f5"))
 
   (custom-theme-set-faces
    'tinty
@@ -296,7 +296,7 @@
    `(term-color-blue ((t (:foreground "#1e66f5" :background "#1e66f5"))))
    `(term-color-magenta ((t (:foreground "#8839ef" :background "#8839ef"))))
    `(term-color-cyan ((t (:foreground "#179299" :background "#179299"))))
-   `(term-color-white ((t (:foreground "#1e1e2e" :background "#1e1e2e"))))
+   `(term-color-white ((t (:foreground "#4c4f69" :background "#4c4f69"))))
 
    ;; === EShell ===
    `(eshell-prompt ((t (:foreground ,ui-accent :weight bold))))
@@ -509,14 +509,14 @@
    `(ansi-color-magenta ((t (:foreground ,pal-magenta :background ,pal-magenta))))
    `(ansi-color-cyan ((t (:foreground ,pal-cyan :background ,pal-cyan))))
    `(ansi-color-white ((t (:foreground ,pal-white :background ,pal-white))))
-   `(ansi-color-bright-black ((t (:foreground "#b7bfce" :background "#b7bfce"))))
+   `(ansi-color-bright-black ((t (:foreground "#bcc0cc" :background "#bcc0cc"))))
    `(ansi-color-bright-red ((t (:foreground "#f02e58" :background "#f02e58"))))
    `(ansi-color-bright-green ((t (:foreground "#57cb3d" :background "#57cb3d"))))
    `(ansi-color-bright-yellow ((t (:foreground "#e8a951" :background "#e8a951"))))
    `(ansi-color-bright-blue ((t (:foreground "#598ef8" :background "#598ef8"))))
    `(ansi-color-bright-magenta ((t (:foreground "#aa72f4" :background "#aa72f4"))))
    `(ansi-color-bright-cyan ((t (:foreground "#18cbd5" :background "#18cbd5"))))
-   `(ansi-color-bright-white ((t (:foreground "#45475a" :background "#45475a"))))
+   `(ansi-color-bright-white ((t (:foreground "#5c5f77" :background "#5c5f77"))))
 
    ;; === Anzu ===
    `(anzu-replace-highlight ((t (:background ,ui-line-highlight :foreground ,ui-error :weight bold :strike-through t))))
@@ -1167,14 +1167,14 @@
    ;; === Term (extended) ===
    `(term ((t (:foreground ,ui-fg :background ,ui-bg))))
    `(term-bold ((t (:weight bold))))
-   `(term-color-bright-black ((t (:foreground "#b7bfce" :background "#b7bfce"))))
+   `(term-color-bright-black ((t (:foreground "#bcc0cc" :background "#bcc0cc"))))
    `(term-color-bright-red ((t (:foreground "#f02e58" :background "#f02e58"))))
    `(term-color-bright-green ((t (:foreground "#57cb3d" :background "#57cb3d"))))
    `(term-color-bright-yellow ((t (:foreground "#e8a951" :background "#e8a951"))))
    `(term-color-bright-blue ((t (:foreground "#598ef8" :background "#598ef8"))))
    `(term-color-bright-magenta ((t (:foreground "#aa72f4" :background "#aa72f4"))))
    `(term-color-bright-cyan ((t (:foreground "#18cbd5" :background "#18cbd5"))))
-   `(term-color-bright-white ((t (:foreground "#45475a" :background "#45475a"))))
+   `(term-color-bright-white ((t (:foreground "#5c5f77" :background "#5c5f77"))))
 
    ;; === Transient ===
    `(transient-heading ((t (:foreground ,pal-blue :weight bold))))
