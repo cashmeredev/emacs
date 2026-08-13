@@ -3689,7 +3689,7 @@ moved to local.el
 
 #+end_src
 
-** COMMENT batppuccin
+** batppuccin
 
 #+begin_src emacs-lisp
 (use-package batppuccin

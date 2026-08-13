@@ -3032,6 +3032,11 @@ created later still get them."
 
 
 
+(use-package batppuccin
+  :ensure t
+  :config
+  (load-theme 'batppuccin-mocha t))
+
 ;; (use-package solarized-theme
 ;;   :ensure t
 ;;   :config
