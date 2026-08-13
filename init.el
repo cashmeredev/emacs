@@ -84,8 +84,9 @@
     (require 'ob-tangle)
     (let ((gc-cons-threshold most-positive-fixnum))
       (org-babel-tangle-file org-file el-file "emacs-lisp")))
-  ;; Prefer .elc when present; native-compile asynchronously in the background.
-  (load (file-name-sans-extension el-file) nil 'nomessage)
+  ;; Load the generated source directly.  A stale `config.elc' can otherwise
+  ;; shadow a freshly tangled `config.el' and break startup with old code.
+  (load el-file nil 'nomessage)
   (when (and (featurep 'native-compile)
              (fboundp 'native-comp-available-p)
              (native-comp-available-p))

@@ -105,6 +105,8 @@ Set per-host in the gitignored `local.el'.")
   (load custom-file 'noerror 'nomessage) ;; Load the custom file quietly, ignoring errors.
 
   ;; Makes Emacs vertical divisor the symbol │ instead of |.
+  (unless standard-display-table
+    (setq standard-display-table (make-display-table)))
   (set-display-table-slot standard-display-table 'vertical-border (make-glyph-code ?│))
 
   :init ;; Initialization settings that apply before the package is loaded.
@@ -1047,6 +1049,10 @@ TITLE names the new denote-style file in ~/org."
            "crypt")
           (save-buffer)
           (message "Migrated %d crypt headings to %s" count target))))))
+
+(use-package with-editor
+  :ensure t
+  :demand t)
 
 (use-package passage
   :ensure (:host github :repo "anticomputer/passage.el")
