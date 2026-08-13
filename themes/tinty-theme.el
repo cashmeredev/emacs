@@ -30,7 +30,7 @@
        (ui-bg-light "#45475a")
 
        ;; Tinted8 UI accent/status colors
-       (ui-accent "#94e2d5")
+       (ui-accent "#b4befe")
        (ui-link "#89b4fa")
        (ui-info "#fab387")
        (ui-error "#f38ba8")
