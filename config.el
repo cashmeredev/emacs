@@ -827,7 +827,7 @@ Temporarily disables notifications during the fetch."
   (advice-add 'shell-maker-submit :after #'my/agent-shell-autoscroll)
   (dolist (rule (my/agent-shell-display-buffer-rules))
     (add-to-list 'display-buffer-alist rule))
-  (setq agent-shell-tool-use-expand-by-default t)
+  (setq agent-shell-tool-use-expand-by-default nil)
   (setq agent-shell-thought-process-expand-by-default t)
   (setq agent-shell-user-message-expand-by-default t)
   (setq agent-shell-activity-group-expand-by-default t)
@@ -2545,21 +2545,6 @@ in
   (c-ts-mode-indent-offset 2)
   (c-ts-mode-indent-style 'k&r))
 
-(use-package c3-ts-mode
-  :ensure (:host github :repo "c3lang/c3-ts-mode")
-  :mode (("\\.c3\\'" . c3-ts-mode)
-         ("\\.c3i\\'" . c3-ts-mode)
-         ("\\.c3t\\'" . c3-ts-mode))
-  :custom
-  (c3-ts-mode-indent-offset 2)
-  (setq treesit-font-lock-level 4)
-  :init
-  (add-to-list 'treesit-language-source-alist
-               '(c3 "https://github.com/c3lang/tree-sitter-c3"))
-  :config
-  (unless (treesit-language-available-p 'c3)
-    (treesit-install-language-grammar 'c3)))
-
 (use-package pyvenv
   :ensure t
   :config
@@ -2568,12 +2553,6 @@ in
   (add-hook 'python-ts-mode-hook 
             (lambda ()
               (pyvenv-mode 1))))
-
-(use-package js
-  :ensure nil
-  :mode ("\\.js\\'" . js-ts-mode)
-  :config
-  (setq js-indent-level 2))
 
 (use-package xonsh-mode
   :ensure (:host github :repo "seanfarley/xonsh-mode")
@@ -2972,22 +2951,6 @@ so the working-tree diff stays visible until the user explicitly stages."
   ((dired-mode . diredfl-mode)
    (dirvish-directory-view-mode . diredfl-mode)))
 
-(defun ek/first-install ()
-  "dired"
-  (interactive)                                      ;; Allow this function to be called interactively.
-  (switch-to-buffer "*Messages*")                    ;; Switch to the *Messages* buffer to display installation messages.
-  (message ">>> All required packages installed.")
-  (message ">>> Configuring Emacs-Kick...")
-  (message ">>> Configuring Tree Sitter parsers...")
-  (require 'treesit-auto)
-  (treesit-auto-install-all)                         ;; Install all available Tree Sitter grammars.
-  (message ">>> Configuring Nerd Fonts...")
-  (require 'nerd-icons)
-  (nerd-icons-install-fonts)                         ;; Install all available nerd-fonts
-  (message ">>> Emacs-Kick installed! Press any key to close the installer and open Emacs normally. First boot will compile some extra stuff :)")
-  (read-key)                                         ;; Wait for the user to press any key.
-  (kill-emacs))                                      ;; Close Emacs after installation is complete.
-
 (display-time-mode 1)
 
 (use-package mode-line-maker
@@ -3010,7 +2973,7 @@ so the working-tree diff stays visible until the user explicitly stages."
 (blink-cursor-mode 0)
 (setq-default cursor-type 'box)
 
-(defvar cashmere/font-height 200)
+(defvar cashmere/font-height 160)
 
 (defun cashmere/set-fonts (&optional frame)
   "Apply the MapleMono faces, but only on graphical frames.
@@ -3188,7 +3151,11 @@ still require a restart since elpaca queues run at init time."
 
 (use-package wgrep-helm
   :ensure t
-  :after (wgrep helm))
+  :after (wgrep helm)
+  :config
+  ;; jump straight into editable wgrep mode in *hgrep*/*hmoccur* buffers
+  (add-hook 'helm-grep-mode-hook #'wgrep-change-to-wgrep-mode)
+  (add-hook 'helm-occur-mode-hook #'wgrep-change-to-wgrep-mode))
 
 (defun my/project-replace ()
   "Project-wide search via ripgrep (`helm-projectile-rg').
@@ -3221,7 +3188,7 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
   (defvar my/workspaces-master "master")
   (defvar my/workspace-last nil)
   (defvar my/workspaces-on-switch-project 'non-empty)
-  (defvar my/workspace-switch-project-function #'helm-projectile-find-file)
+  (defvar my/workspace-switch-project-function #'projectile-dashboard)
 
   (setq persp-autokill-buffer-on-remove 'kill-weak
         persp-reset-windows-on-nil-window-conf nil
@@ -3556,22 +3523,6 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
   (setq golden-ratio-exclude-buffer-names '(" *which-key*"))
   (setq golden-ratio-exclude-buffer-regexp '("\\`\\*eldoc")))
 
-(use-package pdf-tools
-  :ensure nil
-  :if (display-graphic-p)
-  :magic ("%PDF" . pdf-view-mode)
-  :config
-  (pdf-loader-install)
-  :hook (pdf-view-mode . (lambda () (display-line-numbers-mode -1))))
-
-;; Site-lisp may pre-register pdf-view-mode in magic-mode-alist on TUI emacs.
-;; Strip those entries so opening a PDF in -nw falls back to doc-view/fundamental.
-(unless (display-graphic-p)
-  (setq magic-mode-alist
-        (seq-remove (lambda (e) (eq (cdr e) 'pdf-view-mode)) magic-mode-alist))
-  (setq auto-mode-alist
-        (seq-remove (lambda (e) (eq (cdr e) 'pdf-view-mode)) auto-mode-alist)))
-
 (defun my/format-buffer ()
   (interactive)
   (user-error "No formatter configured for %s" major-mode))
@@ -3759,7 +3710,7 @@ workspace (e.g. *scratch*)."
   "[b" 'switch-to-prev-buffer
   "]t" 'tab-next
   "[t" 'tab-previous
-  "P" 'helm-show-kill-ring
+  ;; "P" 'helm-show-kill-ring
   ;; "?" 'casual-avy-tmenu
   "gcc" (lambda ()
           (interactive)
@@ -3802,24 +3753,6 @@ workspace (e.g. *scratch*)."
   "n" '(org-toggle-narrow-to-subtree :wk "narrow"))
 
 (evil-define-key 'normal org-mode-map (kbd "RET") 'org-open-at-point)
-
-(my-leader
-  :keymaps '(rust-ts-mode-map)
-  "m" '(:wk "rust mode" :ignore)
-  "mr" '(rust-run :wk "run")
-  "mc" '(rust-run-clippy :wk "clippy")
-  "mC" '(rust-check :wk "check"))
-
-(with-eval-after-load 'tmr
-  (general-def 'normal tmr-tabulated-mode-map
-    "y" 'tmr-clone
-    "c" 'tmr-cancel
-    "d" 'tmr-remove
-    "D" 'tmr-remove-finished
-    "n" 'tmr
-    "N" 'tmr-with-details
-    "e" 'tmr-edit-description
-    "r" 'tmr-reschedule))
 
 (defun dirvish-next-file (arg)
   "Move down ARG lines, landing on the filename column.
@@ -4269,15 +4202,6 @@ opening another file in same project does not re-notify."
     (envrc-global-mode -1)))
 
 (use-package tldr
-  :ensure t)
-
-(use-package eshell
-  :ensure nil
-  :config
-  (setq eshell-command-aliases-list
-        '(("nh-switch" "nh os switch --quiet $*"))))
-
-(use-package el-fetch
   :ensure t)
 
 (use-package ghostel
