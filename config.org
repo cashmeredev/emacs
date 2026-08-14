@@ -2679,7 +2679,7 @@ Auto switch silos (different workspaces/folders) based on preconfigured director
      "\\`\\*elpaca-log\\*\\'"
      "\\`\\*Native-compile-Log\\*\\'"
      "\\`\\*Async-native-compile-log\\*\\'"))
-  ;; (helm-display-function #'helm-display-buffer-in-own-frame)
+  (helm-display-function #'helm-display-buffer-in-own-frame)
   :bind (:map helm-map
               ("C-j" . helm-next-line)
               ("C-k" . helm-previous-line)))
@@ -3564,7 +3564,7 @@ Native =undo-redo= (via =evil-undo-system='undo-redo=); just raise the undo limi
 (blink-cursor-mode 0)
 (setq-default cursor-type 'box)
 
-(defvar cashmere/font-height 160)
+(defvar cashmere/font-height 180)
 
 (defun cashmere/set-fonts (&optional frame)
   "Apply the MapleMono faces, but only on graphical frames.
@@ -3584,6 +3584,8 @@ created later still get them."
 (add-hook 'server-after-make-frame-hook #'cashmere/set-fonts)
 (cashmere/set-fonts)
 #+end_src
+
+#+RESULTS:
 
 * essentials
 
@@ -5184,24 +5186,12 @@ opening another file in same project does not re-notify."
   :commands (zfs))
 #+end_src
 
-* COMMENT org-tree-slide
+* ox-reveal
 
 #+begin_src emacs-lisp
-(use-package org-tree-slide
-  :ensure t)
-(when (require 'org-tree-slide nil t)
-  (global-set-key (kbd "<f8>") 'org-tree-slide-mode)
-  (global-set-key (kbd "S-<f8>") 'org-tree-slide-skip-done-toggle)
-  (define-key org-tree-slide-mode-map (kbd "<f9>")
-    'org-tree-slide-move-previous-tree)
-  (define-key org-tree-slide-mode-map (kbd "<f10>")
-    'org-tree-slide-move-next-tree)
-  (define-key org-tree-slide-mode-map (kbd "<f11>")
-    'org-tree-slide-content)
-  (setq org-tree-slide-skip-outline-level 4)
-  (org-tree-slide-narrowing-control-profile)
-  (setq org-tree-slide-skip-comments 'inherit)
-  (setq org-tree-slide-skip-done nil))
+(load (expand-file-name "lisp/ox-reveal.el" user-emacs-directory)
+      nil
+      'nomessage)
 #+end_src
 
 * provide init

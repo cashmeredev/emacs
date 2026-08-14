@@ -2298,7 +2298,7 @@ Timers that expired while Emacs was closed fire immediately."
      "\\`\\*elpaca-log\\*\\'"
      "\\`\\*Native-compile-Log\\*\\'"
      "\\`\\*Async-native-compile-log\\*\\'"))
-  ;; (helm-display-function #'helm-display-buffer-in-own-frame)
+  (helm-display-function #'helm-display-buffer-in-own-frame)
   :bind (:map helm-map
               ("C-j" . helm-next-line)
               ("C-k" . helm-previous-line)))
@@ -2973,7 +2973,7 @@ so the working-tree diff stays visible until the user explicitly stages."
 (blink-cursor-mode 0)
 (setq-default cursor-type 'box)
 
-(defvar cashmere/font-height 160)
+(defvar cashmere/font-height 180)
 
 (defun cashmere/set-fonts (&optional frame)
   "Apply the MapleMono faces, but only on graphical frames.
@@ -4365,5 +4365,9 @@ opening another file in same project does not re-notify."
 (use-package zfs
   :ensure nil
   :commands (zfs))
+
+(load (expand-file-name "lisp/ox-reveal.el" user-emacs-directory)
+      nil
+      'nomessage)
 
 (provide 'init)
