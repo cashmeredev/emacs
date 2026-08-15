@@ -2707,101 +2707,18 @@ Auto switch silos (different workspaces/folders) based on preconfigured director
   (citre-edit-ctags-options-manually nil)
   (citre-auto-enable-citre-mode-modes '(prog-mode))
   :config
-  (defconst my/project-ctags-nix-options
-    '("--langdef=nix"
-      "--map-nix=+.nix"
-      "--kinddef-nix=a,attribute,attributes"
-      "--regex-nix=/^[[:space:]]*([A-Za-z_][A-Za-z0-9_'-]*(\\.[A-Za-z_][A-Za-z0-9_'-]+)+)[[:space:]]*=[^=]/\\1/a/"
-      "--regex-nix=/^[[:space:]]*([A-Za-z_][A-Za-z0-9_'-]*)[[:space:]]*=[^=]/\\1/a/"))
+  (defvar my/project-ctags-program
+    (expand-file-name "bin/project-ctags" user-emacs-directory))
+
+  (defvar-local my/project-ctags-arguments nil)
+
+  (put 'my/project-ctags-arguments 'safe-local-variable
+       (lambda (value)
+         (and (listp value) (seq-every-p #'stringp value))))
 
   (defun my/project-ctags-root ()
     (or (projectile-project-root)
         (user-error "Not in a Projectile project")))
-
-  (defun my/project-ctags-nixpkgs (root)
-    (when (and (file-directory-p (expand-file-name "npins" root))
-               (executable-find "npins"))
-      (let ((default-directory root)
-            (output (generate-new-buffer " *npins*")))
-        (unwind-protect
-            (when (zerop (process-file "npins" nil output nil
-                                        "get-path" "nixpkgs"))
-              (with-current-buffer output
-                (string-trim (buffer-string))))
-          (kill-buffer output)))))
-
-  (defun my/project-ctags-nixos-options (nixpkgs output)
-    (let ((expression
-           (format
-            "let
-  nixpkgs = %S;
-  evaluated = import (nixpkgs + \"/nixos/lib/eval-config.nix\") {
-    system = builtins.currentSystem;
-    modules = [ ];
-  };
-  collect = prefix: attrs:
-    builtins.concatLists (builtins.map
-      (name:
-        let value = attrs.${name}; in
-        if builtins.isAttrs value && (value._type or null) == \"option\"
-        then
-          if value.declarations == [ ] then [ ] else [
-            [
-              (builtins.concatStringsSep \".\" (prefix ++ [ name ]))
-              (builtins.toString (builtins.head value.declarations))
-            ]
-          ]
-        else if builtins.isAttrs value then collect (prefix ++ [ name ]) value
-        else [ ])
-      (builtins.attrNames attrs));
-in
-  builtins.concatStringsSep \"\\n\" (builtins.map builtins.toJSON (collect [ ] evaluated.options))"
-            nixpkgs)))
-      (with-current-buffer output
-        (erase-buffer))
-      (if (zerop (process-file "nix-instantiate" nil output nil
-                               "--eval" "--raw" "--strict"
-                               "--expr" expression))
-          (mapcar (lambda (line)
-                    (json-parse-string line :array-type 'list))
-                  (split-string (with-current-buffer output
-                                  (buffer-string))
-                                "\n" t))
-        (user-error "Could not evaluate NixOS options"))))
-
-  (defun my/project-ctags-add-nixos-options (tags-file root output)
-    (when-let* ((nixpkgs (my/project-ctags-nixpkgs root)))
-      (condition-case err
-          (let (headers tags)
-            (dolist (line (with-temp-buffer
-                            (insert-file-contents tags-file)
-                            (split-string (buffer-string) "\n" t)))
-              (if (string-prefix-p "!" line)
-                  (push line headers)
-                (push line tags)))
-            (dolist (option (my/project-ctags-nixos-options nixpkgs output))
-              (pcase-let ((`(,name ,file) option))
-                (push (format "%s\t%s\t1;\"\tkind:attribute\tlanguage:nix\troles:def"
-                              name file)
-                      tags)))
-            (with-temp-file tags-file
-              (dolist (line (nreverse headers))
-                (insert line "\n"))
-              (dolist (line (sort (delete-dups tags) #'string<))
-                (insert line "\n"))))
-        (error
-         (message "NixOS option tags unavailable: %s"
-                  (error-message-string err))))))
-
-  (defun my/project-ctags-files (root)
-    (let ((default-directory root)
-          files)
-      (dolist (file (projectile-current-project-files))
-        (unless (string= file ".tags")
-          (when (file-regular-p (expand-file-name file root))
-            (push (expand-file-name file root) files))))
-      (nreverse files)))
-
 
   (defun my/project-ctags-enable-citre (root)
     (dolist (buffer (buffer-list))
@@ -2809,69 +2726,45 @@ in
         (when (and buffer-file-name
                    (file-in-directory-p buffer-file-name root))
           (citre-mode 1)))))
-  (defun my/project-ctags-start (root)
-    (let* ((ctags (executable-find "ctags"))
-           (tags-file (expand-file-name ".tags" root))
-           (list-file (make-temp-file "citre-files-"))
-           (temporary-tags-file (make-temp-file "citre-tags-"))
-           (output (get-buffer-create "*citre-ctags*"))
-           (files (my/project-ctags-files root)))
-      (unless ctags
-        (user-error "Universal Ctags is not available"))
-      (unless files
-        (user-error "No project files to tag"))
-      (with-temp-file list-file
-        (dolist (file files)
-          (insert file "\n")))
+
+  (defun my/project-ctags-sentinel (process _event)
+    (when (memq (process-status process) '(exit signal))
+      (let ((root (process-get process 'project-root)))
+        (if (and (eq (process-status process) 'exit)
+                 (zerop (process-exit-status process)))
+            (progn
+              (citre-clear-tags-file-cache)
+              (my/project-ctags-enable-citre root)
+              (message "Ctags ready for %s" root))
+          (display-buffer (process-buffer process))
+          (message "Ctags failed for %s; see %s"
+                   root
+                   (buffer-name (process-buffer process)))))))
+
+  (defun my/project-ctags-start (root arguments)
+    (unless (file-executable-p my/project-ctags-program)
+      (user-error "Project Ctags generator is not executable: %s"
+                  my/project-ctags-program))
+    (let ((output (get-buffer-create "*project-ctags*")))
       (with-current-buffer output
         (erase-buffer))
-      (make-process
-       :name (format "ctags:%s" (file-name-nondirectory (directory-file-name root)))
-       :buffer output
-       :command (append
-                 (list ctags
-                       "--options=NONE"
-                       "--output-format=e-ctags")
-                 my/project-ctags-nix-options
-                 (list "--languages=all"
-                       "--kinds-all=*"
-                       "--fields=*"
-                       "--extras=*"
-                       "-f"
-                       temporary-tags-file
-                       "-L"
-                       list-file))
-       :connection-type 'pipe
-       :sentinel
-       (lambda (process _event)
-         (when (memq (process-status process) '(exit signal))
-           (unwind-protect
-               (if (and (eq (process-status process) 'exit)
-                        (zerop (process-exit-status process)))
-                   (progn
-                     (my/project-ctags-add-nixos-options
-                      temporary-tags-file root output)
-                     (rename-file temporary-tags-file tags-file t)
-                     (citre-clear-tags-file-cache)
-                     (my/project-ctags-enable-citre root)
-                     (message "Ctags ready for %s" root))
-                 (message "Ctags failed for %s; see %s"
-                          root
-                          (buffer-name output)))
-             (when (file-exists-p list-file)
-               (delete-file list-file))
-             (when (file-exists-p temporary-tags-file)
-               (delete-file temporary-tags-file))))))
-      (message "Generating Ctags for %s..." root)))
+      (let ((process
+             (make-process
+              :name (format "ctags:%s"
+                            (file-name-nondirectory
+                             (directory-file-name root)))
+              :buffer output
+              :command (append (list my/project-ctags-program root)
+                               arguments)
+              :connection-type 'pipe
+              :sentinel #'my/project-ctags-sentinel)))
+        (process-put process 'project-root root)))
+    (message "Generating Ctags for %s..." root))
 
   (defun my/project-ctags-setup ()
     (interactive)
-    (let* ((root (my/project-ctags-root))
-           (tags-file (expand-file-name ".tags" root)))
-      (if (file-exists-p tags-file)
-          (my/project-ctags-start root)
-        (when (y-or-n-p (format "Set up Ctags for %s? " root))
-          (my/project-ctags-start root)))))
+    (my/project-ctags-start (my/project-ctags-root)
+                            my/project-ctags-arguments))
 
   (with-eval-after-load 'evil
     (evil-define-key '(normal motion) 'global
@@ -4285,7 +4178,7 @@ workspace (e.g. *scratch*)."
   "pa" '(projectile-add-known-project :wk "add project")
   "pi" '(projectile-invalidate-cache :wk "invalidate cache")
   "pt" '(projectile-run-task :wk "tasks")
-  "pc" '(my/project-ctags-setup :wk "setup/update ctags")
+  "pc" '(my/project-ctags-setup :wk "generate/update ctags")
 
   "g" '(:ignore t :wk "git")
   "gc" '(magit-clone :wk "clone")

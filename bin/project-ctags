@@ -1,0 +1,403 @@
+#!/usr/bin/env python3
+import argparse
+import ast
+import json
+import os
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+IGNORED_DIRECTORIES = {
+    ".direnv",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pixi",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "test",
+    "tests",
+}
+PYTHON_SUFFIXES = {".py", ".pyi"}
+C_SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".m", ".mm"}
+C_HEADER_SUFFIXES = {".h", ".hh", ".hpp", ".hxx"}
+NIX_CTAGS_OPTIONS = [
+    "--langdef=nix",
+    "--map-nix=+.nix",
+    "--kinddef-nix=a,attribute,attributes",
+    "--regex-nix=/^[[:space:]]*([A-Za-z_][A-Za-z0-9_'-]*(\\.[A-Za-z_][A-Za-z0-9_'-]+)+)[[:space:]]*=[^=]/\\1/a/",
+    "--regex-nix=/^[[:space:]]*([A-Za-z_][A-Za-z0-9_'-]*)[[:space:]]*=[^=]/\\1/a/",
+]
+PYTHON_RESOLVER = """
+import importlib.util
+import json
+import pathlib
+import sysconfig
+import sys
+
+resolved = {}
+stdlib = pathlib.Path(sysconfig.get_path("stdlib"))
+for name in sys.argv[1:]:
+    try:
+        spec = importlib.util.find_spec(name)
+    except (ImportError, ModuleNotFoundError, ValueError):
+        spec = None
+    paths = []
+    if spec is not None and spec.submodule_search_locations:
+        paths.extend(spec.submodule_search_locations)
+    elif spec is not None and spec.origin not in (None, "built-in", "frozen"):
+        paths.append(spec.origin)
+    elif spec is not None and spec.origin == "frozen":
+        module_file = stdlib / (name + ".py")
+        package_file = stdlib / name / "__init__.py"
+        if module_file.is_file():
+            paths.append(str(module_file))
+        elif package_file.is_file():
+            paths.append(str(package_file.parent))
+    resolved[name] = paths if spec is not None else None
+print(json.dumps(resolved))
+"""
+
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description="Generate one Citre-compatible .tags file for project code and used dependencies."
+    )
+    parser.add_argument("root", nargs="?", default=".")
+    parser.add_argument("--output", default=".tags")
+    parser.add_argument("--ctags")
+    parser.add_argument("--python")
+    parser.add_argument("--python-command")
+    parser.add_argument("--source", action="append", default=[])
+    parser.add_argument("--no-python-deps", action="store_true")
+    parser.add_argument("--no-c-deps", action="store_true")
+    return parser.parse_args()
+
+
+def resolved_path(value, base):
+    expanded = os.path.expandvars(os.path.expanduser(value))
+    path = Path(expanded)
+    if not path.is_absolute():
+        path = base / path
+    return path.resolve()
+
+
+def walk_files(path, suffixes=None):
+    if path.is_file():
+        if suffixes is None or path.suffix.lower() in suffixes:
+            return [path.resolve()]
+        return []
+    if not path.is_dir():
+        return []
+    files = []
+    for directory, names, filenames in os.walk(path):
+        names[:] = [name for name in names if name not in IGNORED_DIRECTORIES]
+        parent = Path(directory)
+        for filename in filenames:
+            candidate = parent / filename
+            if suffixes is None or candidate.suffix.lower() in suffixes:
+                files.append(candidate.resolve())
+    return files
+
+
+def git_project_files(root):
+    git = shutil.which("git")
+    if git is None:
+        return None
+    result = subprocess.run(
+        [git, "-C", str(root), "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    files = []
+    for name in result.stdout.split(b"\0"):
+        if not name:
+            continue
+        path = root / os.fsdecode(name)
+        if path.is_file():
+            files.append(path.resolve())
+    return files
+
+
+def project_files(root, output):
+    files = git_project_files(root)
+    if files is None:
+        files = walk_files(root)
+    return sorted(path for path in files if path != output)
+
+
+def imported_modules(files):
+    modules = set()
+    for path in files:
+        if path.suffix.lower() not in PYTHON_SUFFIXES:
+            continue
+        try:
+            tree = ast.parse(path.read_bytes(), filename=str(path))
+        except (OSError, SyntaxError, UnicodeError):
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                modules.update(alias.name.partition(".")[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                modules.add(node.module.partition(".")[0])
+    return sorted(modules)
+
+
+def python_command(args, root):
+    if args.python_command:
+        return shlex.split(args.python_command)
+    environment_command = os.environ.get("PROJECT_CTAGS_PYTHON_COMMAND")
+    if environment_command:
+        return shlex.split(environment_command)
+    if args.python:
+        path = Path(os.path.expandvars(os.path.expanduser(args.python)))
+        if not path.is_absolute():
+            path = root / path
+        return [str(path.absolute())]
+    virtual_environment = os.environ.get("VIRTUAL_ENV")
+    candidates = []
+    if virtual_environment:
+        candidates.append(Path(virtual_environment) / "bin" / "python")
+    candidates.extend(
+        [
+            root / ".venv" / "bin" / "python",
+            root / ".devenv" / "state" / "venv" / "bin" / "python",
+            root / ".pixi" / "envs" / "default" / "bin" / "python",
+        ]
+    )
+    for candidate in candidates:
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return [str(candidate.absolute())]
+    uv = shutil.which("uv")
+    if uv and (root / "uv.lock").exists():
+        return [uv, "run", "--no-sync", "python"]
+    python = shutil.which("python3") or shutil.which("python")
+    if python:
+        return [python]
+    return None
+
+
+def python_dependency_files(args, root, files):
+    modules = imported_modules(files)
+    if not modules:
+        return [], None, []
+    command = python_command(args, root)
+    if command is None:
+        return [], None, modules
+    result = subprocess.run(
+        command + ["-c", PYTHON_RESOLVER, *modules],
+        cwd=root,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0:
+        print(result.stderr.rstrip(), file=sys.stderr)
+        return [], shlex.join(command), modules
+    try:
+        resolved = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        print(f"Could not read module paths from {shlex.join(command)}", file=sys.stderr)
+        return [], shlex.join(command), modules
+    dependency_files = set()
+    unresolved = []
+    for module, paths in resolved.items():
+        if paths is None:
+            unresolved.append(module)
+            continue
+        module_files = []
+        for value in paths:
+            path = Path(value).resolve()
+            module_files.extend(walk_files(path, PYTHON_SUFFIXES))
+        dependency_files.update(module_files)
+    return sorted(dependency_files), shlex.join(command), unresolved
+
+
+def compilation_database(root):
+    path = root / "compile_commands.json"
+    if not path.is_file():
+        return {}
+    try:
+        entries = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+    database = {}
+    for entry in entries:
+        directory = resolved_path(entry.get("directory", root), root)
+        source = resolved_path(entry["file"], directory)
+        arguments = entry.get("arguments")
+        if arguments is None and entry.get("command"):
+            arguments = shlex.split(entry["command"])
+        if arguments:
+            database[source] = (directory, arguments)
+    return database
+
+
+def dependency_command(source, root, database):
+    entry = database.get(source)
+    if entry is None:
+        compiler = shlex.split(os.environ.get("CC", "cc"))
+        flags = shlex.split(os.environ.get("CPPFLAGS", ""))
+        flags.extend(shlex.split(os.environ.get("CFLAGS", "")))
+        return root, compiler + ["-M", "-MG", *flags, str(source)]
+    directory, arguments = entry
+    compiler = arguments[0]
+    flags = []
+    skip_next = False
+    options_with_values = {"-MF", "-MT", "-MQ", "-o"}
+    for argument in arguments[1:]:
+        if skip_next:
+            skip_next = False
+            continue
+        if argument in options_with_values:
+            skip_next = True
+            continue
+        if argument == "-c" or argument.startswith("-M"):
+            continue
+        candidate = resolved_path(argument, directory)
+        if candidate == source:
+            continue
+        flags.append(argument)
+    return directory, [compiler, "-M", "-MG", *flags, str(source)]
+
+
+def make_dependencies(output, directory):
+    flattened = output.replace("\\\n", " ")
+    if ":" not in flattened:
+        return []
+    dependencies = flattened.split(":", 1)[1]
+    paths = []
+    for value in shlex.split(dependencies):
+        path = resolved_path(value, directory)
+        if path.is_file() and path.suffix.lower() in C_HEADER_SUFFIXES:
+            paths.append(path)
+    return paths
+
+
+def c_dependency_files(root, files):
+    sources = [path for path in files if path.suffix.lower() in C_SOURCE_SUFFIXES]
+    if not sources:
+        return []
+    database = compilation_database(root)
+    headers = set()
+    for source in sources:
+        directory, command = dependency_command(source, root, database)
+        result = subprocess.run(
+            command,
+            cwd=directory,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        if result.returncode == 0:
+            headers.update(make_dependencies(result.stdout, directory))
+        elif result.stderr:
+            print(result.stderr.rstrip(), file=sys.stderr)
+    return sorted(headers)
+
+
+def extra_source_files(args, root):
+    values = list(args.source)
+    environment_sources = os.environ.get("PROJECT_CTAGS_SOURCES")
+    if environment_sources:
+        values.extend(value for value in environment_sources.split(os.pathsep) if value)
+    files = set()
+    for value in values:
+        path = resolved_path(value, root)
+        if not path.exists():
+            print(f"Extra source does not exist: {path}", file=sys.stderr)
+            continue
+        files.update(walk_files(path))
+    return sorted(files)
+
+
+def generate_tags(ctags, output, files):
+    output.parent.mkdir(parents=True, exist_ok=True)
+    list_file = tempfile.NamedTemporaryFile(mode="w", prefix="project-ctags-", delete=False)
+    temporary_output = tempfile.NamedTemporaryFile(
+        prefix=f".{output.name}.", dir=output.parent, delete=False
+    )
+    temporary_output.close()
+    try:
+        for path in files:
+            list_file.write(f"{path}\n")
+        list_file.close()
+        command = [
+            ctags,
+            "--options=NONE",
+            "--output-format=e-ctags",
+            *NIX_CTAGS_OPTIONS,
+            "--languages=all",
+            "--kinds-all=*",
+            "--fields=*",
+            "--extras=*",
+            "-f",
+            temporary_output.name,
+            "-L",
+            list_file.name,
+        ]
+        result = subprocess.run(command, check=False)
+        if result.returncode != 0:
+            raise SystemExit(result.returncode)
+        os.replace(temporary_output.name, output)
+    finally:
+        list_file.close()
+        Path(list_file.name).unlink(missing_ok=True)
+        Path(temporary_output.name).unlink(missing_ok=True)
+
+
+def main():
+    args = parse_arguments()
+    root = resolved_path(args.root, Path.cwd())
+    if not root.is_dir():
+        raise SystemExit(f"Project root does not exist: {root}")
+    output = resolved_path(args.output, root)
+    ctags = args.ctags or shutil.which("ctags")
+    if ctags is None:
+        raise SystemExit("Universal Ctags is not available")
+
+    local_files = project_files(root, output)
+    python_files = []
+    python = None
+    unresolved = []
+    if not args.no_python_deps:
+        python_files, python, unresolved = python_dependency_files(args, root, local_files)
+    c_headers = []
+    if not args.no_c_deps:
+        c_headers = c_dependency_files(root, local_files)
+    extra_files = extra_source_files(args, root)
+    all_files = sorted(set(local_files + python_files + c_headers + extra_files))
+    if not all_files:
+        raise SystemExit("No source files found")
+
+    generate_tags(ctags, output, all_files)
+    print(f"project: {len(local_files)} files")
+    if python:
+        print(f"python: {python}; {len(python_files)} dependency files")
+    if unresolved:
+        print(f"python unresolved: {', '.join(unresolved)}")
+    if c_headers:
+        print(f"c: {len(c_headers)} dependency headers")
+    if extra_files:
+        print(f"extra: {len(extra_files)} files")
+    print(f"tags: {output}")
+
+
+if __name__ == "__main__":
+    main()
