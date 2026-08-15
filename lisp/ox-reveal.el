@@ -90,6 +90,7 @@ default fragment style, otherwise return \"fragment style\"."
 
   :translate-alist
   '((export-block . org-reveal-export-block)
+    (special-block . org-reveal-special-block)
     (headline . org-reveal-headline)
     (inner-template . org-reveal-inner-template)
     (keyword . org-reveal-keyword)
@@ -325,15 +326,19 @@ a '\\n'"
        (format " class=\"%s\"" (frag-style frag))))
 
 (defun org-reveal-export-block (export-block contents info)
-  "Transocde a EXPORT-BLOCK element from Org to Reveal.
-CONTENTS is nil. INFO is a plist holding contextual information."
+  "Transcode an export block element from Org to Reveal."
   (let ((block-type (org-element-property :type export-block))
         (block-string (org-element-property :value export-block)))
     (cond ((string= block-type "NOTES")
-           (org-reveal-tag 'aside '(('class . 'notes))
+           (org-reveal-tag 'aside '(:class "notes")
                            (org-export-string-as block-string 'html 'body-only)))
           ((string= block-type "HTML")
            (org-remove-indentation block-string)))))
+
+(defun org-reveal-special-block (special-block contents info)
+  (if (string= (org-element-property :type special-block) "notes")
+      (org-reveal-tag 'aside '(:class "notes") contents)
+    (org-html-special-block special-block contents info)))
 
 (defun org-reveal-headline (headline contents info)
   "Transcode a HEADLINE element from Org to Reveal.
@@ -494,6 +499,7 @@ holding contextual information."
              (if (plist-get info :reveal-keyboard) "true" "false"))
      (format "overview: %s,\n"
              (if (plist-get info :reveal-overview) "true" "false"))
+     "showNotes: false,\n"
      (let ((width (plist-get info :reveal-width)))
        (if (> width 0) (format "width: %d,\n" width) ""))
      (let ((height (plist-get info :reveal-height)))
