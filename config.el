@@ -3615,6 +3615,7 @@ workspace (e.g. *scratch*)."
   "at" '(agent-shell-toggle :wk "toggle")
   "am" '(agent-shell-help-menu :wk "open session")
   "ar" '(agent-shell-send-region :wk "send region")
+  "ac" '(agent-shell-send-clipboard-image :wk "send screenshot")
   "o" '(:ignore t :wk "open")
   "oa" '(my/app-launcher :wk "app launcher")
   "os" '(my/snip-upload :wk "snip buffer/region")
@@ -4365,9 +4366,5 @@ opening another file in same project does not re-notify."
 (use-package zfs
   :ensure nil
   :commands (zfs))
-
-(load (expand-file-name "lisp/ox-reveal.el" user-emacs-directory)
-      nil
-      'nomessage)
 
 (provide 'init)
