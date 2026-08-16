@@ -2321,6 +2321,87 @@ Timers that expired while Emacs was closed fire immediately."
               ("C-k" . helm-previous-line)))
 (global-set-key (kbd "M-x") 'helm-M-x)
 
+(use-package helm-xref
+  :ensure t
+  :after helm)
+
+(use-package citre
+  :ensure t
+  :demand t
+  :init
+  (require 'citre-config)
+  :custom
+  (citre-default-create-tags-file-location 'in-dir)
+  (citre-edit-ctags-options-manually nil)
+  (citre-auto-enable-citre-mode-modes '(prog-mode))
+  :config
+  (defvar my/project-ctags-program
+    (expand-file-name "bin/project-ctags" user-emacs-directory))
+
+  (defvar-local my/project-ctags-arguments nil)
+
+  (put 'my/project-ctags-arguments 'safe-local-variable
+       (lambda (value)
+         (and (listp value) (seq-every-p #'stringp value))))
+
+  (defun my/project-ctags-root ()
+    (or (projectile-project-root)
+        (user-error "Not in a Projectile project")))
+
+  (defun my/project-ctags-enable-citre (root)
+    (dolist (buffer (buffer-list))
+      (with-current-buffer buffer
+        (when (and buffer-file-name
+                   (file-in-directory-p buffer-file-name root))
+          (citre-mode 1)))))
+
+  (defun my/project-ctags-sentinel (process _event)
+    (when (memq (process-status process) '(exit signal))
+      (let ((root (process-get process 'project-root)))
+        (if (and (eq (process-status process) 'exit)
+                 (zerop (process-exit-status process)))
+            (progn
+              (citre-clear-tags-file-cache)
+              (my/project-ctags-enable-citre root)
+              (message "Ctags ready for %s" root))
+          (display-buffer (process-buffer process))
+          (message "Ctags failed for %s; see %s"
+                   root
+                   (buffer-name (process-buffer process)))))))
+
+  (defun my/project-ctags-start (root arguments)
+    (unless (file-executable-p my/project-ctags-program)
+      (user-error "Project Ctags generator is not executable: %s"
+                  my/project-ctags-program))
+    (let ((output (get-buffer-create "*project-ctags*")))
+      (with-current-buffer output
+        (erase-buffer))
+      (let ((process
+             (make-process
+              :name (format "ctags:%s"
+                            (file-name-nondirectory
+                             (directory-file-name root)))
+              :buffer output
+              :command (append (list my/project-ctags-program root)
+                               arguments)
+              :connection-type 'pipe
+              :sentinel #'my/project-ctags-sentinel)))
+        (process-put process 'project-root root)))
+    (message "Generating Ctags for %s..." root))
+
+  (defun my/project-ctags-setup ()
+    (interactive)
+    (my/project-ctags-start (my/project-ctags-root)
+                            my/project-ctags-arguments))
+
+  (with-eval-after-load 'evil
+    (evil-define-key '(normal motion) 'global
+      (kbd "g d") #'citre-jump
+      (kbd "g D") #'citre-query-jump
+      (kbd "g p") #'citre-peek
+      (kbd "g r") #'citre-jump-to-reference
+      (kbd "g b") #'citre-jump-back)))
+
 (use-package typst-ts-mode
   :ensure t
   :mode "\\.typ\\'")
@@ -2834,12 +2915,6 @@ created later still get them."
 ;;   :config
 ;;   (load-theme 'tokyo-night t))
 
-(use-package dracula-theme
-  :ensure t
-  :config
-  (load-theme 'dracula t)
-  (setq dracula-alternate-mode-line-and-minibuffer t))
-
 (use-package dirvish
   :ensure (:host github :repo "latiagertrutis/dirvish" :branch "main")
   :init
@@ -2965,6 +3040,12 @@ still require a restart since elpaca queues run at init time."
         projectile-globally-ignored-buffers '("\\*magit.*"))
   (add-hook 'after-save-hook #'projectile-cache-current-file))
 
+(defun my/projectile-dashboard-fullscreen ()
+  "Show the Projectile dashboard in the full frame."
+  (interactive)
+  (delete-other-windows)
+  (projectile-dashboard))
+
 (use-package helm-projectile
   :ensure t
   :after (helm projectile)
@@ -3018,7 +3099,8 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
   (defvar my/workspaces-master "master")
   (defvar my/workspace-last nil)
   (defvar my/workspaces-on-switch-project 'non-empty)
-  (defvar my/workspace-switch-project-function #'projectile-dashboard)
+  (defvar my/workspace-switch-project-function
+    #'my/projectile-dashboard-fullscreen)
 
   (setq persp-autokill-buffer-on-remove 'kill-weak
         persp-reset-windows-on-nil-window-conf nil
@@ -3102,7 +3184,7 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
       (when (my/workspace-exists-p name)
         (user-error "Workspace '%s' already exists" name))
       (my/workspace-switch name t)
-      (switch-to-buffer (my/workspace-fallback-buffer))
+      (minimal-dashboard)
       (my/workspace-display)))
 
   (defun my/workspace-rename (new-name)
@@ -3525,9 +3607,9 @@ workspace (e.g. *scratch*)."
         (call-interactively 'flash-evil-jump)))))
 
 (general-def '(normal visual operator) 'override
-  :predicate '(not (derived-mode-p 'notmuch-hello-mode 'notmuch-search-mode
-                                   'notmuch-show-mode 'message-mode
-                                   'croc-ui-mode 'sync-ui-mode))
+  :predicate '(not (derived-mode-p 'mu4e-main-mode 'mu4e-headers-mode
+                                    'mu4e-view-mode 'mu4e-compose-mode
+                                    'croc-ui-mode 'sync-ui-mode))
   "s" 'my/s-key-dispatch)
 
 
@@ -3667,7 +3749,7 @@ date) and the dired header are never skipped."
   "a" '(org-agenda :wk "org agenda")
   "c" '(my/centered-cursor :wk "center cursor")
   "f" '(dirvish :wk "file manager")
-  "m" '(notmuch :wk "notmuch")
+  "m" '(mu4e :wk "mu4e")
   "i" '(run-irc :wk "irc")
   "r" '(async-shell-command :wk "run async")
   "t" '(ghostel-project :wk "terminal (project)")
@@ -3868,65 +3950,106 @@ reset is unnecessary, so do the handler resolution ourselves and skip
     "f" #'link-hint-open-link
     "F" #'link-hint-copy-link))
 
-(use-package notmuch
+(use-package mu4e
   :ensure nil
   :defer t
-  :commands (notmuch notmuch-hello notmuch-mua-new-mail)
+  :commands (mu4e mu4e-compose-new)
   :config
-  (setq notmuch-search-oldest-first nil
-        notmuch-show-logo nil
-        notmuch-column-control 1.0
-        notmuch-hello-sections
-        '(notmuch-hello-insert-saved-searches
-          notmuch-hello-insert-alltags
-          notmuch-hello-insert-recent-searches)
-        notmuch-saved-searches
-        '((:name "Inbox"
-           :query "tag:inbox AND NOT tag:trash"
-           :sort-order newest-first)
-          (:name "Unread"
-           :query "tag:unread AND NOT tag:trash"
-           :sort-order newest-first)
-          (:name "Sent"
-           :query "tag:sent"
-           :sort-order newest-first)
-          (:name "Starred"
-           :query "tag:flagged"
-           :sort-order newest-first))
-        notmuch-search-line-faces
-        '(("unread" . notmuch-search-unread-face)
-          ("flagged" . notmuch-search-flagged-face))
-        notmuch-message-headers '("Subject" "From" "To" "Cc" "Date")
-        notmuch-show-stash-mlarchive-link-alist
-        '(("https?://lists\\.gnu\\.org/archive/html/\\([^/]+\\)/.*"
-           . "https://lists.gnu.org/archive/html/%s/"))
-        notmuch-archive-tags '("-inbox" "+archive")
-        notmuch-fcc-dirs nil
-        notmuch-hello-auto-refresh t
-        notmuch-hello-thousands-separator ","
-        notmuch-attachment-dir "~/Downloads"
-        sendmail-program (executable-find "msmtp")
-        send-mail-function #'sendmail-send-it
-        message-send-mail-function #'sendmail-send-it
-        message-sendmail-envelope-from 'header
-        message-kill-buffer-on-exit t)
 
-  (defun my/notmuch-set-msmtp-account ()
-    "Select the msmtp account matching the message's From header."
-    (when (message-mail-p)
-      (save-excursion
-        (let ((from (save-restriction
-                      (message-narrow-to-headers)
-                      (message-fetch-field "from"))))
-          (setq message-sendmail-extra-arguments
-                (list "-a"
-                      (if (and from
-                               (string-match-p
-                                "cashmere@cashmere\\.rs" from))
-                          "cashmere/cashmere"
-                        "autistici")))))))
+  (setq mu4e-mu-binary (executable-find "mu"))
+  (setq mu4e-split-view 'vertical)
+  (setq mu4e-thread-mode t)
+  (setq mu4e-maildir "~/Mails")
+  (setq mu4e-get-mail-command (concat (executable-find "mbsync") " -a"))
+  (setq mu4e-update-interval 300)
+  (setq mu4e-attachment-dir "~/Downloads")
+  (setq mu4e-change-filenames-when-moving t)
 
-  (add-hook 'message-send-mail-hook #'my/notmuch-set-msmtp-account))
+  (setq mu4e-user-mail-address-list
+        '("cashmeresamurai@autistici.org"
+          "cashmere@cashmere.rs"))
+
+  (setq mu4e-contexts
+        `(,(make-mu4e-context
+            :name "autistici"
+            :match-func
+            (lambda (msg)
+              (when msg
+                (string-prefix-p "/autistici" (mu4e-message-field msg :maildir))))
+            :vars '((user-mail-address . "cashmeresamurai@autistici.org")
+                    (user-full-name . "cashmere")
+                    (mu4e-drafts-folder . "/autistici/Drafts")
+                    (mu4e-sent-folder . "/autistici/Sent")
+                    (mu4e-trash-folder . "/autistici/Trash")
+                    (mu4e-refile-folder . "/autistici/Archive")))
+
+          ,(make-mu4e-context
+            :name "cashmere"
+            :match-func
+            (lambda (msg)
+              (when msg
+                (string-prefix-p "/cashmere/cashmere" (mu4e-message-field msg :maildir))))
+            :vars '((user-mail-address . "cashmere@cashmere.rs")
+                    (user-full-name . "cashmere")
+                    (mu4e-drafts-folder . "/cashmere/cashmere/Drafts")
+                    (mu4e-sent-folder . "/cashmere/cashmere/Sent")
+                    (mu4e-trash-folder . "/cashmere/cashmere/Trash")
+                    (mu4e-refile-folder . "/cashmere/cashmere/Archive")))))
+
+  (setq mu4e-context-policy 'pick-first)
+  (setq mu4e-compose-context-policy 'ask)
+
+  (setq sendmail-program (executable-find "msmtp"))
+  (setq send-mail-function 'sendmail-send-it)
+  (setq message-send-mail-function 'sendmail-send-it)
+  (setq message-sendmail-envelope-from 'header)
+  (setq message-kill-buffer-on-exit t)
+
+  (defun mu4e-set-msmtp-account ()
+    (if (message-mail-p)
+        (save-excursion
+          (let* ((from (save-restriction
+                         (message-narrow-to-headers)
+                         (message-fetch-field "from")))
+                 (account
+                  (cond
+                   ((string-match "cashmeresamurai@autistici.org" from) "autistici")
+                   ((string-match "cashmere@cashmere.rs" from) "cashmere/cashmere"))))
+            (setq message-sendmail-extra-arguments (list '"-a" account))))))
+
+  (add-hook 'message-send-mail-hook 'mu4e-set-msmtp-account))
+
+(use-package mu4e-alert
+  :ensure t
+  :after mu4e
+  :config
+  ;; Use libnotify for desktop notifications (notify-send / swaync)
+  (mu4e-alert-set-default-style 'libnotify)
+
+  ;; Interesting mail query: unread, exclude trash and sent folders
+  (setq mu4e-alert-interesting-mail-query
+        (concat "flag:unread AND NOT flag:trashed"
+                " AND NOT maildir:\"/autistici/Sent\""
+                " AND NOT maildir:\"/cashmere/cashmere/Sent\""))
+
+  ;; Show both count and per-sender subject notifications
+  (setq mu4e-alert-email-notification-types '(count subjects))
+
+  ;; Group desktop notifications by maildir (per-account grouping)
+  (setq mu4e-alert-group-by :maildir)
+
+  ;; Disable X11 urgency hints (does not work on Wayland)
+  (setq mu4e-alert-set-window-urgency nil)
+
+  ;; Enable desktop notifications
+  (mu4e-alert-enable-notifications)
+
+  ;; Enable mode-line data updates (populates mu4e-alert-mode-line variable).
+  ;; We strip the default global-mode-string entry afterwards since we use
+  ;; a custom maple-modeline segment instead.
+  (mu4e-alert-enable-mode-line-display)
+  (setq global-mode-string
+        (delete '(:eval mu4e-alert-mode-line) global-mode-string)))
 
 (use-package colorful-mode
   ;; :diminish
@@ -4158,6 +4281,7 @@ opening another file in same project does not re-notify."
 
 (use-package minimal-dashboard
   :ensure t
+  :demand t
   :init
   (setq initial-buffer-choice #'minimal-dashboard) ;; set initial buffer as dashboard
   :custom
