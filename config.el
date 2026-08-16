@@ -1111,6 +1111,23 @@ TITLE names the new denote-style file in ~/org."
 
 
 
+(use-package kitty-graphics
+  :ensure (:host github :repo "cashmeredev/kitty-graphics.el")
+  :demand t
+  :custom
+  (kitty-graphics-enable-video t)
+  (kitty-graphics-shr-scale 'fit)
+  (kitty-graphics-shr-fit-width 0.4)
+  (kitty-graphics-shr-fit-height 20)
+  (kitty-graphics-doc-view-resolution-scale 2.0)
+  :hook (dired-mode . kitty-graphics-dired-auto-preview-mode)
+  :config
+  (setq kitty-graphics-enable-browser t
+        kitty-graphics-casty-program "~/projects/casty/bin/casty.js"
+        kitty-graphics-casty-chrome "helium-browser")
+
+  (kitty-graphics-setup))
+
 (with-eval-after-load 'org
   (setq org-confirm-babel-evaluate nil)
   (org-babel-do-load-languages
@@ -2888,11 +2905,6 @@ created later still get them."
 
 
 
-(use-package batppuccin
-  :ensure t
-  :config
-  (load-theme 'batppuccin-mocha t))
-
 ;; (use-package solarized-theme
 ;;   :ensure t
 ;;   :config
@@ -4259,5 +4271,43 @@ opening another file in same project does not re-notify."
 (use-package zfs
   :ensure nil
   :commands (zfs))
+
+(use-package minimal-dashboard
+  :ensure t
+  :init
+  (setq initial-buffer-choice #'minimal-dashboard) ;; set initial buffer as dashboard
+  :custom
+  (minimal-dashboard-buffer-name "Dashboard")
+  ;; (minimal-dashboard-buffer-name #'some-func-that-returns-a-string)
+
+  (minimal-dashboard-image-path "~/.emacs.d/Emacs-logo.svg") ;; path to image
+  ;; (minimal-dashboard-image-path #'some-func-that-returns-a-valid-image-path)
+
+  (minimal-dashboard-text "Welcome to Emacs") ;; plain text
+
+  ;; You can have function returning a string as well
+  (minimal-dashboard-text (lambda () (format "started in %s" (emacs-init-time))))
+
+  ;; Multi-line text (with center alignment) is also supported
+  ;; (minimal-dashboard-text "My multiline\nstring is here")
+
+  ;; Click support for image
+  ;; (minimal-dashboard-image-click-handler
+  ;;   (lambda (event)
+  ;;     (pcase (event-basic-type event)
+  ;;       ('mouse-1 (message "Left click on image"))
+  ;;       ('mouse-2 (message "Middle click on image"))
+  ;;       ('mouse-3 (message "Right click on image")))))
+
+  ;; Click support for text
+  ;; (minimal-dashboard-text-click-handler
+  ;;   (lambda (event)
+  ;;     (pcase (event-basic-type event)
+  ;;       ('mouse-1 (message "Left click on text"))
+  ;;       ('mouse-2 (message "Middle click on text"))
+  ;;       ('mouse-3 (message "Right click on text")))))
+  (minimal-dashboard-image-scale 1.25)
+  (minimal-dashboard-enable-resize-handling t) ;; to refresh when buffer is resized
+  (minimal-dashboard-modeline-shown t)) ;; visibility of the modeline
 
 (provide 'init)
