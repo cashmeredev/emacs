@@ -47,11 +47,6 @@
 (add-hook 'after-init-hook #'elpaca-process-queues)
 (elpaca `(,@elpaca-order))
 
-;; mu4e is not on MELPA; it ships with the system `mu` package and is already
-;; on load-path via the Nix emacs wrapper. Ignore it as a dependency so
-;; packages requiring it (nano-mu4e) don't try (and fail) to fetch it.
-(with-eval-after-load 'elpaca
-  (add-to-list 'elpaca-ignored-dependencies 'mu4e))
 
 ;; Install use-package support
 (elpaca (elpaca-use-package :wait t)

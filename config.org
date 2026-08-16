@@ -4292,9 +4292,9 @@ workspace (e.g. *scratch*)."
         (call-interactively 'flash-evil-jump)))))
 
 (general-def '(normal visual operator) 'override
-  :predicate '(not (derived-mode-p 'mu4e-main-mode 'mu4e-headers-mode
-                                    'mu4e-view-mode 'mu4e-compose-mode
-                                    'croc-ui-mode 'sync-ui-mode))
+  :predicate '(not (derived-mode-p 'notmuch-hello-mode 'notmuch-search-mode
+                                   'notmuch-show-mode 'message-mode
+                                   'croc-ui-mode 'sync-ui-mode))
   "s" 'my/s-key-dispatch)
 
 
@@ -4454,7 +4454,7 @@ date) and the dired header are never skipped."
   "a" '(org-agenda :wk "org agenda")
   "c" '(my/centered-cursor :wk "center cursor")
   "f" '(dirvish :wk "file manager")
-  "m" '(mu4e :wk "mu4e")
+  "m" '(notmuch :wk "notmuch")
   "i" '(run-irc :wk "irc")
   "r" '(async-shell-command :wk "run async")
   "t" '(ghostel-project :wk "terminal (project)")
@@ -4699,113 +4699,68 @@ reset is unnecessary, so do the handler resolution ourselves and skip
     "F" #'link-hint-copy-link))
 #+end_src
 
-* mu4e
+* notmuch
 
 #+begin_src emacs-lisp
-(use-package mu4e
+(use-package notmuch
   :ensure nil
   :defer t
-  :commands (mu4e mu4e-compose-new)
+  :commands (notmuch notmuch-hello notmuch-mua-new-mail)
   :config
-  
-  (setq mu4e-mu-binary (executable-find "mu"))
-  (setq mu4e-split-view 'vertical)
-  (setq mu4e-thread-mode t)
-  (setq mu4e-maildir "~/Mails")
-  (setq mu4e-get-mail-command (concat (executable-find "mbsync") " -a"))
-  (setq mu4e-update-interval 300)
-  (setq mu4e-attachment-dir "~/Downloads")
-  (setq mu4e-change-filenames-when-moving t)
-  
-  (setq mu4e-user-mail-address-list 
-        '("cashmeresamurai@autistici.org"
-          "cashmere@cashmere.rs"))
-  
-  (setq mu4e-contexts
-        `(,(make-mu4e-context
-            :name "autistici"
-            :match-func
-            (lambda (msg)
-              (when msg
-                (string-prefix-p "/autistici" (mu4e-message-field msg :maildir))))
-            :vars '((user-mail-address . "cashmeresamurai@autistici.org")
-                    (user-full-name . "cashmere")
-                    (mu4e-drafts-folder . "/autistici/Drafts")
-                    (mu4e-sent-folder . "/autistici/Sent")
-                    (mu4e-trash-folder . "/autistici/Trash")
-                    (mu4e-refile-folder . "/autistici/Archive")))
-          
-          ,(make-mu4e-context
-            :name "cashmere"
-            :match-func
-            (lambda (msg)
-              (when msg
-                (string-prefix-p "/cashmere/cashmere" (mu4e-message-field msg :maildir))))
-            :vars '((user-mail-address . "cashmere@cashmere.rs")
-                    (user-full-name . "cashmere")
-                    (mu4e-drafts-folder . "/cashmere/cashmere/Drafts")
-                    (mu4e-sent-folder . "/cashmere/cashmere/Sent")
-                    (mu4e-trash-folder . "/cashmere/cashmere/Trash")
-                    (mu4e-refile-folder . "/cashmere/cashmere/Archive")))))
-  
-  (setq mu4e-context-policy 'pick-first)
-  (setq mu4e-compose-context-policy 'ask)
-  
-  (setq sendmail-program (executable-find "msmtp"))
-  (setq send-mail-function 'sendmail-send-it)
-  (setq message-send-mail-function 'sendmail-send-it)
-  (setq message-sendmail-envelope-from 'header)
-  (setq message-kill-buffer-on-exit t)
-  
-  (defun mu4e-set-msmtp-account ()
-    (if (message-mail-p)
-        (save-excursion
-          (let* ((from (save-restriction
-                         (message-narrow-to-headers)
-                         (message-fetch-field "from")))
-                 (account
-                  (cond
-                   ((string-match "cashmeresamurai@autistici.org" from) "autistici")
-                   ((string-match "cashmere@cashmere.rs" from) "cashmere/cashmere"))))
-            (setq message-sendmail-extra-arguments (list '"-a" account))))))
-  
-  (add-hook 'message-send-mail-hook 'mu4e-set-msmtp-account))
-#+end_src
+  (setq notmuch-search-oldest-first nil
+        notmuch-show-logo nil
+        notmuch-column-control 1.0
+        notmuch-hello-sections
+        '(notmuch-hello-insert-saved-searches
+          notmuch-hello-insert-alltags
+          notmuch-hello-insert-recent-searches)
+        notmuch-saved-searches
+        '((:name "Inbox"
+           :query "tag:inbox AND NOT tag:trash"
+           :sort-order newest-first)
+          (:name "Unread"
+           :query "tag:unread AND NOT tag:trash"
+           :sort-order newest-first)
+          (:name "Sent"
+           :query "tag:sent"
+           :sort-order newest-first)
+          (:name "Starred"
+           :query "tag:flagged"
+           :sort-order newest-first))
+        notmuch-search-line-faces
+        '(("unread" . notmuch-search-unread-face)
+          ("flagged" . notmuch-search-flagged-face))
+        notmuch-message-headers '("Subject" "From" "To" "Cc" "Date")
+        notmuch-show-stash-mlarchive-link-alist
+        '(("https?://lists\\.gnu\\.org/archive/html/\\([^/]+\\)/.*"
+           . "https://lists.gnu.org/archive/html/%s/"))
+        notmuch-archive-tags '("-inbox" "+archive")
+        notmuch-fcc-dirs nil
+        notmuch-hello-auto-refresh t
+        notmuch-hello-thousands-separator ","
+        notmuch-attachment-dir "~/Downloads"
+        sendmail-program (executable-find "msmtp")
+        send-mail-function #'sendmail-send-it
+        message-send-mail-function #'sendmail-send-it
+        message-sendmail-envelope-from 'header
+        message-kill-buffer-on-exit t)
 
-** mu4e-alerts
+  (defun my/notmuch-set-msmtp-account ()
+    "Select the msmtp account matching the message's From header."
+    (when (message-mail-p)
+      (save-excursion
+        (let ((from (save-restriction
+                      (message-narrow-to-headers)
+                      (message-fetch-field "from"))))
+          (setq message-sendmail-extra-arguments
+                (list "-a"
+                      (if (and from
+                               (string-match-p
+                                "cashmere@cashmere\\.rs" from))
+                          "cashmere/cashmere"
+                        "autistici")))))))
 
-#+begin_src emacs-lisp
-(use-package mu4e-alert
-  :ensure t
-  :after mu4e
-  :config
-  ;; Use libnotify for desktop notifications (notify-send / swaync)
-  (mu4e-alert-set-default-style 'libnotify)
-
-  ;; Interesting mail query: unread, exclude trash and sent folders
-  (setq mu4e-alert-interesting-mail-query
-        (concat "flag:unread AND NOT flag:trashed"
-                " AND NOT maildir:\"/autistici/Sent\""
-                " AND NOT maildir:\"/cashmere/cashmere/Sent\""))
-
-  ;; Show both count and per-sender subject notifications
-  (setq mu4e-alert-email-notification-types '(count subjects))
-
-  ;; Group desktop notifications by maildir (per-account grouping)
-  (setq mu4e-alert-group-by :maildir)
-
-  ;; Disable X11 urgency hints (does not work on Wayland)
-  (setq mu4e-alert-set-window-urgency nil)
-
-  ;; Enable desktop notifications
-  (mu4e-alert-enable-notifications)
-
-  ;; Enable mode-line data updates (populates mu4e-alert-mode-line variable).
-  ;; We strip the default global-mode-string entry afterwards since we use
-  ;; a custom maple-modeline segment instead.
-  (mu4e-alert-enable-mode-line-display)
-  (setq global-mode-string
-        (delete '(:eval mu4e-alert-mode-line) global-mode-string)))
+  (add-hook 'message-send-mail-hook #'my/notmuch-set-msmtp-account))
 #+end_src
 
 * colorful-mode
