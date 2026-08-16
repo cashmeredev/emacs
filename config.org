@@ -3521,6 +3521,17 @@ moved to local.el
 ;;   (load-theme 'tokyo-night t))
 #+end_src
 
+** dracula
+
+#+begin_src emacs-lisp
+(use-package dracula-theme
+  :ensure t
+  :config
+  (load-theme 'dracula t)
+  (setq dracula-alternate-mode-line-and-minibuffer t))
+#+end_src
+
+
 * dirvish
 
 #+begin_src emacs-lisp
