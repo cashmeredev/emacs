@@ -2241,12 +2241,7 @@ Timers that expired while Emacs was closed fire immediately."
   (company-backends '(company-capf))
   :config
   (defun my/company-limit-candidates (candidates)
-    (seq-take candidates 4))
-
-  (define-key company-mode-map [remap indent-for-tab-command]
-              #'company-manual-begin)
-  (define-key company-mode-map [remap c-indent-line-or-region]
-              #'company-manual-begin))
+    (seq-take candidates 4)))
 
 (use-package which-key
   :ensure t
@@ -2272,20 +2267,6 @@ Timers that expired while Emacs was closed fire immediately."
   ;; first function returning a result wins.  Note that the list of buffer-local
   ;; completion functions takes precedence over the global list.
   (add-hook 'completion-at-point-functions #'cape-file))
-
-(use-package embark
-  :ensure (:wait t)
-  :defer t
-  :bind
-  (("C-." . embark-act)
-   ("M-." . embark-dwim)
-   ("C-h B" . embark-bindings)
-   :map minibuffer-local-map
-   ("C-c C-a" . embark-act-all)
-   ("C-c C-e" . embark-export)
-   ("C-c C-o" . embark-collect))
-  :init
-  (setq prefix-help-command #'embark-prefix-help-command))
 
 (use-package helm
   :ensure (:wait t)
@@ -2315,7 +2296,7 @@ Timers that expired while Emacs was closed fire immediately."
      "\\`\\*elpaca-log\\*\\'"
      "\\`\\*Native-compile-Log\\*\\'"
      "\\`\\*Async-native-compile-log\\*\\'"))
-  (helm-display-function #'helm-display-buffer-in-own-frame)
+  ;; (helm-display-function #'helm-display-buffer-in-own-frame)
   :bind (:map helm-map
               ("C-j" . helm-next-line)
               ("C-k" . helm-previous-line)))
@@ -2401,6 +2382,13 @@ Timers that expired while Emacs was closed fire immediately."
       (kbd "g p") #'citre-peek
       (kbd "g r") #'citre-jump-to-reference
       (kbd "g b") #'citre-jump-back)))
+
+(use-package nov
+  :ensure t
+  :mode ("\\.epub\\'" . nov-mode)
+  :hook (nov-mode . visual-line-mode)
+  :custom
+  (nov-text-width 100))
 
 (use-package typst-ts-mode
   :ensure t
@@ -2883,8 +2871,6 @@ so the working-tree diff stays visible until the user explicitly stages."
 (blink-cursor-mode 0)
 (setq-default cursor-type 'box)
 
-(defvar cashmere/font-height 180)
-
 (defun cashmere/set-fonts (&optional frame)
   "Apply the MapleMono faces, but only on graphical frames.
 Runs per-frame so a TTY-only daemon never touches fonts while GUI frames
@@ -3030,6 +3016,8 @@ still require a restart since elpaca queues run at init time."
 (use-package projectile
   :ensure (:wait t)
   :demand t
+  :bind-keymap
+  (("C-x p" . projectile-command-map))
   :config
   (projectile-mode +1)
   (setq projectile-completion-system 'default
@@ -3483,7 +3471,6 @@ workspace (e.g. *scratch*)."
   "fr" '(helm-recentf :wk "recent files")
   "ff" '(helm-find-files :wk "find file")
   "fs" '(save-buffer :wk "save file")
-
   "b" '(:ignore t :wk "buffer/bookmarks")
   "bb" '(helm-filtered-bookmarks :wk "display current bookmarks")
   "bi" '(my/ibuffer-workspace :wk "ibuffer (workspace)")
@@ -4297,7 +4284,7 @@ opening another file in same project does not re-notify."
   (minimal-dashboard-text (lambda () (format "started in %s" (emacs-init-time))))
 
   ;; Multi-line text (with center alignment) is also supported
-  ;; (minimal-dashboard-text "My multiline\nstring is here")
+  (minimal-dashboard-text "You never quit Emacs\nYou just die at some point")
 
   ;; Click support for image
   ;; (minimal-dashboard-image-click-handler
@@ -4317,5 +4304,93 @@ opening another file in same project does not re-notify."
   (minimal-dashboard-image-scale 1.25)
   (minimal-dashboard-enable-resize-handling t) ;; to refresh when buffer is resized
   (minimal-dashboard-modeline-shown t)) ;; visibility of the modeline
+
+(use-package rsync-ui
+  :ensure nil
+  :commands (rsync-ui rsync-ui-dired)
+  :bind (:map dired-mode-map
+              ("C-c r" . rsync-ui-dired))
+  :init
+  (with-eval-after-load 'general
+    (my-leader "or" '(rsync-ui :wk "rsync"))))
+
+(defun rlr/org-export-html-to-browser ()
+  "Export the current Org buffer to a temporary HTML file in the system temp directory, open it, and then delete it when Emacs is killed."
+  (interactive)
+  (unless (derived-mode-p 'org-mode)
+    (user-error "Not in an Org buffer"))
+  (let* ((tmp (make-temp-file "org-preview-" nil ".html"))
+         (org-export-in-background nil)
+         (org-html-head-include-default-style nil)
+         (org-html-head-include-scripts nil)
+         (org-html-head rlr/org-preview-css)
+         (org-html-validation-link nil))
+    (org-export-to-file 'html tmp)
+    (add-hook 'kill-emacs-hook
+              (lambda () (ignore-errors (delete-file tmp))))
+    (funcall browse-url-secondary-browser-function
+             (browse-url-file-url tmp))))
+(defvar rlr/org-preview-css "
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    max-width: 40rem;
+    margin: 3rem auto;
+    padding: 0 1.25rem;
+    font-family: -apple-system, BlinkMacSystemFont, 'Iowan Old Style','Palatino Linotype', Georgia, serif;
+    font-size: 1.125rem;
+    line-height: 1.65;
+    color: #24292f;
+    background: #fdfdfc;
+    text-rendering: optimizeLegibility;
+    hyphens: auto;
+  }
+  h1, h2, h3, h4 {
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+    line-height: 1.25;
+    margin-top: 2.25em;
+    color: #14181c;
+  }
+  h1 { font-size: 1.9rem; margin-bottom: 0.2em; }
+  h2 { font-size: 1.45rem; }
+  h3 { font-size: 1.2rem; }
+  .title { text-align: left; margin-bottom: 2rem; }
+  #table-of-contents { font-size: 0.95rem; }
+  a { color: #0b5cad; text-underline-offset: 2px; }
+  blockquote {
+    margin: 1.5em 0; padding: 0.25em 0 0.25em 1.25em;
+    border-left: 3px solid #d0d7de; color: #4a5058; font-style: italic;
+  }
+  pre, code { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 0.9rem; }
+  pre {
+    background: #f4f4f2; padding: 0.9em 1.1em;
+    border-radius: 6px; overflow-x: auto; line-height: 1.45;
+  }
+  code { background: #f0f0ee; padding: 0.1em 0.3em; border-radius: 3px; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; margin: 1.5em 0; font-size: 0.95rem; }
+  th, td { border: 1px solid #d0d7de; padding: 0.4em 0.7em; text-align: left; }
+  th { background: #f4f4f2; }
+  hr { border: none; border-top: 1px solid #d8d8d4; margin: 2.5em 0; }
+  .footpara { display: inline; }
+  #postamble { margin-top: 3rem; font-size: 0.85rem; color: #6a707a; }
+  @media (prefers-color-scheme: dark) {
+    body { color: #d6d3cd; background: #16181a; }
+    h1, h2, h3, h4 { color: #f0ede8; }
+    a { color: #6cb3f5; }
+    blockquote { border-left-color: #3a3f45; color: #a8a49d; }
+    pre { background: #1e2124; }
+    code { background: #24282c; }
+    th, td { border-color: #3a3f45; }
+    th { background: #1e2124; }
+    hr { border-top-color: #2e3236; }
+  }
+</style>"
+  "Stylesheet injected into throwaway HTML previews of Org buffers.")
+
+(use-package javelin
+  :ensure t
+  :config
+  (global-javelin-minor-mode 1))
 
 (provide 'init)

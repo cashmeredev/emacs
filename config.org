@@ -999,7 +999,6 @@ let's give agent-shell another try
   :ensure (:host nil :repo "ssh://git@git.cashmere.rs/agent-shell-sidebar.git"))
 #+end_src
 
-
 * eldoc
 
 #+begin_src emacs-lisp
@@ -1720,10 +1719,6 @@ Skips capture tasks and projects."
 
 #+end_src
 
-
-** harper
-
-
 * org-capture
 
 *** org-capture combined with denote
@@ -1794,7 +1789,6 @@ Skips capture tasks and projects."
   :ensure t
   :after org-super-agenda)
 #+end_src
-
 
 ** agenda
 
@@ -2625,7 +2619,7 @@ Auto switch silos (different workspaces/folders) based on preconfigured director
   (add-hook 'completion-at-point-functions #'cape-file))
 #+end_src
 
-* embark
+* COMMENT embark
 
 #+begin_src emacs-lisp
 (use-package embark
@@ -3463,8 +3457,6 @@ Native =undo-redo= (via =evil-undo-system='undo-redo=); just raise the undo limi
 (blink-cursor-mode 0)
 (setq-default cursor-type 'box)
 
-(defvar cashmere/font-height 180)
-
 (defun cashmere/set-fonts (&optional frame)
   "Apply the MapleMono faces, but only on graphical frames.
 Runs per-frame so a TTY-only daemon never touches fonts while GUI frames
@@ -3567,7 +3559,6 @@ moved to local.el
                                (or dps dirvish-preview-dispatchers)))))
       (funcall fn dps))))
 #+end_src
-
 
 * zoxide
 
@@ -3676,6 +3667,8 @@ still require a restart since elpaca queues run at init time."
 (use-package projectile
   :ensure (:wait t)
   :demand t
+  :bind-keymap
+  (("C-x p" . projectile-command-map))
   :config
   (projectile-mode +1)
   (setq projectile-completion-system 'default
@@ -4170,7 +4163,6 @@ workspace (e.g. *scratch*)."
   "fr" '(helm-recentf :wk "recent files")
   "ff" '(helm-find-files :wk "find file")
   "fs" '(save-buffer :wk "save file")
-
   "b" '(:ignore t :wk "buffer/bookmarks")
   "bb" '(helm-filtered-bookmarks :wk "display current bookmarks")
   "bi" '(my/ibuffer-workspace :wk "ibuffer (workspace)")
@@ -5114,7 +5106,7 @@ opening another file in same project does not re-notify."
   (minimal-dashboard-text (lambda () (format "started in %s" (emacs-init-time))))
 
   ;; Multi-line text (with center alignment) is also supported
-  ;; (minimal-dashboard-text "My multiline\nstring is here")
+  (minimal-dashboard-text "You never quit Emacs\nYou just die at some point")
 
   ;; Click support for image
   ;; (minimal-dashboard-image-click-handler
@@ -5225,6 +5217,16 @@ opening another file in same project does not re-notify."
   }
 </style>"
   "Stylesheet injected into throwaway HTML previews of Org buffers.")
+#+end_src
+
+
+* javelin
+
+#+begin_src emacs-lisp
+(use-package javelin
+  :ensure t
+  :config
+  (global-javelin-minor-mode 1))
 #+end_src
 
 
