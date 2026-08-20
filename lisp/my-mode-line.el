@@ -2,36 +2,56 @@
 
 (require 'mode-line-maker)
 
-(defface my/mode-line-helix-normal
-  '((t (:background "#89b4fa" :foreground "#1e1e2e" :weight bold)))
-  "Face for the helix normal state indicator.")
+(defface my/mode-line-evil-normal
+  '((t (:inherit font-lock-keyword-face :weight bold)))
+  "Face for the evil normal state indicator.")
 
-(defface my/mode-line-helix-insert
-  '((t (:background "#a6e3a1" :foreground "#1e1e2e" :weight bold)))
-  "Face for the helix insert state indicator.")
+(defface my/mode-line-evil-insert
+  '((t (:inherit success :weight bold)))
+  "Face for the evil insert state indicator.")
+
+(defface my/mode-line-evil-visual
+  '((t (:inherit warning :weight bold)))
+  "Face for the evil visual state indicator.")
+
+(defface my/mode-line-evil-replace
+  '((t (:inherit error :weight bold)))
+  "Face for the evil replace state indicator.")
+
+(defface my/mode-line-evil-motion
+  '((t (:inherit font-lock-constant-face :weight bold)))
+  "Face for the evil motion state indicator.")
+
+(defface my/mode-line-evil-emacs
+  '((t (:inherit font-lock-builtin-face :weight bold)))
+  "Face for the evil Emacs state indicator.")
+
+(defface my/mode-line-buffer-icon-face
+  '((t (:inherit mode-line-buffer-id)))
+  "Face for the current buffer's file or mode icon.")
 
 (defface my/mode-line-irc-face
-  '((t (:foreground "#94e2d5" :weight bold)))
+  '((t (:inherit font-lock-builtin-face :weight bold)))
   "Face for the IRC activity indicator.")
 
 (defface my/mode-line-mu4e-face
-  '((t (:foreground "#f9e2af" :weight bold)))
+  '((t (:inherit warning :weight bold)))
   "Face for the unread mail indicator.")
 
 (defface my/mode-line-time-face
-  '((t (:foreground "#89dceb")))
+  '((t (:inherit font-lock-constant-face)))
   "Face for the time segment.")
 
 (defface my/mode-line-state-saved-face
-  '((t (:foreground "#a6e3a1")))
+  '((t (:inherit success)))
   "Face for the saved buffer state icon.")
 
 (defface my/mode-line-state-modified-face
-  '((t (:foreground "#fab387" :weight bold)))
+  '((t (:inherit warning :weight bold)))
   "Face for the modified buffer state icon.")
 
 (defface my/mode-line-state-read-only-face
-  '((t (:foreground "#f38ba8")))
+  '((t (:inherit error)))
   "Face for the read-only buffer state icon.")
 
 (defvar-local my/mode-line--buffer-title nil)
@@ -64,57 +84,81 @@ the project root, falling back to the plain buffer name."
         (buffer-name))))
 
 (defun my/mode-line--nerd-icons-p ()
+  "Return non-nil when Nerd Icons are enabled and available."
   (and (bound-and-true-p ek-use-nerd-fonts)
        (require 'nerd-icons nil t)))
+
+(defun my/mode-line--icon (name face &optional fallback)
+  "Render Nerd icon NAME with FACE, or FALLBACK when unavailable."
+  (if (my/mode-line--nerd-icons-p)
+      (propertize (nerd-icons-mdicon name) 'face face)
+    (propertize (or fallback "") 'face face)))
 
 (defun my/mode-line-buffer-icon ()
   "Nerd icon for the current buffer, or nil."
   (when (my/mode-line--nerd-icons-p)
     (or (and buffer-file-name
-             (ignore-errors (nerd-icons-icon-for-file buffer-file-name)))
-        (ignore-errors (nerd-icons-icon-for-mode major-mode)))))
+             (ignore-errors
+               (nerd-icons-icon-for-file
+                buffer-file-name :face 'my/mode-line-buffer-icon-face)))
+        (ignore-errors
+          (nerd-icons-icon-for-mode
+           major-mode :face 'my/mode-line-buffer-icon-face)))))
 
-(defun my/mode-line-helix-state ()
-  "Colored single-letter indicator for the current helix state."
-  (when (and (boundp 'helix--current-state) helix--current-state)
-    (let* ((tag (upcase (substring (symbol-name helix--current-state) 0 1)))
-           (face (intern-soft (format "my/mode-line-helix-%s" helix--current-state))))
-      (propertize (format " %s " tag) 'face (or face 'my/mode-line-helix-normal)))))
+(defconst my/mode-line--evil-states
+  '((normal  "N" my/mode-line-evil-normal)
+    (insert  "I" my/mode-line-evil-insert)
+    (visual  "V" my/mode-line-evil-visual)
+    (replace "R" my/mode-line-evil-replace)
+    (motion  "M" my/mode-line-evil-motion)
+    (emacs   "E" my/mode-line-evil-emacs))
+  "Display labels and theme-derived faces for Evil states.")
+
+(defun my/mode-line-evil-state ()
+  "Compact, theme-aware indicator for the current Evil state."
+  (when (bound-and-true-p evil-state)
+    (let* ((entry (assq evil-state my/mode-line--evil-states))
+           (tag (or (nth 1 entry)
+                    (upcase (substring (symbol-name evil-state) 0 1))))
+           (face (or (nth 2 entry) 'my/mode-line-evil-normal)))
+      (propertize (format " %s " tag) 'face face))))
 
 (defun my/mode-line-buffer-state ()
-  "Buffer state icon: lock (read-only), pencil-alert (modified), save (saved)."
+  "Render a clean lock, edit, or saved indicator for the current buffer."
   (cond
    (buffer-read-only
-    (if (my/mode-line--nerd-icons-p)
-        (propertize (nerd-icons-mdicon "nf-md-lock")
-                    'face 'my/mode-line-state-read-only-face)
-      "%%"))
+    (my/mode-line--icon "nf-md-lock"
+                        'my/mode-line-state-read-only-face "RO"))
    ((buffer-modified-p)
-    (if (my/mode-line--nerd-icons-p)
-        (propertize (nerd-icons-mdicon "nf-md-content_save_alert")
-                    'face 'my/mode-line-state-modified-face)
-      "**"))
+    (my/mode-line--icon "nf-md-pencil"
+                        'my/mode-line-state-modified-face "*"))
    (t
-    (if (my/mode-line--nerd-icons-p)
-        (propertize (nerd-icons-mdicon "nf-md-content_save")
-                    'face 'my/mode-line-state-saved-face)
-      "--"))))
+    (my/mode-line--icon "nf-md-check"
+                        'my/mode-line-state-saved-face "="))))
+
+(defun my/mode-line-remote ()
+  "Show a remote indicator only for an actual remote directory.
+Unlike the built-in `mode-line-remote', local buffers render nothing instead
+of a literal dash."
+  (when (file-remote-p default-directory)
+    (my/mode-line--icon "nf-md-cloud_outline"
+                        'font-lock-constant-face "@")))
 
 (defun my/mode-line-irc ()
   "IRC activity indicator: icon plus number of buffers with unread activity."
   (when (bound-and-true-p erc-modified-channels-alist)
-    (let ((icon (and (my/mode-line--nerd-icons-p)
-                     (nerd-icons-mdicon "nf-md-message_badge_outline"))))
-      (propertize (format "%s %d" (or icon "irc")
+    (let ((icon (my/mode-line--icon "nf-md-forum_outline"
+                                    'my/mode-line-irc-face "irc")))
+      (propertize (format "%s %d" icon
                           (length erc-modified-channels-alist))
                   'face 'my/mode-line-irc-face))))
 
 (defun my/mode-line-mu4e ()
   "Unread mail indicator from mu4e-alert, or nil when mu4e is not in use."
   (when (bound-and-true-p mu4e-alert-mode-line)
-    (let ((icon (and (my/mode-line--nerd-icons-p)
-                     (nerd-icons-mdicon "nf-md-email_alert_outline"))))
-      (propertize (format "%s %s" (or icon "mail")
+    (let ((icon (my/mode-line--icon "nf-md-email_outline"
+                                    'my/mode-line-mu4e-face "mail")))
+      (propertize (format "%s %s" icon
                           (string-trim mu4e-alert-mode-line))
                   'face 'my/mode-line-mu4e-face))))
 
@@ -135,16 +179,33 @@ the project root, falling back to the plain buffer name."
       (propertize (if icon (concat icon " " time) time)
                   'face 'my/mode-line-time-face))))
 
+(defun my/mode-line-sync-theme (&optional _theme)
+  "Make helper padding inherit the live header-line theme face.
+Optional THEME is ignored so this function also fits
+`enable-theme-functions'."
+  (set-face-attribute 'mode-line-maker-padding-face nil
+                      :inherit 'header-line
+                      :foreground 'unspecified
+                      :background 'unspecified
+                      :box nil
+                      :overline nil
+                      :underline nil
+                      :inverse-video nil
+                      :strike-through nil))
+
 (defun my/mode-line-install ()
   "Install the custom mode-line built with mode-line-maker.
 The mode-line lives at the top of the window via `header-line-format';
 the bottom mode-line is hidden."
   (setq global-mode-string (delq 'display-time-string global-mode-string))
+  (my/mode-line-sync-theme)
+  (add-hook 'enable-theme-functions #'my/mode-line-sync-theme)
   (setq-default mode-line-format nil)
   (setq-default header-line-format
                 (mode-line-maker
-                 '((:eval (my/mode-line-helix-state)) " "
-                   (:eval (my/mode-line-buffer-state)) mode-line-remote " "
+                 '((:eval (my/mode-line-evil-state)) " "
+                   (:eval (my/mode-line-buffer-state))
+                   (:eval (my/mode-line-remote)) " "
                    (:eval (my/mode-line-buffer-icon)) " "
                    (:eval (propertize (my/mode-line-buffer-name)
                                       'face 'mode-line-buffer-id

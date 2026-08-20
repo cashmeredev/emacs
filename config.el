@@ -2,7 +2,7 @@
 (setq pgtk-wait-for-event-timeout 0.001)
 (setq package-enable-at-startup nil)
 ;; (setq-default mode-line-format t) ;; disabled: boolean t is not valid for mode-line-format
-(setq default-frame-alist '((undecorated . t)))
+(add-to-list 'default-frame-alist '(undecorated . t))
 ;; GC + file-name-handler-alist tuning lives in early-init.el now.
 (setq create-lockfiles nil)
 (setq make-backup-files nil)
@@ -22,7 +22,29 @@
   (defvar my/local-packages nil
     "Alist of (PACKAGE . DIRECTORY) loaded from a local checkout.
 Set per-host in the gitignored `local.el'.")
+  (defvar cashmere/frame-alpha-background nil
+    "Per-host frame opacity, or nil for the Emacs default.")
+  (defvar cashmere/font-height 180
+    "Per-host default font height in tenths of a point.")
+  (defvar cashmere/theme nil
+    "Per-host theme to load, or nil for no theme.")
   (load (locate-user-emacs-file "local.el") 'noerror 'nomessage))
+
+;; Apply appearance settings at runtime only.  Keeping these outside
+;; `eval-and-compile' avoids loading themes or mutating the initial daemon
+;; frame while native compilation is inspecting the configuration.
+(when cashmere/frame-alpha-background
+  (add-to-list 'default-frame-alist
+               `(alpha-background . ,cashmere/frame-alpha-background))
+  (when (display-graphic-p)
+    (set-frame-parameter nil 'alpha-background
+                         cashmere/frame-alpha-background)))
+
+(when cashmere/theme
+  (add-to-list 'custom-theme-load-path
+               (expand-file-name "themes" user-emacs-directory))
+  (unless (memq cashmere/theme custom-enabled-themes)
+    (load-theme cashmere/theme t)))
 
 (dolist (entry my/local-packages)
   (add-to-list 'load-path (expand-file-name (cdr entry))))
@@ -411,16 +433,16 @@ Selects the compilation window so the cursor lands in it."
 
 (defun my/erc-fetch-history (&optional count)
   "Fetch COUNT previous messages from Soju via CHATHISTORY.
-Defaults to 1000 (soju max). With prefix arg, prompts for count.
+Defaults to 100 (soju max). With prefix arg, prompts for count.
 Temporarily disables notifications during the fetch."
   (interactive "P")
   (let ((target (erc-default-target)))
     (if (not target)
         (message "Not in a channel buffer.")
       (let ((n (min (if count
-                       (read-number "Messages to fetch: " 1000)
-                     1000)
-                    1000)))
+                       (read-number "Messages to fetch: " 100)
+                     100)
+                    100)))
         (erc-notifications-disable)
         (erc-server-send (format "CHATHISTORY LATEST %s * %d" target n))
         (run-at-time 5 nil #'erc-notifications-enable)))))
@@ -597,6 +619,11 @@ Temporarily disables notifications during the fetch."
           (240 . "#74c7ec")
           (260 . "#89b4fa")
           (280 . "#b4befe"))))
+(use-package vc-fossil
+  ;; Keep from loading unnecessarily at startup.
+  :ensure t 
+  ;; This allows VC to load vc-fossil when needed.
+  :init (add-to-list 'vc-handled-backends 'Fossil t))
 
 (use-package ibuffer
   :ensure nil
@@ -2395,13 +2422,17 @@ Timers that expired while Emacs was closed fire immediately."
   :mode "\\.typ\\'")
 
 (use-package yasnippet
-  :ensure t
+  :ensure (:wait t)
+  :demand t
   :config
   (yas-global-mode 1))
 
 (use-package yasnippet-snippets
-  :ensure t
-  :after yasnippet)
+  :ensure (:wait t)
+  :demand t
+  :after yasnippet
+  :config
+  (yas-reload-all))
 
 (use-package nix-ts-mode
   :ensure t
@@ -2886,6 +2917,13 @@ created later still get them."
     (set-face-attribute 'fixed-pitch frame :family "Maple Mono NF" :weight 'regular)
     (set-face-attribute 'variable-pitch frame :family "Maple Mono NF" :weight 'regular :height 1.1)))
 
+;; A daemon's first GUI frame must be born with the final font.  Applying it
+;; only from `server-after-make-frame-hook' lets the compositor show one frame
+;; with the fallback font first, which changes the window's character geometry
+;; and makes centered content visibly jump.
+(add-to-list 'default-frame-alist
+             `(font . ,(format "Maple Mono NF-%g"
+                               (/ cashmere/font-height 10.0))))
 (add-hook 'server-after-make-frame-hook #'cashmere/set-fonts)
 (cashmere/set-fonts)
 
@@ -2958,6 +2996,11 @@ created later still get them."
 
 (use-package textui
   :ensure (:host github :repo "yibie/textui" :files ("*.el")))
+
+(use-package fossil-ui
+  :ensure nil
+  :after textui
+  :commands (fossil-ui fossil-ui-status))
 
 (use-package yggdrasil-ui
   :ensure nil
@@ -3496,6 +3539,7 @@ workspace (e.g. *scratch*)."
   "g" '(:ignore t :wk "git")
   "gc" '(magit-clone :wk "clone")
   "gg" '(magit-status :wk "status")
+  "gf" '(fossil-ui-status :wk "fossil status")
   "gl" '(magit-log-current :wk "log")
   "gi" '(magit-init :wk "init")
   "gd" '(xref-find-definitions :wk "go to definition") 
@@ -3596,7 +3640,8 @@ workspace (e.g. *scratch*)."
 (general-def '(normal visual operator) 'override
   :predicate '(not (derived-mode-p 'mu4e-main-mode 'mu4e-headers-mode
                                     'mu4e-view-mode 'mu4e-compose-mode
-                                    'croc-ui-mode 'sync-ui-mode))
+                                    'croc-ui-mode 'sync-ui-mode
+                                    'fossil-ui-mode))
   "s" 'my/s-key-dispatch)
 
 
@@ -4006,6 +4051,10 @@ reset is unnecessary, so do the handler resolution ourselves and skip
 
   (add-hook 'message-send-mail-hook 'mu4e-set-msmtp-account))
 
+(use-package himalaya-ui
+  :ensure nil
+  :commands (himalaya-ui))
+
 (use-package mu4e-alert
   :ensure t
   :after mu4e
@@ -4392,5 +4441,38 @@ opening another file in same project does not re-notify."
   :ensure t
   :config
   (global-javelin-minor-mode 1))
+
+(use-package clatter
+  :ensure (:host github :repo "parenworks/clatter.el")
+  :commands (clatter clatter-quick-connect)
+  :custom
+  (clatter-message-order 'oldest-first)
+  (clatter-notify-enabled t)
+  (clatter-notify-on-mention t)
+  (clatter-notify-on-dm t)
+  (clatter-notify-on-invite t)
+  (clatter-notify-on-keyword t)
+  (clatter-notify-keywords '("cashmere"))
+  (clatter-notify-current-buffer nil)
+  (clatter-notify-timeout 5000)
+  (clatter-notify-urgency 'normal)
+  (clatter-networks
+   `(("soju"
+      :server "bouncer.cashmere.rs"
+      :port 6699
+      :tls t
+      :nick "cashmere"
+      ;; Bare bouncer username: fans out to every upstream network.
+      :username "cashmere/libera"
+      :password ,(password-store-get "soju")
+      :sasl plain
+      :bouncer t)))
+  :config
+  (require 'gnutls)
+  (clatter-setup)
+  (clatter-dcc-setup)
+  (with-eval-after-load 'org
+    (require 'clatter-org)
+    (clatter-org-setup)))
 
 (provide 'init)

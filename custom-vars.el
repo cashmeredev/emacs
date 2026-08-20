@@ -14,7 +14,13 @@
                    nushell-ts-mode offlineimap org-modern pdf-tools
                    ultra-scroll))
  '(safe-local-variable-values
-   '((eval let ((host (car (split-string (system-name) "\\."))))
+   '((eval add-hook 'after-save-hook
+           (lambda nil
+             (when (string-suffix-p ".org" buffer-file-name)
+               (org-md-export-to-markdown)))
+           nil t)
+     (org-md-headline-style . atx)
+     (eval let ((host (car (split-string (system-name) "\\."))))
            (setq-local eglot-workspace-configuration
                        `(:nixd
                          (:nixpkgs
