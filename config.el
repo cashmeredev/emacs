@@ -134,7 +134,7 @@ Set per-host in the gitignored `local.el'.")
   (scroll-bar-mode -1)
   (add-to-list 'default-frame-alist '(vertical-scroll-bars . nil))
   (add-to-list 'default-frame-alist '(horizontal-scroll-bars . nil))
-  (global-hl-line-mode 1) ;; Highlight the current line
+  ;; (global-hl-line-mode 1) ;; Highlight the current line
   (add-hook 'org-mode-hook (lambda () (setq-local global-hl-line-mode nil))) ;; hl-line repaints wipe kitty-graphics scaled headings
   (add-hook 'markdown-mode-hook (lambda () (setq-local global-hl-line-mode nil))) ;; same conflict for kitty-graphics markdown headings
   (global-auto-revert-mode 1) ;; Enable global auto-revert mode to keep buffers up to date with their corresponding files.
@@ -3782,7 +3782,7 @@ date) and the dired header are never skipped."
   "c" '(my/centered-cursor :wk "center cursor")
   "f" '(dirvish :wk "file manager")
   "m" '(mu4e :wk "mu4e")
-  "i" '(run-irc :wk "irc")
+  "i" '(clatter :wk "irc")
   "r" '(async-shell-command :wk "run async")
   "t" '(ghostel-project :wk "terminal (project)")
   "T" '(ghostel-list-buffers :wk "terminal (switch)")
@@ -4456,6 +4456,7 @@ opening another file in same project does not re-notify."
   (clatter-notify-current-buffer nil)
   (clatter-notify-timeout 5000)
   (clatter-notify-urgency 'normal)
+  (clatter-suppress-messages '(join part quit away))
   (clatter-networks
    `(("soju"
       :server "bouncer.cashmere.rs"
@@ -4474,5 +4475,10 @@ opening another file in same project does not re-notify."
   (with-eval-after-load 'org
     (require 'clatter-org)
     (clatter-org-setup)))
+
+(use-package janet-ts-mode
+  :ensure (:host github
+           :repo "sogaiu/janet-ts-mode"
+           :files ("*.el")))
 
 (provide 'init)
