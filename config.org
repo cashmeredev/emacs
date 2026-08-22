@@ -1,7 +1,7 @@
 #+title:      config.org
 #+date:       [2025-10-20 Mon 08:33]
 #+identifier: 20251020T083323
-#+PROPERTY: header-args :tangle config.el
+#+property:   header-args :tangle config.el
 
 * early-init
 
@@ -109,7 +109,6 @@ Set per-host in the gitignored `local.el'.")
   (warning-minimum-level :emergency) ;; Set the minimum level of warnings to display.
   :hook ;; Add hooks to enable specific features in certain modes.
   (prog-mode . display-line-numbers-mode)
-  (org-mode . display-line-numbers-mode)
   (markdown-mode . display-line-numbers-mode)
   (text-mode . visual-line-mode)       ;; Soft-wrap prose/text files at window edge.
   (conf-mode . visual-line-mode)       ;; Soft-wrap .conf and similar config files.
@@ -693,7 +692,7 @@ Temporarily disables notifications during the fetch."
 
 * ibuffer
 
-ibuffer is an integrated buffer management suite. 
+ibuffer is an integrated buffer management suite.
 
 If you have Emacs for a long time open or just like me, like to switch between different projects on a constant, keeping a good overview over you buffers is important.
 
@@ -810,14 +809,16 @@ I adjusted the config accordingly to my modes which I use on a frequent.
 
 ** nerd-icons-ibuffer
 
-To spice things up, I enabled the same Nerd Icons which are visible in dired to ibuffer. 
+To spice things up, I enabled the same Nerd Icons which are visible in dired to ibuffer.
 
 Not necessary but an eyecandy to look at!
 
 #+begin_src emacs-lisp
 (use-package nerd-icons
   :if ek-use-nerd-fonts
-  :ensure t)
+  :ensure t
+  :custom
+  (nerd-icons-font-family "SFProText Nerd Font"))
 
 (use-package nerd-icons-ibuffer
   :if ek-use-nerd-fonts
@@ -839,7 +840,6 @@ Not necessary but an eyecandy to look at!
 #+end_src
 
 * ai
-
 ** markdown-mode
 
 #+begin_src emacs-lisp
@@ -884,12 +884,15 @@ Not necessary but an eyecandy to look at!
 
   :custom-face
   (markdown-header-delimiter-face ((t (:foreground "#616161" :height 0.9))))
-  (markdown-header-face-1 ((t (:height 1.6 :foreground "#A3BE8C" :weight extra-bold :inherit markdown-header-face))))
-  (markdown-header-face-2 ((t (:height 1.4 :foreground "#EBCB8B" :weight extra-bold :inherit markdown-header-face))))
-  (markdown-header-face-3 ((t (:height 1.2 :foreground "#D08770" :weight extra-bold :inherit markdown-header-face))))
-  (markdown-header-face-4 ((t (:height 1.15 :foreground "#BF616A" :weight bold :inherit markdown-header-face))))
-  (markdown-header-face-5 ((t (:height 1.1 :foreground "#b48ead" :weight bold :inherit markdown-header-face))))
-  (markdown-header-face-6 ((t (:height 1.05 :foreground "#5e81ac" :weight semi-bold :inherit markdown-header-face)))))
+  (markdown-header-face-1 ((t (:family "SF Pro Display" :height 1.65 :foreground "#A3BE8C" :weight bold :inherit markdown-header-face))))
+  (markdown-header-face-2 ((t (:family "SF Pro Display" :height 1.45 :foreground "#EBCB8B" :weight bold :inherit markdown-header-face))))
+  (markdown-header-face-3 ((t (:family "SF Pro Display" :height 1.3 :foreground "#D08770" :weight semibold :inherit markdown-header-face))))
+  (markdown-header-face-4 ((t (:family "SF Pro Display" :height 1.2 :foreground "#BF616A" :weight semibold :inherit markdown-header-face))))
+  (markdown-header-face-5 ((t (:family "SF Pro Display" :height 1.12 :foreground "#b48ead" :weight medium :inherit markdown-header-face))))
+  (markdown-header-face-6 ((t (:family "SF Pro Display" :height 1.08 :foreground "#5e81ac" :weight medium :inherit markdown-header-face))))
+  (markdown-code-face ((t (:inherit fixed-pitch))))
+  (markdown-inline-code-face ((t (:inherit fixed-pitch))))
+  (markdown-pre-face ((t (:inherit fixed-pitch)))))
 #+end_src
 
 ** agent-shell
@@ -1073,17 +1076,47 @@ let's give agent-shell another try
   :config
   (require 'org-tempo)
 
+  (defun my/org-apply-minimal-faces (&optional _theme)
+    "Apply quiet, theme-adaptive typography to Org headings."
+    (let ((foreground (face-attribute 'default :foreground nil t))
+          (muted (face-attribute 'shadow :foreground nil t)))
+      (set-face-attribute 'org-document-title nil
+                          :family "SF Pro Display" :height 1.6
+                          :weight 'medium :foreground foreground)
+      (dolist (spec '((org-level-1 1.30 semibold)
+                      (org-level-2 1.15 semibold)
+                      (org-level-3 1.08 semibold)
+                      (org-level-4 1.00 medium)
+                      (org-level-5 1.00 medium)))
+        (set-face-attribute (car spec) nil
+                            :family "SF Pro Display"
+                            :height (cadr spec)
+                            :weight (caddr spec)
+                            :foreground foreground))
+      (dolist (face '(org-level-6 org-level-7 org-level-8))
+        (set-face-attribute face nil
+                            :family "SF Pro Display" :height 1.0
+                            :weight 'regular :foreground muted))))
+
+  ;; Reapply the neutral heading palette after Tinty's or Fontaine's theme
+  ;; changes, deriving colors from whichever theme is active at that point.
+  (add-hook 'enable-theme-functions #'my/org-apply-minimal-faces)
+  (my/org-apply-minimal-faces)
+
   (custom-set-faces
-   '(org-document-title ((t (:height 1.5))))
-   '(outline-1          ((t (:height 1.5))))
-   '(outline-2          ((t (:height 1.4))))
-   '(outline-3          ((t (:height 1.3))))
-   '(outline-4          ((t (:height 1.25))))
-   '(outline-5          ((t (:height 1.2))))
-   '(outline-6          ((t (:height 1.175))))
-   '(outline-7          ((t (:height 1.0))))
-   '(outline-8          ((t (:height 1.0))))
-   '(outline-9          ((t (:height 1.0)))))
+   '(org-block ((t (:inherit fixed-pitch))))
+   '(org-block-begin-line ((t (:inherit (shadow fixed-pitch)))))
+   '(org-block-end-line ((t (:inherit (shadow fixed-pitch)))))
+   '(org-code ((t (:inherit (shadow fixed-pitch)))))
+   '(org-verbatim ((t (:inherit (shadow fixed-pitch)))))
+   '(org-table ((t (:inherit fixed-pitch))))
+   '(org-checkbox ((t (:inherit fixed-pitch))))
+   '(org-tag ((t (:inherit fixed-pitch))))
+   '(org-meta-line ((t (:inherit (font-lock-comment-face fixed-pitch)))))
+   '(org-special-keyword ((t (:inherit (font-lock-comment-face fixed-pitch)))))
+   '(org-property-value ((t (:inherit fixed-pitch))))
+   '(org-drawer ((t (:inherit fixed-pitch))))
+   '(org-indent ((t (:inherit (org-hide fixed-pitch))))))
 
   (setq org-startup-folded 'overview)
   (setq
@@ -1092,15 +1125,15 @@ let's give agent-shell another try
 		org-return-follows-link t
         org-hide-leading-stars t
         org-pretty-entities t
-        org-startup-truncated t
+        org-startup-truncated nil
         org-ellipsis "  ")
   (setq org-src-fontify-natively t
         org-src-tab-acts-natively t
         org-edit-src-content-indentation 0)
   (add-to-list 'org-src-lang-modes '("nix" . nix-ts))
   (setq org-log-done                       t
-        org-auto-align-tags                t
-        org-tags-column                    -80
+        org-auto-align-tags                nil
+        org-tags-column                    0
         org-fold-catch-invisible-edits     'show-and-error
         org-special-ctrl-a/e               t
         org-insert-heading-respect-content t)
@@ -1119,6 +1152,17 @@ let's give agent-shell another try
                              (1 `(face nil
                                        display (space :align-to (- right ,(org-string-width (match-string 2)) 3)))
                                 prepend))) t))
+#+end_src
+
+** org-fmt
+
+Load the local, opinionated Org formatter from =lisp/org-fmt.el= on demand. Formatting stays explicit because the formatter can refuse unsafe input; use =SPC c f= (or =SPC m f= in an Org buffer) to format the current buffer.
+
+#+begin_src emacs-lisp
+(use-package org-fmt
+  :ensure nil
+  :after org
+  :commands (org-fmt-buffer))
 #+end_src
 
 *** prompt timestamps with time
@@ -1163,6 +1207,39 @@ automatically encrypted before save and can be decrypted in-place with
   (setq org-appear-autoemphasis   t   ;; Show bold, italics, verbatim, etc.
         org-appear-autolinks      t   ;; Show links
         org-appear-autosubmarkers t)) ;; Show sub- and superscripts
+#+end_src
+
+** org-modern
+
+Use =org-modern= only for quiet structural markers in Org files. GTD labels, timestamps, priorities, and the agenda keep their existing semantic faces.
+
+#+begin_src emacs-lisp
+(use-package org-modern
+  :ensure t
+  :hook (org-mode . org-modern-mode)
+  :custom
+  (org-modern-star 'fold)
+  (org-modern-hide-stars 'leading)
+  (org-modern-list '((?+ . "◦") (?- . "–") (?* . "•")))
+  (org-modern-checkbox '((?X . "☑") (?- . "⊟") (?\s . "☐")))
+  (org-modern-table t)
+  (org-modern-horizontal-rule t)
+  (org-modern-block-name t)
+  (org-modern-block-fringe nil)
+  (org-modern-todo nil)
+  (org-modern-priority nil)
+  (org-modern-tag nil)
+  (org-modern-timestamp nil)
+  (org-modern-progress nil)
+  (org-modern-keyword nil)
+  (org-modern-footnote nil)
+  (org-modern-internal-target nil)
+  (org-modern-radio-target nil)
+  :custom-face
+  (org-modern-symbol
+   ((t (:family "Maple Mono NF" :inherit shadow :weight regular))))
+  (org-modern-block-name
+   ((t (:inherit (shadow fixed-pitch) :height 0.85 :weight regular)))))
 #+end_src
 
 ** org-agenda
@@ -1232,7 +1309,6 @@ Only activates when running in a Kitty terminal (not in GUI Emacs).
      (screen . t)
      (eshell . t))))
 #+end_src
-
 
 #+begin_src emacs-lisp
 (with-eval-after-load 'org
@@ -1624,7 +1700,6 @@ Skips capture tasks and projects."
 #+end_src
 
 * org-capture
-
 *** org-capture combined with denote
 
 #+begin_src emacs-lisp
@@ -2680,8 +2755,6 @@ Auto switch silos (different workspaces/folders) based on preconfigured director
 #+end_src
 
 * programming
-
-
 ** typst-mode
 
 #+begin_src emacs-lisp
@@ -2716,7 +2789,6 @@ Auto switch silos (different workspaces/folders) based on preconfigured director
   :config
   (modify-syntax-entry ?. "_" nix-ts-mode--syntax-table))
 #+end_src
-
 
 *** compilation enhancements
 
@@ -2820,8 +2892,6 @@ Xonsh is a python superset; reuse python tree-sitter parser."
     (add-to-list 'auto-mode-alist '("\\.xonshrc\\'" . xonsh-ts-mode))))
 #+end_src
 
-
-
 *** xonsh org babel
 
 Custom =org-babel-execute:xonsh= — writes block body to temp =.xsh= file
@@ -2863,7 +2933,6 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
   (add-hook 'ob-async-pre-execute-src-block-hook my/ob-xonsh-installer))
 #+end_src
 
-
 ** COMMENT json-ts-mode
 
 #+begin_src emacs-lisp
@@ -2900,13 +2969,20 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
 #+end_src
 
 * terminals
-
 * olivetti
 
 #+begin_src emacs-lisp
 (use-package olivetti
   :ensure t
-  ;; :hook (org-mode . olivetti-mode)  ; no auto-center in org buffers
+  :commands (olivetti-mode)
+  :preface
+  (defun my/org-writing-layout ()
+    "Use a centered, comfortably spaced writing layout in Org buffers."
+    (setq-local olivetti-body-width 88
+                line-spacing 0.14)
+    (display-line-numbers-mode -1)
+    (olivetti-mode 1))
+  :hook (org-mode . my/org-writing-layout)
   :custom
   (olivetti-style nil)  ; Use window margins (fringes disabled in early-init)
   (olivetti-margin-width 10)  ; No side margins
@@ -3048,7 +3124,6 @@ so the working-tree diff stays visible until the user explicitly stages."
 #+end_src
 
 * keybindings
-
 ** evil-mode
 
 #+begin_src emacs-lisp
@@ -3265,7 +3340,6 @@ Native =undo-redo= (via =evil-undo-system='undo-redo=); just raise the undo limi
 #+end_src
 
 * env-modes
-
 ** dotenv
 
 #+begin_src emacs-lisp
@@ -3308,7 +3382,6 @@ Native =undo-redo= (via =evil-undo-system='undo-redo=); just raise the undo limi
 #+end_src
 
 * nerd icons
-
 ** nerd icons dired
 
 #+begin_src emacs-lisp
@@ -3331,7 +3404,6 @@ Native =undo-redo= (via =evil-undo-system='undo-redo=); just raise the undo limi
 #+end_src
 
 * modelines
-
 ** display-time
 
 #+begin_src emacs-lisp
@@ -3365,38 +3437,64 @@ Native =undo-redo= (via =evil-undo-system='undo-redo=); just raise the undo limi
 (blink-cursor-mode 0)
 (setq-default cursor-type 'box)
 
-(defun cashmere/set-fonts (&optional frame)
-  "Apply the MapleMono faces, but only on graphical frames.
-Runs per-frame so a TTY-only daemon never touches fonts while GUI frames
-created later still get them."
-  (when (display-graphic-p frame)
-    (set-face-attribute 'default frame
-                        :family "Maple Mono NF"
-                        :height cashmere/font-height
-                        :font (font-spec
-                               :family "Maple Mono NF"
-                               :features '(cv04 ss05 zero)
-                               ))
-    (set-face-attribute 'fixed-pitch frame :family "Maple Mono NF" :weight 'regular)
-    (set-face-attribute 'variable-pitch frame :family "Maple Mono NF" :weight 'regular :height 1.1)))
+(use-package fontaine
+  :ensure t
+  :demand t
+  :hook (text-mode . variable-pitch-mode)
+  :custom
+  (fontaine-latest-state-file
+   (locate-user-emacs-file "fontaine-latest-state.eld"))
+  :config
+  (setq fontaine-presets
+        `((regular
+           :default-height ,cashmere/font-height)
+          (comfortable
+           :default-height ,(+ cashmere/font-height 20)
+           :variable-pitch-height 1.08
+           :line-spacing 0.12)
+          (presentation
+           :default-height ,(+ cashmere/font-height 60)
+           :variable-pitch-height 1.12
+           :line-spacing 0.16)
+          (t
+           :default-family "Maple Mono NF"
+           :default-weight regular
+           :fixed-pitch-family "Maple Mono NF"
+           :variable-pitch-family "SF Pro Text"
+           :variable-pitch-weight regular
+           :variable-pitch-height 1.04
+           :mode-line-active-family "SFProText Nerd Font"
+           :mode-line-active-weight regular
+           :mode-line-active-height 0.92
+           :mode-line-inactive-family "SFProText Nerd Font"
+           :mode-line-inactive-height 0.92
+           :header-line-family "SFProText Nerd Font"
+           :header-line-weight regular
+           :line-number-family "Maple Mono NF"
+           :line-number-height 0.9
+           :bold-weight semibold
+           :line-spacing 0.08)))
 
-;; A daemon's first GUI frame must be born with the final font.  Applying it
-;; only from `server-after-make-frame-hook' lets the compositor show one frame
-;; with the fallback font first, which changes the window's character geometry
-;; and makes centered content visibly jump.
+  ;; Fontaine 3 implements presets as a global theme, so applying the preset
+  ;; once also covers GUI frames created later by an Emacs daemon.  Reapplying
+  ;; it from `server-after-make-frame-hook' can disrupt an active minibuffer
+  ;; (notably Helm) when an emacsclient frame is created or reused.
+  (fontaine-set-preset
+   (or (fontaine-restore-latest-preset) 'regular))
+  (fontaine-mode 1))
+
+;; Give a daemon's first GUI frame the final base font before its first
+;; redisplay.  This avoids fallback-font geometry and a visible layout jump;
+;; Fontaine's global theme then supplies the remaining face attributes.
 (add-to-list 'default-frame-alist
              `(font . ,(format "Maple Mono NF-%g"
                                (/ cashmere/font-height 10.0))))
-(add-hook 'server-after-make-frame-hook #'cashmere/set-fonts)
-(cashmere/set-fonts)
 #+end_src
 
-#+RESULTS:
+#+results:
 
 * essentials
-
 * themes
-
 ** theme load
 
 #+begin_comment
@@ -3643,7 +3741,6 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
   (interactive)
   (call-interactively #'helm-projectile-rg))
 #+end_src
-
 
 ** search in arbitrary directories
 
@@ -4036,8 +4133,13 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 
 #+begin_src emacs-lisp
 (defun my/format-buffer ()
+  "Format the current buffer with its mode-specific formatter."
   (interactive)
-  (user-error "No formatter configured for %s" major-mode))
+  (cond
+   ((derived-mode-p 'org-mode)
+    (org-fmt-buffer))
+   (t
+    (user-error "No formatter configured for %s" major-mode))))
 
 (defun my/find-file-or-switch-project ()
   "Find a file in the current project; outside one, pick a project first.
@@ -4242,9 +4344,6 @@ workspace (e.g. *scratch*)."
             (region-end)))))
 #+end_src
 
-
-
-
 ** org mode keymaps
 
 #+begin_src emacs-lisp
@@ -4255,6 +4354,7 @@ workspace (e.g. *scratch*)."
   "mt" '(org-todo :wk "TODO")
   "ma" '(org-add-note :wk "add note")
   "mC" '(org-capture :wk "capture")
+  "mf" '(org-fmt-buffer :wk "format buffer")
 
   "mc" '(:wk "set" :ignore)
   "mk" '(kitty-graphics-org-heading-sizes :wk "kgfx headlines")
@@ -4275,7 +4375,6 @@ workspace (e.g. *scratch*)."
 
 (evil-define-key 'normal org-mode-map (kbd "RET") 'org-open-at-point)
 #+end_src
-
 
 ** dirvish keymaps
 
@@ -4379,7 +4478,6 @@ date) and the dired header are never skipped."
   "o" '(my/global-olivetti-mode :wk "center buffer")
   "s" '(my-org-sidecar-left :wk "org sidecar"))
 #+end_src
-
 
 ** convenient keys
 
@@ -4501,7 +4599,6 @@ reset is unnecessary, so do the handler resolution ourselves and skip
 #+end_src
 
 * eww
-
 ** core eww / shr / url settings
 
 #+begin_src emacs-lisp
@@ -5140,7 +5237,6 @@ opening another file in same project does not re-notify."
   "Stylesheet injected into throwaway HTML previews of Org buffers.")
 #+end_src
 
-
 * javelin
 
 #+begin_src emacs-lisp
@@ -5149,7 +5245,6 @@ opening another file in same project does not re-notify."
   :config
   (global-javelin-minor-mode 1))
 #+end_src
-
 
 * clatter
 
@@ -5168,6 +5263,7 @@ opening another file in same project does not re-notify."
   (clatter-notify-current-buffer nil)
   (clatter-notify-timeout 5000)
   (clatter-notify-urgency 'normal)
+  (clatter-suppress-messages '(join part quit away))
   (clatter-networks
    `(("soju"
       :server "bouncer.cashmere.rs"
@@ -5188,7 +5284,15 @@ opening another file in same project does not re-notify."
     (clatter-org-setup)))
 #+end_src
 
+* org-other-agenda
 
+#+begin_src emacs-lisp
+(use-package org-other-agenda
+  :ensure (:host github
+           :repo "yibie/org-other-agenda"
+           :files ("*.el"))
+  :commands (org-other-agenda))
+#+end_src
 
 * provide init
 

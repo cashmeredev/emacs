@@ -87,7 +87,6 @@ Set per-host in the gitignored `local.el'.")
   (warning-minimum-level :emergency) ;; Set the minimum level of warnings to display.
   :hook ;; Add hooks to enable specific features in certain modes.
   (prog-mode . display-line-numbers-mode)
-  (org-mode . display-line-numbers-mode)
   (markdown-mode . display-line-numbers-mode)
   (text-mode . visual-line-mode)       ;; Soft-wrap prose/text files at window edge.
   (conf-mode . visual-line-mode)       ;; Soft-wrap .conf and similar config files.
@@ -732,7 +731,9 @@ Temporarily disables notifications during the fetch."
 
 (use-package nerd-icons
   :if ek-use-nerd-fonts
-  :ensure t)
+  :ensure t
+  :custom
+  (nerd-icons-font-family "SFProText Nerd Font"))
 
 (use-package nerd-icons-ibuffer
   :if ek-use-nerd-fonts
@@ -789,12 +790,15 @@ Temporarily disables notifications during the fetch."
 
   :custom-face
   (markdown-header-delimiter-face ((t (:foreground "#616161" :height 0.9))))
-  (markdown-header-face-1 ((t (:height 1.6 :foreground "#A3BE8C" :weight extra-bold :inherit markdown-header-face))))
-  (markdown-header-face-2 ((t (:height 1.4 :foreground "#EBCB8B" :weight extra-bold :inherit markdown-header-face))))
-  (markdown-header-face-3 ((t (:height 1.2 :foreground "#D08770" :weight extra-bold :inherit markdown-header-face))))
-  (markdown-header-face-4 ((t (:height 1.15 :foreground "#BF616A" :weight bold :inherit markdown-header-face))))
-  (markdown-header-face-5 ((t (:height 1.1 :foreground "#b48ead" :weight bold :inherit markdown-header-face))))
-  (markdown-header-face-6 ((t (:height 1.05 :foreground "#5e81ac" :weight semi-bold :inherit markdown-header-face)))))
+  (markdown-header-face-1 ((t (:family "SF Pro Display" :height 1.65 :foreground "#A3BE8C" :weight bold :inherit markdown-header-face))))
+  (markdown-header-face-2 ((t (:family "SF Pro Display" :height 1.45 :foreground "#EBCB8B" :weight bold :inherit markdown-header-face))))
+  (markdown-header-face-3 ((t (:family "SF Pro Display" :height 1.3 :foreground "#D08770" :weight semibold :inherit markdown-header-face))))
+  (markdown-header-face-4 ((t (:family "SF Pro Display" :height 1.2 :foreground "#BF616A" :weight semibold :inherit markdown-header-face))))
+  (markdown-header-face-5 ((t (:family "SF Pro Display" :height 1.12 :foreground "#b48ead" :weight medium :inherit markdown-header-face))))
+  (markdown-header-face-6 ((t (:family "SF Pro Display" :height 1.08 :foreground "#5e81ac" :weight medium :inherit markdown-header-face))))
+  (markdown-code-face ((t (:inherit fixed-pitch))))
+  (markdown-inline-code-face ((t (:inherit fixed-pitch))))
+  (markdown-pre-face ((t (:inherit fixed-pitch)))))
 
 (defun my/agent-shell-autoscroll (&rest _)
   (dolist (win (get-buffer-window-list (current-buffer) 'visible))
@@ -916,10 +920,6 @@ Temporarily disables notifications during the fetch."
   (advice-add 'agent-shell-yank-dwim :around
               #'my/agent-shell-yank-dwim-in-terminal))
 
-(use-package agent-shell-sidebar
-  :after agent-shell
-  :ensure (:host nil :repo "ssh://git@git.cashmere.rs/agent-shell-sidebar.git"))
-
 (use-package eldoc
   :ensure nil
   :config
@@ -956,17 +956,47 @@ Temporarily disables notifications during the fetch."
   :config
   (require 'org-tempo)
 
+  (defun my/org-apply-minimal-faces (&optional _theme)
+    "Apply quiet, theme-adaptive typography to Org headings."
+    (let ((foreground (face-attribute 'default :foreground nil t))
+          (muted (face-attribute 'shadow :foreground nil t)))
+      (set-face-attribute 'org-document-title nil
+                          :family "SF Pro Display" :height 1.6
+                          :weight 'medium :foreground foreground)
+      (dolist (spec '((org-level-1 1.30 semibold)
+                      (org-level-2 1.15 semibold)
+                      (org-level-3 1.08 semibold)
+                      (org-level-4 1.00 medium)
+                      (org-level-5 1.00 medium)))
+        (set-face-attribute (car spec) nil
+                            :family "SF Pro Display"
+                            :height (cadr spec)
+                            :weight (caddr spec)
+                            :foreground foreground))
+      (dolist (face '(org-level-6 org-level-7 org-level-8))
+        (set-face-attribute face nil
+                            :family "SF Pro Display" :height 1.0
+                            :weight 'regular :foreground muted))))
+
+  ;; Reapply the neutral heading palette after Tinty's or Fontaine's theme
+  ;; changes, deriving colors from whichever theme is active at that point.
+  (add-hook 'enable-theme-functions #'my/org-apply-minimal-faces)
+  (my/org-apply-minimal-faces)
+
   (custom-set-faces
-   '(org-document-title ((t (:height 1.5))))
-   '(outline-1          ((t (:height 1.5))))
-   '(outline-2          ((t (:height 1.4))))
-   '(outline-3          ((t (:height 1.3))))
-   '(outline-4          ((t (:height 1.25))))
-   '(outline-5          ((t (:height 1.2))))
-   '(outline-6          ((t (:height 1.175))))
-   '(outline-7          ((t (:height 1.0))))
-   '(outline-8          ((t (:height 1.0))))
-   '(outline-9          ((t (:height 1.0)))))
+   '(org-block ((t (:inherit fixed-pitch))))
+   '(org-block-begin-line ((t (:inherit (shadow fixed-pitch)))))
+   '(org-block-end-line ((t (:inherit (shadow fixed-pitch)))))
+   '(org-code ((t (:inherit (shadow fixed-pitch)))))
+   '(org-verbatim ((t (:inherit (shadow fixed-pitch)))))
+   '(org-table ((t (:inherit fixed-pitch))))
+   '(org-checkbox ((t (:inherit fixed-pitch))))
+   '(org-tag ((t (:inherit fixed-pitch))))
+   '(org-meta-line ((t (:inherit (font-lock-comment-face fixed-pitch)))))
+   '(org-special-keyword ((t (:inherit (font-lock-comment-face fixed-pitch)))))
+   '(org-property-value ((t (:inherit fixed-pitch))))
+   '(org-drawer ((t (:inherit fixed-pitch))))
+   '(org-indent ((t (:inherit (org-hide fixed-pitch))))))
 
   (setq org-startup-folded 'overview)
   (setq
@@ -975,15 +1005,15 @@ Temporarily disables notifications during the fetch."
 		org-return-follows-link t
         org-hide-leading-stars t
         org-pretty-entities t
-        org-startup-truncated t
+        org-startup-truncated nil
         org-ellipsis "  ")
   (setq org-src-fontify-natively t
         org-src-tab-acts-natively t
         org-edit-src-content-indentation 0)
   (add-to-list 'org-src-lang-modes '("nix" . nix-ts))
   (setq org-log-done                       t
-        org-auto-align-tags                t
-        org-tags-column                    -80
+        org-auto-align-tags                nil
+        org-tags-column                    0
         org-fold-catch-invisible-edits     'show-and-error
         org-special-ctrl-a/e               t
         org-insert-heading-respect-content t)
@@ -1003,6 +1033,11 @@ Temporarily disables notifications during the fetch."
                                        display (space :align-to (- right ,(org-string-width (match-string 2)) 3)))
                                 prepend))) t))
 
+(use-package org-fmt
+  :ensure nil
+  :after org
+  :commands (org-fmt-buffer))
+
 (defun my-org-read-date-always-with-time (orig-fun &optional org-with-time to-time from-string prompt default-time default-input inactive)
   (cl-letf (((symbol-function 'org-read-date--get-current-time)
              (lambda () (or default-time (current-time)))))
@@ -1021,111 +1056,6 @@ Temporarily disables notifications during the fetch."
   (setq org-tags-exclude-from-inheritance '("crypt"))
   (add-hook 'org-mode-hook (lambda () (setq-local auto-save-default nil))))
 
-(use-package age
-  :ensure t
-  :demand t
-  :custom
-  (age-program "rage")
-  (age-default-identity "~/.config/age/keys.txt")
-  (age-default-recipient
-   '("age188928acysrh9zpc3rk6q4lqmf3qlpjx3s26m6k3p6kah63gcws7sx3jeej"
-     "age1mhvdwh6cvd70hm5dcptc4xca2xnkf383g6706ful6kmrudwdysvq0eytym"))
-  :config
-  (setenv "PINENTRY_PROGRAM" "pinentry-gnome3")
-  (setenv "PASSAGE_DIR" (expand-file-name "~/pass"))
-  (age-file-enable))
-
-(defun my/org-crypt-migrate-to-age (title)
-  "Migrate all :crypt: headings in the current buffer to a new .org.age file.
-TITLE names the new denote-style file in ~/org."
-  (interactive "sTitle for new age file: ")
-  (unless (derived-mode-p 'org-mode)
-    (user-error "Not an org buffer"))
-  (save-excursion
-    (org-decrypt-entries)
-    (let ((collected (generate-new-buffer " *crypt-migration*"))
-          (count 0))
-      (org-map-entries
-       (lambda ()
-         (let ((beg (org-entry-beginning-position))
-               (end (org-entry-end-position)))
-           (with-current-buffer collected
-             (insert (buffer-substring-no-properties beg end) "\n"))
-           (setq count (1+ count))))
-       "crypt")
-      (if (zerop count)
-          (progn (kill-buffer collected)
-                 (user-error "No :crypt: headings found"))
-        (let ((target (expand-file-name
-                       (format "%s--%s__crypt.org.age"
-                               (format-time-string "%Y%m%dT%H%M%S")
-                               (replace-regexp-in-string "[^a-z0-9]+" "-" (downcase title)))
-                       "~/org")))
-          (with-current-buffer collected
-            (org-mode)
-            (write-file target)
-            (save-buffer))
-          (goto-char (point-max))
-          (org-map-entries
-           (lambda ()
-             (delete-region (org-entry-beginning-position) (org-entry-end-position)))
-           "crypt")
-          (save-buffer)
-          (message "Migrated %d crypt headings to %s" count target))))))
-
-(use-package with-editor
-  :ensure t
-  :demand t)
-
-(use-package passage
-  :ensure (:host github :repo "anticomputer/passage.el")
-  :custom
-  (auth-source-passage-filename "~/pass")
-  :config
-  (with-eval-after-load 'evil
-    (evil-define-key 'normal passage-mode-map
-
-      "J" #'passage-goto-entry
-      "U" #'passage-browse-url
-      "a" #'passage-insert
-      "G" #'passage-insert-generated
-      "R" #'passage-rename
-      "x" #'passage-kill
-      "E" #'passage-edit
-      "j" #'passage-next-entry
-      "k" #'passage-prev-entry
-      "gr" #'passage-update-buffer
-      "o" #'passage-otp-options
-      "]]" #'passage-next-directory
-      "[[" #'passage-prev-directory
-      (kbd "RET") #'passage-view
-      "q" #'passage-quit)
-    (evil-define-key 'normal passage-view-mode-map
-      "q" #'quit-window
-      "t" #'passage-view-toggle-password
-      "y" #'passage-view-copy-password))
-  (with-eval-after-load 'evil-collection
-    (evil-collection-define-operator-key 'yank 'passage-mode-map
-      "f" #'passage-copy-field
-      "n" #'passage-copy-username
-      "u" #'passage-copy-url))
-  ;; The yank-operator sub-keys ("yn"/"yu"/"yf") are invisible to
-  ;; `where-is', so hardcode their header labels (evil-collection-pass
-  ;; uses the same trick for pass).
-  (defconst my/passage-command-to-label
-    '((passage-copy-field . "yf")
-      (passage-copy-username . "yn")
-      (passage-copy-url . "yu")))
-  (defun my/passage-display-keybinding (f &rest args)
-    "Render `my/passage-command-to-label' labels in the passage header."
-    (if-let* ((label (alist-get (car args) my/passage-command-to-label)))
-        (insert (format "%8s %-13s \t "
-                        (propertize (format "<%s>" label)
-                                    'face 'font-lock-constant-face)
-                        (cadr args)))
-      (apply f args)))
-  (advice-add 'passage--display-keybinding :around #'my/passage-display-keybinding))
-
 (use-package org-appear
   :ensure t
   :commands (org-appear-mode)
@@ -1135,6 +1065,33 @@ TITLE names the new denote-style file in ~/org."
   (setq org-appear-autoemphasis   t   ;; Show bold, italics, verbatim, etc.
         org-appear-autolinks      t   ;; Show links
         org-appear-autosubmarkers t)) ;; Show sub- and superscripts
+
+(use-package org-modern
+  :ensure t
+  :hook (org-mode . org-modern-mode)
+  :custom
+  (org-modern-star 'fold)
+  (org-modern-hide-stars 'leading)
+  (org-modern-list '((?+ . "◦") (?- . "–") (?* . "•")))
+  (org-modern-checkbox '((?X . "☑") (?- . "⊟") (?\s . "☐")))
+  (org-modern-table t)
+  (org-modern-horizontal-rule t)
+  (org-modern-block-name t)
+  (org-modern-block-fringe nil)
+  (org-modern-todo nil)
+  (org-modern-priority nil)
+  (org-modern-tag nil)
+  (org-modern-timestamp nil)
+  (org-modern-progress nil)
+  (org-modern-keyword nil)
+  (org-modern-footnote nil)
+  (org-modern-internal-target nil)
+  (org-modern-radio-target nil)
+  :custom-face
+  (org-modern-symbol
+   ((t (:family "Maple Mono NF" :inherit shadow :weight regular))))
+  (org-modern-block-name
+   ((t (:inherit (shadow fixed-pitch) :height 0.85 :weight regular)))))
 
 
 
@@ -2541,7 +2498,15 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
 
 (use-package olivetti
   :ensure t
-  ;; :hook (org-mode . olivetti-mode)  ; no auto-center in org buffers
+  :commands (olivetti-mode)
+  :preface
+  (defun my/org-writing-layout ()
+    "Use a centered, comfortably spaced writing layout in Org buffers."
+    (setq-local olivetti-body-width 88
+                line-spacing 0.14)
+    (display-line-numbers-mode -1)
+    (olivetti-mode 1))
+  :hook (org-mode . my/org-writing-layout)
   :custom
   (olivetti-style nil)  ; Use window margins (fringes disabled in early-init)
   (olivetti-margin-width 10)  ; No side margins
@@ -2902,30 +2867,58 @@ so the working-tree diff stays visible until the user explicitly stages."
 (blink-cursor-mode 0)
 (setq-default cursor-type 'box)
 
-(defun cashmere/set-fonts (&optional frame)
-  "Apply the MapleMono faces, but only on graphical frames.
-Runs per-frame so a TTY-only daemon never touches fonts while GUI frames
-created later still get them."
-  (when (display-graphic-p frame)
-    (set-face-attribute 'default frame
-                        :family "Maple Mono NF"
-                        :height cashmere/font-height
-                        :font (font-spec
-                               :family "Maple Mono NF"
-                               :features '(cv04 ss05 zero)
-                               ))
-    (set-face-attribute 'fixed-pitch frame :family "Maple Mono NF" :weight 'regular)
-    (set-face-attribute 'variable-pitch frame :family "Maple Mono NF" :weight 'regular :height 1.1)))
+(use-package fontaine
+  :ensure t
+  :demand t
+  :hook (text-mode . variable-pitch-mode)
+  :custom
+  (fontaine-latest-state-file
+   (locate-user-emacs-file "fontaine-latest-state.eld"))
+  :config
+  (setq fontaine-presets
+        `((regular
+           :default-height ,cashmere/font-height)
+          (comfortable
+           :default-height ,(+ cashmere/font-height 20)
+           :variable-pitch-height 1.08
+           :line-spacing 0.12)
+          (presentation
+           :default-height ,(+ cashmere/font-height 60)
+           :variable-pitch-height 1.12
+           :line-spacing 0.16)
+          (t
+           :default-family "Maple Mono NF"
+           :default-weight regular
+           :fixed-pitch-family "Maple Mono NF"
+           :variable-pitch-family "SF Pro Text"
+           :variable-pitch-weight regular
+           :variable-pitch-height 1.04
+           :mode-line-active-family "SFProText Nerd Font"
+           :mode-line-active-weight regular
+           :mode-line-active-height 0.92
+           :mode-line-inactive-family "SFProText Nerd Font"
+           :mode-line-inactive-height 0.92
+           :header-line-family "SFProText Nerd Font"
+           :header-line-weight regular
+           :line-number-family "Maple Mono NF"
+           :line-number-height 0.9
+           :bold-weight semibold
+           :line-spacing 0.08)))
 
-;; A daemon's first GUI frame must be born with the final font.  Applying it
-;; only from `server-after-make-frame-hook' lets the compositor show one frame
-;; with the fallback font first, which changes the window's character geometry
-;; and makes centered content visibly jump.
+  ;; Fontaine 3 implements presets as a global theme, so applying the preset
+  ;; once also covers GUI frames created later by an Emacs daemon.  Reapplying
+  ;; it from `server-after-make-frame-hook' can disrupt an active minibuffer
+  ;; (notably Helm) when an emacsclient frame is created or reused.
+  (fontaine-set-preset
+   (or (fontaine-restore-latest-preset) 'regular))
+  (fontaine-mode 1))
+
+;; Give a daemon's first GUI frame the final base font before its first
+;; redisplay.  This avoids fallback-font geometry and a visible layout jump;
+;; Fontaine's global theme then supplies the remaining face attributes.
 (add-to-list 'default-frame-alist
              `(font . ,(format "Maple Mono NF-%g"
                                (/ cashmere/font-height 10.0))))
-(add-hook 'server-after-make-frame-hook #'cashmere/set-fonts)
-(cashmere/set-fonts)
 
 
 
@@ -3467,8 +3460,13 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
   (setq golden-ratio-exclude-buffer-regexp '("\\`\\*eldoc")))
 
 (defun my/format-buffer ()
+  "Format the current buffer with its mode-specific formatter."
   (interactive)
-  (user-error "No formatter configured for %s" major-mode))
+  (cond
+   ((derived-mode-p 'org-mode)
+    (org-fmt-buffer))
+   (t
+    (user-error "No formatter configured for %s" major-mode))))
 
 (defun my/find-file-or-switch-project ()
   "Find a file in the current project; outside one, pick a project first.
@@ -3679,6 +3677,7 @@ workspace (e.g. *scratch*)."
   "mt" '(org-todo :wk "TODO")
   "ma" '(org-add-note :wk "add note")
   "mC" '(org-capture :wk "capture")
+  "mf" '(org-fmt-buffer :wk "format buffer")
 
   "mc" '(:wk "set" :ignore)
   "mk" '(kitty-graphics-org-heading-sizes :wk "kgfx headlines")
@@ -4253,11 +4252,6 @@ opening another file in same project does not re-notify."
   (when (executable-find "delta")
     (add-hook 'magit-mode-hook #'magit-delta-mode)))
 
-;; (use-package pretty-sha-path
-;;   :ensure t
-;;   :config
-;;   (setopt global-pretty-sha-path-mode 't))
-
 (use-package pulsar
   :ensure t
   :config
@@ -4476,9 +4470,10 @@ opening another file in same project does not re-notify."
     (require 'clatter-org)
     (clatter-org-setup)))
 
-(use-package janet-ts-mode
+(use-package org-other-agenda
   :ensure (:host github
-           :repo "sogaiu/janet-ts-mode"
-           :files ("*.el")))
+           :repo "yibie/org-other-agenda"
+           :files ("*.el"))
+  :commands (org-other-agenda))
 
 (provide 'init)
