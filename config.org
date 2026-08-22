@@ -1018,14 +1018,6 @@ let's give agent-shell another try
               #'my/agent-shell-yank-dwim-in-terminal))
 #+end_src
 
-*** agent-shell-sidebar
-
-#+begin_src emacs-lisp
-(use-package agent-shell-sidebar
-  :after agent-shell
-  :ensure (:host nil :repo "ssh://git@git.cashmere.rs/agent-shell-sidebar.git"))
-#+end_src
-
 * eldoc
 
 #+begin_src emacs-lisp
@@ -1157,121 +1149,6 @@ automatically encrypted before save and can be decrypted in-place with
   (setq org-crypt-key "1ED9D600A040D0AF193AAF30B877C0AC3B080FBB")
   (setq org-tags-exclude-from-inheritance '("crypt"))
   (add-hook 'org-mode-hook (lambda () (setq-local auto-save-default nil))))
-#+end_src
-
-** age
-
-#+begin_src emacs-lisp
-(use-package age
-  :ensure t
-  :demand t
-  :custom
-  (age-program "rage")
-  (age-default-identity "~/.config/age/keys.txt")
-  (age-default-recipient
-   '("age188928acysrh9zpc3rk6q4lqmf3qlpjx3s26m6k3p6kah63gcws7sx3jeej"
-     "age1mhvdwh6cvd70hm5dcptc4xca2xnkf383g6706ful6kmrudwdysvq0eytym"))
-  :config
-  (setenv "PINENTRY_PROGRAM" "pinentry-gnome3")
-  (setenv "PASSAGE_DIR" (expand-file-name "~/pass"))
-  (age-file-enable))
-#+end_src
-
-#+begin_src emacs-lisp
-(defun my/org-crypt-migrate-to-age (title)
-  "Migrate all :crypt: headings in the current buffer to a new .org.age file.
-TITLE names the new denote-style file in ~/org."
-  (interactive "sTitle for new age file: ")
-  (unless (derived-mode-p 'org-mode)
-    (user-error "Not an org buffer"))
-  (save-excursion
-    (org-decrypt-entries)
-    (let ((collected (generate-new-buffer " *crypt-migration*"))
-          (count 0))
-      (org-map-entries
-       (lambda ()
-         (let ((beg (org-entry-beginning-position))
-               (end (org-entry-end-position)))
-           (with-current-buffer collected
-             (insert (buffer-substring-no-properties beg end) "\n"))
-           (setq count (1+ count))))
-       "crypt")
-      (if (zerop count)
-          (progn (kill-buffer collected)
-                 (user-error "No :crypt: headings found"))
-        (let ((target (expand-file-name
-                       (format "%s--%s__crypt.org.age"
-                               (format-time-string "%Y%m%dT%H%M%S")
-                               (replace-regexp-in-string "[^a-z0-9]+" "-" (downcase title)))
-                       "~/org")))
-          (with-current-buffer collected
-            (org-mode)
-            (write-file target)
-            (save-buffer))
-          (goto-char (point-max))
-          (org-map-entries
-           (lambda ()
-             (delete-region (org-entry-beginning-position) (org-entry-end-position)))
-           "crypt")
-          (save-buffer)
-          (message "Migrated %d crypt headings to %s" count target))))))
-#+end_src
-
-** passage
-
-#+begin_src emacs-lisp :tangle yes
-(use-package with-editor
-  :ensure t
-  :demand t)
-
-(use-package passage
-  :ensure (:host github :repo "anticomputer/passage.el")
-  :custom
-  (auth-source-passage-filename "~/pass")
-  :config
-  (with-eval-after-load 'evil
-    (evil-define-key 'normal passage-mode-map
-
-      "J" #'passage-goto-entry
-      "U" #'passage-browse-url
-      "a" #'passage-insert
-      "G" #'passage-insert-generated
-      "R" #'passage-rename
-      "x" #'passage-kill
-      "E" #'passage-edit
-      "j" #'passage-next-entry
-      "k" #'passage-prev-entry
-      "gr" #'passage-update-buffer
-      "o" #'passage-otp-options
-      "]]" #'passage-next-directory
-      "[[" #'passage-prev-directory
-      (kbd "RET") #'passage-view
-      "q" #'passage-quit)
-    (evil-define-key 'normal passage-view-mode-map
-      "q" #'quit-window
-      "t" #'passage-view-toggle-password
-      "y" #'passage-view-copy-password))
-  (with-eval-after-load 'evil-collection
-    (evil-collection-define-operator-key 'yank 'passage-mode-map
-      "f" #'passage-copy-field
-      "n" #'passage-copy-username
-      "u" #'passage-copy-url))
-  ;; The yank-operator sub-keys ("yn"/"yu"/"yf") are invisible to
-  ;; `where-is', so hardcode their header labels (evil-collection-pass
-  ;; uses the same trick for pass).
-  (defconst my/passage-command-to-label
-    '((passage-copy-field . "yf")
-      (passage-copy-username . "yn")
-      (passage-copy-url . "yu")))
-  (defun my/passage-display-keybinding (f &rest args)
-    "Render `my/passage-command-to-label' labels in the passage header."
-    (if-let* ((label (alist-get (car args) my/passage-command-to-label)))
-        (insert (format "%8s %-13s \t "
-                        (propertize (format "<%s>" label)
-                                    'face 'font-lock-constant-face)
-                        (cadr args)))
-      (apply f args)))
-  (advice-add 'passage--display-keybinding :around #'my/passage-display-keybinding))
 #+end_src
 
 ** org-appear
