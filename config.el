@@ -24,6 +24,8 @@
 Set per-host in the gitignored `local.el'.")
   (defvar cashmere/frame-alpha-background nil
     "Per-host frame opacity, or nil for the Emacs default.")
+  (defvar cashmere/font-family "Maple Mono NF"
+    "Per-host default monospace font family.")
   (defvar cashmere/font-height 180
     "Per-host default font height in tenths of a point.")
   (defvar cashmere/theme nil
@@ -1088,10 +1090,13 @@ Temporarily disables notifications during the fetch."
   (org-modern-internal-target nil)
   (org-modern-radio-target nil)
   :custom-face
-  (org-modern-symbol
-   ((t (:family "Maple Mono NF" :inherit shadow :weight regular))))
   (org-modern-block-name
-   ((t (:inherit (shadow fixed-pitch) :height 0.85 :weight regular)))))
+   ((t (:inherit (shadow fixed-pitch) :height 0.85 :weight regular))))
+  :config
+  (set-face-attribute 'org-modern-symbol nil
+                      :family cashmere/font-family
+                      :inherit 'shadow
+                      :weight 'regular))
 
 
 
@@ -2887,9 +2892,9 @@ so the working-tree diff stays visible until the user explicitly stages."
            :variable-pitch-height 1.12
            :line-spacing 0.16)
           (t
-           :default-family "Maple Mono NF"
+           :default-family ,cashmere/font-family
            :default-weight regular
-           :fixed-pitch-family "Maple Mono NF"
+           :fixed-pitch-family ,cashmere/font-family
            :variable-pitch-family "SF Pro Text"
            :variable-pitch-weight regular
            :variable-pitch-height 1.04
@@ -2900,7 +2905,7 @@ so the working-tree diff stays visible until the user explicitly stages."
            :mode-line-inactive-height 0.92
            :header-line-family "SFProText Nerd Font"
            :header-line-weight regular
-           :line-number-family "Maple Mono NF"
+           :line-number-family ,cashmere/font-family
            :line-number-height 0.9
            :bold-weight semibold
            :line-spacing 0.08)))
@@ -2917,7 +2922,7 @@ so the working-tree diff stays visible until the user explicitly stages."
 ;; redisplay.  This avoids fallback-font geometry and a visible layout jump;
 ;; Fontaine's global theme then supplies the remaining face attributes.
 (add-to-list 'default-frame-alist
-             `(font . ,(format "Maple Mono NF-%g"
+             `(font . ,(format "%s-%g" cashmere/font-family
                                (/ cashmere/font-height 10.0))))
 
 
@@ -4057,6 +4062,8 @@ reset is unnecessary, so do the handler resolution ourselves and skip
 (use-package mu4e-alert
   :ensure t
   :after mu4e
+  :custom
+  (mu4e-alert-modeline-formatter #'my/mode-line-mu4e-formatter)
   :config
   ;; Use libnotify for desktop notifications (notify-send / swaync)
   (mu4e-alert-set-default-style 'libnotify)

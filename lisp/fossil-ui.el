@@ -339,10 +339,14 @@ Paths may contain spaces.  A dash in either count denotes binary data."
           :busy nil
           :error nil)))
 
+(defun fossil-ui--single-line (value)
+  "Return VALUE as a string without native-widget line breaks."
+  (replace-regexp-in-string "[\r\n]+" " " (format "%s" (or value ""))))
+
 (defun fossil-ui--fit (value width &optional face)
   "Return VALUE truncated or padded to WIDTH, optionally using FACE."
   (let* ((width (max 0 width))
-         (value (truncate-string-to-width (format "%s" (or value ""))
+         (value (truncate-string-to-width (fossil-ui--single-line value)
                                           width nil nil "..."))
          (result (concat value
                          (make-string (max 0 (- width (string-width value))) ?\s))))
@@ -350,8 +354,9 @@ Paths may contain spaces.  A dash in either count denotes binary data."
 
 (defun fossil-ui--item (value &optional face)
   "Return a TextUI item for VALUE with optional FACE."
-  `(:type item :format "%v"
-    :value ,(if face (propertize value 'face face) value)))
+  (let ((value (fossil-ui--single-line value)))
+    `(:type item :format "%v"
+      :value ,(if face (propertize value 'face face) value))))
 
 (defun fossil-ui--icons-p ()
   "Return non-nil when dashboard Nerd Font icons should be used."

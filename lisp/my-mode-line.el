@@ -34,6 +34,10 @@
   '((t (:inherit font-lock-builtin-face :weight bold)))
   "Face for the IRC activity indicator.")
 
+(defface my/mode-line-clatter-face
+  '((t (:inherit font-lock-builtin-face :weight bold)))
+  "Face for the Clatter joined-channel indicator.")
+
 (defface my/mode-line-mu4e-face
   '((t (:inherit warning :weight bold)))
   "Face for the unread mail indicator.")
@@ -55,6 +59,9 @@
   "Face for the read-only buffer state icon.")
 
 (defvar-local my/mode-line--buffer-title nil)
+
+(defconst my/mode-line--missing (make-symbol "missing")
+  "Sentinel used when checking membership in package hash tables.")
 
 (defun my/mode-line--update-title-cache ()
   "Update the cached #+title for the current buffer."
@@ -153,6 +160,34 @@ of a literal dash."
                           (length erc-modified-channels-alist))
                   'face 'my/mode-line-irc-face))))
 
+(defun my/mode-line-clatter ()
+  "Clatter indicator showing the number of joined channels."
+  (when (featurep 'clatter)
+    (let ((count 0))
+      (dolist (buffer (clatter-all-buffers))
+        (when (with-current-buffer buffer
+                (and (eq clatter--buffer-type 'channel)
+                     (hash-table-p clatter--nick-list)
+                     (when-let* ((connection
+                                  (clatter-get-connection clatter--network))
+                                 ((eq (clatter-connection-state connection)
+                                      :connected))
+                                 (nick (clatter-connection-nick connection)))
+                       (not (eq (gethash (downcase nick) clatter--nick-list
+                                         my/mode-line--missing)
+                                my/mode-line--missing)))))
+          (setq count (1+ count))))
+      (when (> count 0)
+        (let ((icon (my/mode-line--icon "nf-md-forum_outline"
+                                        'my/mode-line-clatter-face "irc")))
+          (propertize (format "%s %d" icon count)
+                      'face 'my/mode-line-clatter-face))))))
+
+(defun my/mode-line-mu4e-formatter (mail-count)
+  "Format MAIL-COUNT for the custom mode line without an extra icon."
+  (unless (zerop mail-count)
+    (number-to-string mail-count)))
+
 (defun my/mode-line-mu4e ()
   "Unread mail indicator from mu4e-alert, or nil when mu4e is not in use."
   (when (bound-and-true-p mu4e-alert-mode-line)
@@ -215,6 +250,7 @@ the bottom mode-line is hidden."
                                       'local-map mode-line-buffer-identification-keymap)) " "
                    mode-line-position)
                  '("" (:eval (my/mode-line-irc)) " "
+                   (:eval (my/mode-line-clatter)) " "
                    (:eval (my/mode-line-mu4e)) " "
                    mode-line-process " "
                    (:eval (my/mode-line-time)) " "
