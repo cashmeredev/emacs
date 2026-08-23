@@ -59,6 +59,25 @@ Set per-host in the gitignored `local.el'.")
     (funcall orig name _keyword args)))
 (advice-add 'use-package-normalize/:ensure :around #'my/elpaca-skip-local)
 
+(defun my/elpaca-write-lock-file ()
+  "Write exact revisions of all queued packages to `elpaca-lock-file'."
+  (interactive)
+  (unless elpaca-lock-file
+    (user-error "`elpaca-lock-file' is not configured"))
+  (elpaca-wait)
+  (elpaca-write-lock-file elpaca-lock-file)
+  ;; Make the newly written revisions visible to this Emacs session too.
+  (elpaca-menu-lock-file 'update)
+  (message "Elpaca lock file updated: %s"
+           (abbreviate-file-name elpaca-lock-file)))
+
+(defun my/elpaca-visit-lock-file ()
+  "Visit the configured `elpaca-lock-file'."
+  (interactive)
+  (unless elpaca-lock-file
+    (user-error "`elpaca-lock-file' is not configured"))
+  (find-file elpaca-lock-file))
+
 (use-package emacs
   :ensure nil
   :custom
@@ -213,8 +232,7 @@ Selects the compilation window so the cursor lands in it."
   "Focus the async-shell window and make q bury it without killing the process."
   (select-window window)
   (with-current-buffer (window-buffer window)
-    (evil-local-set-key 'normal (kbd "q") #'quit-window)
-    (evil-local-set-key 'motion (kbd "q") #'quit-window)
+    (my/async-shell-command-bindings)
     (evil-normal-state)))
 
 (use-package window
@@ -276,11 +294,6 @@ Selects the compilation window so the cursor lands in it."
   (mailcap-add "image/jpg" "kitty --hold kitty +kitten icat %s")
   (mailcap-add "image/gif" "kitty --hold kitty +kitten icat %s")
 
-  (define-key dired-mode-map (kbd "E") 
-    (lambda () 
-      (interactive) 
-      (mailcap-view-file (dired-get-filename))))
-  
   (advice-add 'dired-create-directory :around
               (lambda (orig-fun dirname)
                 (let ((current-buffer (current-buffer)))
@@ -295,25 +308,11 @@ Selects the compilation window so the cursor lands in it."
 
 (use-package async :ensure t)
 
-(use-package general
-  :ensure (:wait t)
-  :demand t
-  :config
-  (general-evil-setup))
+(defvar-keymap my/leader-map
+  :doc "Global leader map used from Evil states.")
 
-(eval-and-compile
-  (require 'general)
-
-  (general-create-definer my-leader
-    :states '(normal visual insert)
-    :keymaps 'override
-    :prefix "SPC"
-    :non-normal-prefix "M-SPC")
-
-  (general-create-definer my-local-leader
-    :states '(normal visual)
-    :keymaps 'override
-    :prefix ","))
+(defvar-keymap my/local-leader-map
+  :doc "Global local-leader map used from Evil states.")
 
 ;; Always-available IRC entry points so `M-x run-irc` works from any daemon
 ;; (hub, work, standalone). Calling `erc-tls` autoloads ERC on demand.
@@ -507,24 +506,7 @@ Temporarily disables notifications during the fetch."
                   (yes-or-no-p
                    (format "ERC buffer %s is connected. Really kill (will part channel)? "
                            (buffer-name)))
-                t)))
-
-  (general-def 'normal erc-mode-map
-    "q"   'quit-window
-    "Q"   'my/erc-quit-all
-    "gb"  'my/erc-switch-channel
-    "gn"  'erc-track-switch-buffer
-    "gH"  'my/erc-fetch-history
-    "go"  'erc-channel-names
-    "gj"  'erc-join-channel
-    "gl"  'my/erc-list-channels
-    "gr"  'my/erc-reconnect
-    "RET" 'erc-send-current-line)
-
-  (general-def '(normal insert) erc-mode-map
-    "M-n" 'erc-track-switch-buffer
-    "C-k" 'erc-previous-command
-    "C-j" 'erc-next-command))
+                t))))
 
 (defvar my/centered-cursor-enabled nil)
 
@@ -591,18 +573,11 @@ Temporarily disables notifications during the fetch."
   (setq isearch-lazy-count t)                  ;; Enable lazy counting to show current match information.
   (setq lazy-count-prefix-format "(%s/%s) ")   ;; Format for displaying current match count.
   (setq lazy-count-suffix-format nil)          ;; Disable suffix formatting for match count.
-  (setq search-whitespace-regexp ".*?")        ;; Allow searching across whitespace.
-  :bind (("C-s" . isearch-forward)             ;; Bind C-s to forward isearch.
-                 ("C-r" . isearch-backward)))          ;; Bind C-r to backward isearch.
+  (setq search-whitespace-regexp ".*?"))       ;; Allow searching across whitespace.
 
 (use-package vc
   :ensure nil                        ;; This is built-in, no need to fetch it.
   :defer t
-  :bind
-  (("C-x v d" . vc-dir)              ;; Open VC directory for version control status.
-   ("C-x v =" . vc-diff)             ;; Show differences for the current file.
-   ("C-x v D" . vc-root-diff)        ;; Show differences for the entire repository.
-   ("C-x v v" . vc-next-action))     ;; Perform the next version control action.
   :config
   ;; Better colors for <leader> g b  (blame file)
   (setq vc-annotate-color-map
@@ -744,12 +719,7 @@ Temporarily disables notifications during the fetch."
 
 (use-package smerge-mode
   :ensure nil                                  ;; This is built-in, no need to fetch it.
-  :defer t
-  :bind (:map smerge-mode-map
-                          ("C-c ^ u" . smerge-keep-upper)  ;; Keep the changes from the upper version.
-                          ("C-c ^ l" . smerge-keep-lower)  ;; Keep the changes from the lower version.
-                          ("C-c ^ n" . smerge-next)        ;; Move to the next conflict.
-                          ("C-c ^ p" . smerge-previous)))  ;; Move to the previous conflict.
+  :defer t)
 
 (use-package markdown-mode
   :ensure t
@@ -869,22 +839,6 @@ Temporarily disables notifications during the fetch."
           '("delta" "--no-gitconfig" "--color-only")))
   (setq agent-shell-activity-group-header-label-function
         #'agent-shell-activity-group-descriptive-label)
-  (define-key agent-shell-mode-map (kbd "RET") #'my/agent-shell-ret)
-  (define-key agent-shell-mode-map (kbd "<return>") #'my/agent-shell-ret)
-  (define-key agent-shell-viewport-view-mode-map (kbd "RET") #'my/agent-shell-ret)
-  (define-key agent-shell-viewport-view-mode-map (kbd "<return>") #'my/agent-shell-ret)
-  (with-eval-after-load 'evil
-    (evil-define-key '(normal motion) agent-shell-mode-map
-      (kbd "RET") #'my/agent-shell-ret
-      (kbd "<return>") #'my/agent-shell-ret)
-    (evil-define-key 'insert agent-shell-mode-map
-      (kbd "RET") #'agent-shell-submit
-      (kbd "<return>") #'agent-shell-submit)
-    (evil-define-key '(normal motion) agent-shell-viewport-view-mode-map
-      (kbd "RET") #'my/agent-shell-ret
-      (kbd "<return>") #'my/agent-shell-ret))
-
-
   ;; Work around agent-shell's `window-system' guard so clipboard images
   ;; work in terminal Emacs (`emacs -nw').  The underlying save routine
   ;; already shells out to wl-paste/xclip/pngpaste/powershell, none of
@@ -1358,11 +1312,7 @@ Skips capture tasks and projects."
        ;; Change ACTIVE projects back to TODO (projects shouldn't be clocked directly)
        ((and (member (org-get-todo-state) (list "ACTIVE"))
              (my/is-project-p))
-        "TODO"))))
-
-  :bind (("<f11>" . org-clock-goto)
-         ("C-c C-x C-i" . org-clock-in)
-         ("C-c C-x C-o" . org-clock-out)))
+        "TODO")))))
 
 (with-eval-after-load 'org
   (setq org-global-properties
@@ -1384,10 +1334,7 @@ Skips capture tasks and projects."
         (cond
          ((string= complexity "low") (org-set-property "EFFORT" "0:30"))
          ((string= complexity "medium") (org-set-property "EFFORT" "2:00"))
-         ((string= complexity "high") (org-set-property "EFFORT" "5:00"))))))
-
-  ;; Keybinding for manual effort setting
-  (define-key org-mode-map (kbd "C-c e") 'my/org-set-effort-from-complexity))
+         ((string= complexity "high") (org-set-property "EFFORT" "5:00")))))))
 
 (defun my/create-project ()
   "Create a new project file with denote and comprehensive project structure."
@@ -1915,6 +1862,14 @@ Skips capture tasks and projects."
   :ensure (:wait t)
   :after org)
 
+(use-package vui
+  :ensure (:host github :repo "d12frosted/vui.el"
+           :ref "v1.4.0"
+           :files ("*.el"))
+  :demand t
+  :custom
+  (vui-width-mode 'pixel))
+
 (use-package denote
   :ensure (:wait t)
   :hook (dired-mode . denote-dired-mode)
@@ -2094,8 +2049,7 @@ Works on the base filename (without extension), e.g. matches \"-agenda\", \":age
         (kill-buffer)))))
 
 (use-package ox-json
-  :ensure t
-  )
+  :ensure t)
 
 (use-package ox-gfm
   :ensure t)
@@ -2119,8 +2073,6 @@ Works on the base filename (without extension), e.g. matches \"-agenda\", \":age
   (setq tmr-sound-file "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga"
         tmr-notification-urgency 'normal
         tmr-description-list 'tmr-description-history)
-  (define-key global-map (kbd "C-c t") #'tmr-prefix-map)
-
   ;; ── Timer persistence across Emacs restarts ──────────────
   (defvar my/tmr-save-file
     (expand-file-name "tmr-timers.eld" user-emacs-directory)
@@ -2284,12 +2236,8 @@ Timers that expired while Emacs was closed fire immediately."
      "\\`\\*eldoc"
      "\\`\\*elpaca-log\\*\\'"
      "\\`\\*Native-compile-Log\\*\\'"
-     "\\`\\*Async-native-compile-log\\*\\'"))
+     "\\`\\*Async-native-compile-log\\*\\'")))
   ;; (helm-display-function #'helm-display-buffer-in-own-frame)
-  :bind (:map helm-map
-              ("C-j" . helm-next-line)
-              ("C-k" . helm-previous-line)))
-(global-set-key (kbd "M-x") 'helm-M-x)
 
 (use-package helm-xref
   :ensure t
@@ -2362,15 +2310,7 @@ Timers that expired while Emacs was closed fire immediately."
   (defun my/project-ctags-setup ()
     (interactive)
     (my/project-ctags-start (my/project-ctags-root)
-                            my/project-ctags-arguments))
-
-  (with-eval-after-load 'evil
-    (evil-define-key '(normal motion) 'global
-      (kbd "g d") #'citre-jump
-      (kbd "g D") #'citre-query-jump
-      (kbd "g p") #'citre-peek
-      (kbd "g r") #'citre-jump-to-reference
-      (kbd "g b") #'citre-jump-back)))
+                            my/project-ctags-arguments)))
 
 (use-package nov
   :ensure t
@@ -2425,8 +2365,6 @@ Timers that expired while Emacs was closed fire immediately."
     (find-file path)
     (goto-char (point-min))
     (search-forward (car (last (split-string option "\\." t))))))
-
-(keymap-set compilation-mode-map "C-c o" #'nix-compile-goto-option)
 
 (use-package c-ts-mode
   :ensure nil
@@ -2647,13 +2585,7 @@ so the working-tree diff stays visible until the user explicitly stages."
   (setq evil-vsplit-window-right t)
   (setq evil-paste-from-register nil)
   :config
-  (evil-mode 1)
-  (evil-set-initial-state 'help-mode 'emacs)
-  (evil-set-initial-state 'messages-buffer-mode 'normal)
-  (evil-set-initial-state 'dired-mode 'normal)
-  (evil-set-initial-state 'ibuffer-mode 'normal)
-  (evil-set-initial-state 'erc-mode 'normal)
-  (define-key evil-insert-state-map (kbd "C-w") 'evil-window-map))
+  (evil-mode 1))
 
 (modify-syntax-entry ?_ "w")
 
@@ -2664,8 +2596,6 @@ so the working-tree diff stays visible until the user explicitly stages."
   ;;     (eldoc-box-help-at-point)
   ;;   (eldoc-doc-buffer t))
   (eldoc-doc-buffer t))
-
-(define-key evil-normal-state-map (kbd "K") #'my/eldoc-and-jump)
 
 (use-package smartparens
   :ensure t
@@ -2701,9 +2631,6 @@ so the working-tree diff stays visible until the user explicitly stages."
   :ensure t
   :after evil
   :config
-  (define-key evil-inner-text-objects-map "b" 'evil-textobj-anyblock-inner-block)
-  (define-key evil-outer-text-objects-map "b" 'evil-textobj-anyblock-a-block)
-  
   (setq evil-textobj-anyblock-blocks
         '(("(" . ")")
           ("{" . "}")
@@ -2729,9 +2656,6 @@ so the working-tree diff stays visible until the user explicitly stages."
            ("`" . "'")
            ("“" . "”"))))
     (evil-textobj-anyblock--make-textobj beg end type count t)))
-
-(define-key evil-inner-text-objects-map "q" 'my-evil-textobj-anyblock-inner-quote)
-(define-key evil-outer-text-objects-map "q" 'my-evil-textobj-anyblock-a-quote)
 
 (use-package evil-mc
   :ensure t
@@ -2760,10 +2684,7 @@ so the working-tree diff stays visible until the user explicitly stages."
           (evil-mc-make-cursor-in-visual-selection-end)
           (evil-append 1))
       ;; Fallback: normales Verhalten
-      (call-interactively 'evil-append)))
-
-  (define-key evil-visual-state-map (kbd "I") 'my/evil-mc-visual-block-insert)
-  (define-key evil-visual-state-map (kbd "A") 'my/evil-mc-visual-block-append))
+      (call-interactively 'evil-append))))
 
 (use-package flash
   :ensure (:host github :repo "Prgebish/flash")
@@ -2786,13 +2707,6 @@ so the working-tree diff stays visible until the user explicitly stages."
   ;; Evil integration: binds gs in normal/visual/operator + enhanced f/t/F/T
   (require 'flash-evil)
   (flash-evil-setup t)
-
-  ;; Restore ; and , after flash-char overwrites them
-  ;; ; is used as prefix for prev-navigation (;b, ;d)
-  ;; , is the local leader
-  (evil-define-key* '(normal visual motion) 'global
-    (kbd ";") nil
-    (kbd ",") nil)
 
   ;; Search integration: labels during C-s, /, ?
   (require 'flash-isearch)
@@ -2903,7 +2817,7 @@ so the working-tree diff stays visible until the user explicitly stages."
            :mode-line-active-height 0.92
            :mode-line-inactive-family "SFProText Nerd Font"
            :mode-line-inactive-height 0.92
-           :header-line-family "SFProText Nerd Font"
+           :header-line-family ,cashmere/font-family
            :header-line-weight regular
            :line-number-family ,cashmere/font-family
            :line-number-height 0.9
@@ -2987,10 +2901,7 @@ so the working-tree diff stays visible until the user explicitly stages."
 (use-package croc-ui
   :ensure nil
   :commands (croc-ui croc-ui-send-files croc-ui-send-directory
-             croc-ui-send-text croc-ui-receive)
-  :init
-  (with-eval-after-load 'general
-    (my-leader "oc" '(croc-ui :wk "croc"))))
+             croc-ui-send-text croc-ui-receive))
 
 (use-package textui
   :ensure (:host github :repo "yibie/textui" :files ("*.el")))
@@ -3003,17 +2914,11 @@ so the working-tree diff stays visible until the user explicitly stages."
 (use-package yggdrasil-ui
   :ensure nil
   :after textui
-  :commands (yggdrasil-ui)
-  :init
-  (with-eval-after-load 'general
-    (my-leader "ov" '(yggdrasil-ui :wk "yggdrasil"))))
+  :commands (yggdrasil-ui))
 
 (use-package sync-ui
   :ensure nil
   :commands (sync-ui))
-  :init
-  (with-eval-after-load 'general
-    (my-leader "oy" '(sync-ui :wk "sync")))
 
 (defun my/reload-config ()
   "Re-tangle config.org and reload the generated config.el in place.
@@ -3057,8 +2962,6 @@ still require a restart since elpaca queues run at init time."
 (use-package projectile
   :ensure (:wait t)
   :demand t
-  :bind-keymap
-  (("C-x p" . projectile-command-map))
   :config
   (projectile-mode +1)
   (setq projectile-completion-system 'default
@@ -3330,12 +3233,6 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
   (with-eval-after-load 'projectile
     (setq projectile-switch-project-action #'my/workspace-switch-to-project))
 
-  (define-key persp-mode-map [remap delete-window]
-              #'my/workspace-close-window-or-workspace)
-  (with-eval-after-load 'evil
-    (define-key persp-mode-map [remap evil-window-delete]
-                #'my/workspace-close-window-or-workspace))
-
   (add-hook 'persp-filter-save-buffers-functions
             (lambda (buf)
               (with-current-buffer buf (derived-mode-p 'erc-mode))))
@@ -3364,47 +3261,6 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
       (ibuffer nil (format "*ibuffer: %s*" name)
                (list (cons 'persp t))))))
 
-(my-leader
-  "TAB"     '(:ignore t :wk "workspace")
-  "TAB TAB" '(my/workspace-display :wk "display")
-  "TAB ."   '(my/workspace-switch-to :wk "switch to…")
-  "TAB `"   '(my/workspace-other :wk "last")
-  "TAB n"   '(my/workspace-new :wk "new")
-  "TAB r"   '(my/workspace-rename :wk "rename")
-  "TAB d"   '(my/workspace-kill :wk "delete")
-  "TAB x"   '(my/workspace-kill-session :wk "kill session")
-  "TAB s"   '(my/workspace-save-session :wk "save session")
-  "TAB l"   '(my/workspace-load-session :wk "load session")
-  "TAB ["   '(my/workspace-switch-left :wk "prev")
-  "TAB ]"   '(my/workspace-switch-right :wk "next")
-  "TAB 1"   '((lambda () (interactive) (my/workspace-switch-to-index 0)) :wk "1")
-  "TAB 2"   '((lambda () (interactive) (my/workspace-switch-to-index 1)) :wk "2")
-  "TAB 3"   '((lambda () (interactive) (my/workspace-switch-to-index 2)) :wk "3")
-  "TAB 4"   '((lambda () (interactive) (my/workspace-switch-to-index 3)) :wk "4")
-  "TAB 5"   '((lambda () (interactive) (my/workspace-switch-to-index 4)) :wk "5")
-  "TAB 6"   '((lambda () (interactive) (my/workspace-switch-to-index 5)) :wk "6")
-  "TAB 7"   '((lambda () (interactive) (my/workspace-switch-to-index 6)) :wk "7")
-  "TAB 8"   '((lambda () (interactive) (my/workspace-switch-to-index 7)) :wk "8")
-  "TAB 9"   '((lambda () (interactive) (my/workspace-switch-to-index 8)) :wk "9")
-  "TAB 0"   '(my/workspace-switch-to-final :wk "last"))
-
-(general-def '(normal motion)
-  "gt" 'my/workspace-switch-right
-  "gT" 'my/workspace-switch-left)
-
-(dotimes (i 9)
-  (general-define-key
-   :states '(normal visual)
-   :keymaps 'override
-   :prefix ","
-   (number-to-string (1+ i))
-   `(lambda () (interactive) (my/workspace-switch-to-index ,i))))
-(general-define-key
- :states '(normal visual)
- :keymaps 'override
- :prefix ","
- "0" #'my/workspace-switch-to-final)
-
 (use-package pass
   :ensure t
   :defer t
@@ -3415,29 +3271,7 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 
   (add-to-list 'display-buffer-alist
                '("\\*Pass.*\\*"
-                 (display-buffer-full-frame)))
-
-  (with-eval-after-load 'evil
-    (general-def 'normal pass-mode-map
-      "q"   'quit-window
-      "j"   'pass-next-entry
-      "k"   'pass-prev-entry
-      "RET" 'pass-view
-      "d"   'pass-kill
-      "y"   'pass-copy
-      "Y"   'pass-copy-field
-      "e"   'pass-edit
-      "a"   'pass-insert
-      "G"   'pass-insert-generated
-      "o"   'pass-otp-options
-      "r"   'pass-rename
-      "/"   'isearch-forward)
-
-    (general-def 'normal pass-view-mode-map
-      "q"   'quit-window
-      "t"   'pass-view-toggle-password
-      "y"   'pass-copy
-      "Y"   'pass-copy-field)))
+                 (display-buffer-full-frame))))
 
 (use-package auth-source
   :ensure nil                                  ;; This is built-in, no need to fetch it.
@@ -3467,299 +3301,447 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 (defun my/format-buffer ()
   "Format the current buffer with its mode-specific formatter."
   (interactive)
-  (cond
-   ((derived-mode-p 'org-mode)
-    (org-fmt-buffer))
-   (t
-    (user-error "No formatter configured for %s" major-mode))))
+  (if (derived-mode-p 'org-mode)
+      (org-fmt-buffer)
+    (user-error "No formatter configured for %s" major-mode)))
 
 (defun my/find-file-or-switch-project ()
-  "Find a file in the current project; outside one, pick a project first.
-Uses the native Helm sources from `helm-projectile'.  Picking a project
-switches to its workspace and shows its files via
-`projectile-switch-project-action', so this also works from the master
-workspace (e.g. *scratch*)."
+  "Find a file in the current project, or select a project first."
   (interactive)
   (if (projectile-project-p)
       (helm-projectile-find-file)
     (helm-projectile-switch-project)))
 
-(my-leader
-  "SPC" '(my/find-file-or-switch-project :wk "find file/switch project")
-  "sp" '(helm-projectile :wk "search project")
-  "ss" '(helm-occur :wk "search line")
-  "sg" '(my/helm-rg-in :wk "rg in dir")
-  "sf" '(my/helm-find-in :wk "find file in dir")
-  "/" '(helm-projectile-rg :wk "search project")
-  "." '(helm-find-files :wk "find file")
-  "," '(helm-mini :wk "switch buffer")
-  ":" (lambda () (interactive) (execute-extended-command nil))
-  "u" '(universal-argument :wk "universal argument")
+(defun my/xref-find-definitions-other-window ()
+  "Find the definition at point in another window."
+  (interactive)
+  (let ((current-prefix-arg 4))
+    (call-interactively #'xref-find-definitions)))
 
-  "d" '(:ignore t :wk "denote")
-  "da" '(my/denote-toggle-agenda-keyword :wk "toggle agenda tag")
-  "dj" '(denote-journal-new-or-existing-entry :wk "journal")
-  "dd" '(denote-menu t :wk "List all notes")
-  "dm" '(:ignore t :wk "Merge Notes")
-  "dmr" '(denote-merge-region :wk "Merge Region")
-  "dmf" '(denote-merge-file :wk "Merge File")
-  "dg" '(my/denote-rg :wk "grep denotes")
-  "dl" '(denote-link-or-create t :wk "Link Note")
-  "dn" '(denote t :wk "Create a new note")
-  "dr" '(denote-rename-file t :wk "Rename Note")
-  "ds" '(denote-solo-switch :wk "switch silo")
-  "dtl" '(tmr-list-timers :wk "list timer")
-  "dtt" '(tmr :wk "set timer")
+(defun my/comment-line ()
+  "Toggle the comment on the current line."
+  (interactive)
+  (comment-or-uncomment-region
+   (line-beginning-position)
+   (line-end-position)))
 
-  "f" '(:ignore t :wk "files")
-  "fd" '(dired-jump :wk "dired")
-  "fD" '(dired-jump :wk "dired jump")
-  "fr" '(helm-recentf :wk "recent files")
-  "ff" '(helm-find-files :wk "find file")
-  "fs" '(save-buffer :wk "save file")
-  "b" '(:ignore t :wk "buffer/bookmarks")
-  "bb" '(helm-filtered-bookmarks :wk "display current bookmarks")
-  "bi" '(my/ibuffer-workspace :wk "ibuffer (workspace)")
-  "bp" '(projectile-ibuffer :wk "ibuffer project")
-  "bd" '(bookmark-delete :wk "delete bookmark")
-  "bk" '(kill-current-buffer :wk "kill buffer")
-  "bs" '(bookmark-set :wk "save bookmark")
-  "br" '(rename-buffer :wk "rename buffer")
+(defun my/comment-region (beg end)
+  "Toggle comments in the active region from BEG to END."
+  (interactive "r")
+  (comment-or-uncomment-region beg end))
 
-  "p" '(:ignore t :wk "project")
-  "pp" '(helm-projectile-switch-project :wk "switch project workspace")
-  "pf" '(helm-projectile-find-file :wk "find file")
-  "ps" '(helm-projectile-rg :wk "search")
-  "pb" '(helm-projectile-switch-to-buffer :wk "buffers")
-  "pk" '(projectile-kill-buffers :wk "kill buffers") 
-  "pd" '(projectile-remove-known-project :wk "delete project")
-  "pr" '(my/project-replace :wk "project replace (wgrep)")
-  "pa" '(projectile-add-known-project :wk "add project")
-  "pi" '(projectile-invalidate-cache :wk "invalidate cache")
-  "pt" '(projectile-run-task :wk "tasks")
-  "pc" '(my/project-ctags-setup :wk "generate/update ctags")
+(defun my/workspace-switch-by-key ()
+  "Switch to workspace 1–9 using the invoking digit."
+  (interactive)
+  (my/workspace-switch-to-index (- last-command-event ?1)))
 
-  "g" '(:ignore t :wk "git")
-  "gc" '(magit-clone :wk "clone")
-  "gg" '(magit-status :wk "status")
-  "gf" '(fossil-ui-status :wk "fossil status")
-  "gl" '(magit-log-current :wk "log")
-  "gi" '(magit-init :wk "init")
-  "gd" '(xref-find-definitions :wk "go to definition") 
-  "gD" '((lambda () (interactive) 
-           (let ((current-prefix-arg 4))
-             (call-interactively #'xref-find-definitions)))
-         :wk "definition other window")
-  "gI" '(citre-query-jump :wk "find definition")
-  "gt" '(citre-peek :wk "peek definition")
-  "gr" '(xref-find-references :wk "find references")
-  "gs" '(magit-file-stage :wk "stage file")
-  "gu" '(my/magit-uncommit :wk "uncommit (keep & unstage)")
-  "gb" '(vc-annotate :wk "blame")
-  "gT" '(my/code-todos-harvest :wk "harvest code TODOs")
-  "aa" '(agent-shell :wk "start")
-  "at" '(agent-shell-toggle :wk "toggle")
-  "am" '(agent-shell-help-menu :wk "open session")
-  "ar" '(agent-shell-send-region :wk "send region")
-  "ac" '(agent-shell-send-clipboard-image :wk "send screenshot")
-  "o" '(:ignore t :wk "open")
-  "oa" '(my/app-launcher :wk "app launcher")
-  "os" '(my/snip-upload :wk "snip buffer/region")
-  "oS" '(my/snip-upload-file :wk "snip file")
-  "op" '(pass :wk "pass")
-  "ot" '(ghostel :wk "ghostel")
-  "oz" '(zfs :wk "zfs")
+(defvar my/leader-search-map nil)
+(defvar my/leader-denote-map nil)
+(defvar my/leader-denote-merge-map nil)
+(defvar my/leader-denote-timer-map nil)
+(defvar my/leader-file-map nil)
+(defvar my/leader-buffer-map nil)
+(defvar my/leader-project-map nil)
+(defvar my/leader-git-map nil)
+(defvar my/leader-agent-map nil)
+(defvar my/leader-open-map nil)
+(defvar my/leader-help-map nil)
+(defvar my/leader-window-map nil)
+(defvar my/leader-code-map nil)
+(defvar my/leader-quit-map nil)
+(defvar my/leader-web-map nil)
+(defvar my/leader-workspace-map nil)
 
-  "h" '(:ignore t :wk "help")
-  "hm" '(describe-mode :wk "mode")
-  "hf" '(describe-function :wk "function")
-  "hv" '(describe-variable :wk "variable")
-  "hk" '(describe-key :wk "key")
-  ;; "ht" '(load-theme :wk "load theme")
+;; Recreate the maps on reload so removed bindings cannot linger.
+(setq my/leader-map (make-sparse-keymap)
+      my/local-leader-map (make-sparse-keymap)
+      my/leader-search-map (make-sparse-keymap)
+      my/leader-denote-map (make-sparse-keymap)
+      my/leader-denote-merge-map (make-sparse-keymap)
+      my/leader-denote-timer-map (make-sparse-keymap)
+      my/leader-file-map (make-sparse-keymap)
+      my/leader-buffer-map (make-sparse-keymap)
+      my/leader-project-map (make-sparse-keymap)
+      my/leader-git-map (make-sparse-keymap)
+      my/leader-agent-map (make-sparse-keymap)
+      my/leader-open-map (make-sparse-keymap)
+      my/leader-help-map (make-sparse-keymap)
+      my/leader-window-map (make-sparse-keymap)
+      my/leader-code-map (make-sparse-keymap)
+      my/leader-quit-map (make-sparse-keymap)
+      my/leader-web-map (make-sparse-keymap)
+      my/leader-workspace-map (make-sparse-keymap))
 
-  "w w" '(evil-window-next :wk "Close window")
-  "w c" '(evil-window-delete :wk "Close window")
-  "w o" '(delete-other-windows :wk "Maximize window")
-  "w n" '(evil-window-new :wk "New window")
-  "w s" '(evil-window-split :wk "Horizontal split window")
-  "w v" '(evil-window-vsplit :wk "Vertical split window")
-  "w h" '(evil-window-left :wk "Window left")
-  "w j" '(evil-window-down :wk "Window down")
-  "w k" '(evil-window-up :wk "Window up")
-  "w l" '(evil-window-right :wk "Window right")
-  "w w" '(evil-window-next :wk "Goto next window")
-  "w H" '(buf-move-left :wk "Buffer move left")
-  "w J" '(buf-move-down :wk "Buffer move down")
-  "w K" '(buf-move-up :wk "Buffer move up")
-  "w L" '(buf-move-right :wk "Buffer move right")
+(keymap-set my/leader-map "SPC" #'my/find-file-or-switch-project)
+(keymap-set my/leader-map "/" #'helm-projectile-rg)
+(keymap-set my/leader-map "." #'helm-find-files)
+(keymap-set my/leader-map "," #'helm-mini)
+(keymap-set my/leader-map ":" #'execute-extended-command)
+(keymap-set my/leader-map "u" #'universal-argument)
+(keymap-set my/leader-map "x" #'org-capture)
+(keymap-set my/leader-map ";" #'embark-act)
+(keymap-set my/leader-map "P" #'helm-show-kill-ring)
 
-  "c" '(:ignore t :wk "code")
-  "cc" '(my/compile-or-recompile :wk "compile")
-  "cC" '(ghostel-compile :wk "recompile")
-  "ca" '(citre-query-jump :wk "find definition")
-  "cr" '(query-replace :wk "replace")
-  "cf" '(my/format-buffer :wk "format buffer")
-  "cs" '(yas-insert-snippet :wk "snippets")
-  "cl" '(flycheck-list-errors :wk "list errors")
+(keymap-set my/leader-map "s" my/leader-search-map)
+(keymap-set my/leader-search-map "p" #'helm-projectile)
+(keymap-set my/leader-search-map "s" #'helm-occur)
+(keymap-set my/leader-search-map "g" #'my/helm-rg-in)
+(keymap-set my/leader-search-map "f" #'my/helm-find-in)
 
-  "q" '(:ignore t :wk "quit")
-  "qq" '(save-buffers-kill-terminal :wk "quit emacs")
-  "qr" '(restart-emacs :wk "restart")
-  "hr" '(my/reload-config :wk "reload config")
+(keymap-set my/leader-map "d" my/leader-denote-map)
+(keymap-set my/leader-denote-map "a" #'my/denote-toggle-agenda-keyword)
+(keymap-set my/leader-denote-map "j" #'denote-journal-new-or-existing-entry)
+(keymap-set my/leader-denote-map "d" #'denote-menu)
+(keymap-set my/leader-denote-map "g" #'my/denote-rg)
+(keymap-set my/leader-denote-map "l" #'denote-link-or-create)
+(keymap-set my/leader-denote-map "n" #'denote)
+(keymap-set my/leader-denote-map "r" #'denote-rename-file)
+(keymap-set my/leader-denote-map "s" #'denote-solo-switch)
+(keymap-set my/leader-denote-map "m" my/leader-denote-merge-map)
+(keymap-set my/leader-denote-merge-map "r" #'denote-merge-region)
+(keymap-set my/leader-denote-merge-map "f" #'denote-merge-file)
+(keymap-set my/leader-denote-map "t" my/leader-denote-timer-map)
+(keymap-set my/leader-denote-timer-map "l" #'tmr-list-timers)
+(keymap-set my/leader-denote-timer-map "t" #'tmr)
 
-  "x" '(org-capture :wk "capture")
+(keymap-set my/leader-map "f" my/leader-file-map)
+(keymap-set my/leader-file-map "d" #'dired-jump)
+(keymap-set my/leader-file-map "D" #'dired-jump)
+(keymap-set my/leader-file-map "r" #'helm-recentf)
+(keymap-set my/leader-file-map "f" #'helm-find-files)
+(keymap-set my/leader-file-map "s" #'save-buffer)
 
-  ";" '(embark-act :wk "embark")
-  "P" '(helm-show-kill-ring :wk "paste history")
+(keymap-set my/leader-map "b" my/leader-buffer-map)
+(keymap-set my/leader-buffer-map "b" #'helm-filtered-bookmarks)
+(keymap-set my/leader-buffer-map "i" #'my/ibuffer-workspace)
+(keymap-set my/leader-buffer-map "p" #'projectile-ibuffer)
+(keymap-set my/leader-buffer-map "d" #'bookmark-delete)
+(keymap-set my/leader-buffer-map "k" #'kill-current-buffer)
+(keymap-set my/leader-buffer-map "s" #'bookmark-set)
+(keymap-set my/leader-buffer-map "r" #'rename-buffer)
 
-  ;; "t" '(:ignore t :wk "treesitter")
-  ;; "ts" '(flash-treesitter :wk "flash treesitter")
+(keymap-set my/leader-map "p" my/leader-project-map)
+(keymap-set my/leader-project-map "p" #'helm-projectile-switch-project)
+(keymap-set my/leader-project-map "f" #'helm-projectile-find-file)
+(keymap-set my/leader-project-map "s" #'helm-projectile-rg)
+(keymap-set my/leader-project-map "b" #'helm-projectile-switch-to-buffer)
+(keymap-set my/leader-project-map "k" #'projectile-kill-buffers)
+(keymap-set my/leader-project-map "d" #'projectile-remove-known-project)
+(keymap-set my/leader-project-map "r" #'my/project-replace)
+(keymap-set my/leader-project-map "a" #'projectile-add-known-project)
+(keymap-set my/leader-project-map "i" #'projectile-invalidate-cache)
+(keymap-set my/leader-project-map "t" #'projectile-run-task)
+(keymap-set my/leader-project-map "c" #'my/project-ctags-setup)
 
+(keymap-set my/leader-map "g" my/leader-git-map)
+(keymap-set my/leader-git-map "c" #'magit-clone)
+(keymap-set my/leader-git-map "g" #'magit-status)
+(keymap-set my/leader-git-map "f" #'fossil-ui-status)
+(keymap-set my/leader-git-map "l" #'magit-log-current)
+(keymap-set my/leader-git-map "i" #'magit-init)
+(keymap-set my/leader-git-map "d" #'xref-find-definitions)
+(keymap-set my/leader-git-map "D" #'my/xref-find-definitions-other-window)
+(keymap-set my/leader-git-map "I" #'citre-query-jump)
+(keymap-set my/leader-git-map "t" #'citre-peek)
+(keymap-set my/leader-git-map "r" #'xref-find-references)
+(keymap-set my/leader-git-map "s" #'magit-file-stage)
+(keymap-set my/leader-git-map "u" #'my/magit-uncommit)
+(keymap-set my/leader-git-map "b" #'vc-annotate)
+(keymap-set my/leader-git-map "T" #'my/code-todos-harvest)
 
-  "e"   '(:ignore t :wk "eww/web")
-  "e e" '(eww :wk "eww browse / search")
-  "e n" '(my/eww-new-buffer :wk "new eww buffer")
-  "e b" '(eww-list-bookmarks :wk "bookmarks")
-  "e h" '(eww-list-histories :wk "history")
-  "e f" '(elfeed :wk "elfeed (rss)")
-  "e L" '(link-hint-open-link :wk "hint open link")
-  "e C" '(link-hint-copy-link :wk "hint copy link")
-  "e x" '(xwidget-webkit-browse-url :wk "webkit browser")
-  )
+(keymap-set my/leader-map "a" my/leader-agent-map)
+(keymap-set my/leader-agent-map "a" #'agent-shell)
+(keymap-set my/leader-agent-map "t" #'agent-shell-toggle)
+(keymap-set my/leader-agent-map "m" #'agent-shell-help-menu)
+(keymap-set my/leader-agent-map "r" #'agent-shell-send-region)
+(keymap-set my/leader-agent-map "c" #'agent-shell-send-clipboard-image)
 
-(defun my/flash-enabled-p ()
-  (and (not (derived-mode-p 'magit-mode 'dired-mode 'ibuffer-mode))
-       (not (eq major-mode 'dirvish-mode))))
+(keymap-set my/leader-map "o" my/leader-open-map)
+(keymap-set my/leader-open-map "a" #'my/app-launcher)
+(keymap-set my/leader-open-map "s" #'my/snip-upload)
+(keymap-set my/leader-open-map "S" #'my/snip-upload-file)
+(keymap-set my/leader-open-map "p" #'pass)
+(keymap-set my/leader-open-map "t" #'ghostel)
+(keymap-set my/leader-open-map "z" #'zfs)
+(keymap-set my/leader-open-map "c" #'croc-ui)
+(keymap-set my/leader-open-map "v" #'yggdrasil-ui)
+(keymap-set my/leader-open-map "y" #'sync-ui)
+(keymap-set my/leader-open-map "r" #'rsync-ui)
+
+(keymap-set my/leader-map "h" my/leader-help-map)
+(keymap-set my/leader-help-map "m" #'describe-mode)
+(keymap-set my/leader-help-map "f" #'describe-function)
+(keymap-set my/leader-help-map "v" #'describe-variable)
+(keymap-set my/leader-help-map "k" #'describe-key)
+(keymap-set my/leader-help-map "r" #'my/reload-config)
+
+(keymap-set my/leader-map "w" my/leader-window-map)
+(keymap-set my/leader-window-map "w" #'evil-window-next)
+(keymap-set my/leader-window-map "c" #'evil-window-delete)
+(keymap-set my/leader-window-map "o" #'delete-other-windows)
+(keymap-set my/leader-window-map "n" #'evil-window-new)
+(keymap-set my/leader-window-map "s" #'evil-window-split)
+(keymap-set my/leader-window-map "v" #'evil-window-vsplit)
+(keymap-set my/leader-window-map "h" #'evil-window-left)
+(keymap-set my/leader-window-map "j" #'evil-window-down)
+(keymap-set my/leader-window-map "k" #'evil-window-up)
+(keymap-set my/leader-window-map "l" #'evil-window-right)
+(keymap-set my/leader-window-map "H" #'buf-move-left)
+(keymap-set my/leader-window-map "J" #'buf-move-down)
+(keymap-set my/leader-window-map "K" #'buf-move-up)
+(keymap-set my/leader-window-map "L" #'buf-move-right)
+
+(keymap-set my/leader-map "c" my/leader-code-map)
+(keymap-set my/leader-code-map "c" #'my/compile-or-recompile)
+(keymap-set my/leader-code-map "C" #'ghostel-compile)
+(keymap-set my/leader-code-map "a" #'citre-query-jump)
+(keymap-set my/leader-code-map "r" #'query-replace)
+(keymap-set my/leader-code-map "f" #'my/format-buffer)
+(keymap-set my/leader-code-map "s" #'yas-insert-snippet)
+(keymap-set my/leader-code-map "l" #'flycheck-list-errors)
+
+(keymap-set my/leader-map "q" my/leader-quit-map)
+(keymap-set my/leader-quit-map "q" #'save-buffers-kill-terminal)
+(keymap-set my/leader-quit-map "r" #'restart-emacs)
+
+(keymap-set my/leader-map "e" my/leader-web-map)
+(keymap-set my/leader-web-map "e" #'eww)
+(keymap-set my/leader-web-map "n" #'my/eww-new-buffer)
+(keymap-set my/leader-web-map "b" #'eww-list-bookmarks)
+(keymap-set my/leader-web-map "h" #'eww-list-histories)
+(keymap-set my/leader-web-map "f" #'elfeed)
+(keymap-set my/leader-web-map "L" #'link-hint-open-link)
+(keymap-set my/leader-web-map "C" #'link-hint-copy-link)
+(keymap-set my/leader-web-map "x" #'xwidget-webkit-browse-url)
+
+(keymap-set my/leader-map "TAB" my/leader-workspace-map)
+(keymap-set my/leader-workspace-map "TAB" #'my/workspace-display)
+(keymap-set my/leader-workspace-map "." #'my/workspace-switch-to)
+(keymap-set my/leader-workspace-map "`" #'my/workspace-other)
+(keymap-set my/leader-workspace-map "n" #'my/workspace-new)
+(keymap-set my/leader-workspace-map "r" #'my/workspace-rename)
+(keymap-set my/leader-workspace-map "d" #'my/workspace-kill)
+(keymap-set my/leader-workspace-map "x" #'my/workspace-kill-session)
+(keymap-set my/leader-workspace-map "s" #'my/workspace-save-session)
+(keymap-set my/leader-workspace-map "l" #'my/workspace-load-session)
+(keymap-set my/leader-workspace-map "[" #'my/workspace-switch-left)
+(keymap-set my/leader-workspace-map "]" #'my/workspace-switch-right)
+(dotimes (index 9)
+  (keymap-set my/leader-workspace-map (number-to-string (1+ index))
+              #'my/workspace-switch-by-key))
+(keymap-set my/leader-workspace-map "0" #'my/workspace-switch-to-final)
+
+(keymap-set my/local-leader-map "a" #'org-agenda)
+(keymap-set my/local-leader-map "c" #'my/centered-cursor)
+(keymap-set my/local-leader-map "f" #'dirvish)
+(keymap-set my/local-leader-map "m" #'mu4e)
+(keymap-set my/local-leader-map "i" #'clatter)
+(keymap-set my/local-leader-map "r" #'async-shell-command)
+(keymap-set my/local-leader-map "t" #'ghostel-project)
+(keymap-set my/local-leader-map "T" #'ghostel-list-buffers)
+(keymap-set my/local-leader-map "z" #'golden-ratio-mode)
+(keymap-set my/local-leader-map "o" #'my/global-olivetti-mode)
+(keymap-set my/local-leader-map "s" #'my-org-sidecar-left)
+(dotimes (index 9)
+  (keymap-set my/local-leader-map (number-to-string (1+ index))
+              #'my/workspace-switch-by-key))
+(keymap-set my/local-leader-map "0" #'my/workspace-switch-to-final)
+
+(with-eval-after-load 'which-key
+  (which-key-add-keymap-based-replacements
+    my/leader-map
+    "s" "search" "d" "denote" "f" "files" "b" "buffers/bookmarks"
+    "p" "project" "g" "git" "a" "agent" "o" "open" "h" "help"
+    "w" "windows" "c" "code" "q" "quit" "e" "web" "TAB" "workspace")
+  (which-key-add-keymap-based-replacements
+    my/leader-denote-map "m" "merge" "t" "timer"))
+
+(keymap-global-set "C-s" #'isearch-forward)
+(keymap-global-set "C-r" #'isearch-backward)
+(keymap-global-set "C-x v d" #'vc-dir)
+(keymap-global-set "C-x v =" #'vc-diff)
+(keymap-global-set "C-x v D" #'vc-root-diff)
+(keymap-global-set "C-x v v" #'vc-next-action)
+(keymap-global-set "C-x p" projectile-command-map)
+(keymap-global-set "C-c t" tmr-prefix-map)
+(keymap-global-set "<f11>" #'org-clock-goto)
+(keymap-global-set "M-x" #'helm-M-x)
+(keymap-global-set "C-=" #'text-scale-increase)
+(keymap-global-set "C--" #'text-scale-decrease)
 
 (defun my/s-key-dispatch ()
+  "Run Flash with stable viewport margins."
   (interactive)
-  (if (derived-mode-p 'magit-mode)
-      (call-interactively 'magit-stage)
-    (when (my/flash-enabled-p)
-      (let ((scroll-margin 0)
-            (maximum-scroll-margin 0))
-        (call-interactively 'flash-evil-jump)))))
+  (let ((scroll-margin 0)
+        (maximum-scroll-margin 0))
+    (call-interactively #'flash-evil-jump)))
 
-(general-def '(normal visual operator) 'override
-  :predicate '(not (derived-mode-p 'mu4e-main-mode 'mu4e-headers-mode
-                                    'mu4e-view-mode 'mu4e-compose-mode
-                                    'croc-ui-mode 'sync-ui-mode
-                                    'fossil-ui-mode))
-  "s" 'my/s-key-dispatch)
+;; The wrapper must retain Flash's inclusive operator semantics.  Without
+;; these properties `d s' becomes exclusive and stops before the target.
+(evil-set-command-properties #'my/s-key-dispatch
+  :type 'inclusive
+  :keep-visual t
+  :repeat 'motion)
 
+;; Flash's enhanced character motions claim `;' and `,'.  Keep `;' free for
+;; mode-local prefixes and reserve `,' for the local leader below.
+(evil-define-key 'motion 'global
+  (kbd ";") nil
+  (kbd ",") nil)
+(evil-define-key '(normal visual) 'global (kbd "SPC") my/leader-map)
+(evil-define-key 'insert 'global (kbd "M-SPC") my/leader-map)
+(evil-define-key '(normal visual) 'global (kbd ",") my/local-leader-map)
+(evil-define-key '(normal visual operator) 'global (kbd "s") #'my/s-key-dispatch)
+(evil-define-key 'insert 'global (kbd "C-w") evil-window-map)
 
-(general-def 'normal 'override
-  "K" 'my/eldoc-and-jump
-  "]d" 'flycheck-next-error
-  "[d" 'flycheck-previous-error
-  "]c" 'diff-hl-next-hunk
-  "[c" 'diff-hl-previous-hunk
-  "]b" 'switch-to-next-buffer
-  "[b" 'switch-to-prev-buffer
-  "]t" 'tab-next
-  "[t" 'tab-previous
-  ;; "P" 'helm-show-kill-ring
-  ;; "?" 'casual-avy-tmenu
-  "gcc" (lambda ()
-          (interactive)
-          (unless (use-region-p)
-            (comment-or-uncomment-region
-             (line-beginning-position)
-             (line-end-position)))))
+(evil-define-key 'normal 'global
+  (kbd "K") #'my/eldoc-and-jump
+  (kbd "] d") #'flycheck-next-error
+  (kbd "[ d") #'flycheck-previous-error
+  (kbd "] c") #'diff-hl-next-hunk
+  (kbd "[ c") #'diff-hl-previous-hunk
+  (kbd "] b") #'switch-to-next-buffer
+  (kbd "[ b") #'switch-to-prev-buffer
+  (kbd "] t") #'tab-next
+  (kbd "[ t") #'tab-previous
+  (kbd "g c c") #'my/comment-line
+  (kbd "g d") #'citre-jump
+  (kbd "g D") #'citre-query-jump
+  (kbd "g p") #'citre-peek
+  (kbd "g r") #'citre-jump-to-reference
+  (kbd "g b") #'citre-jump-back)
 
-(general-def 'visual 'override
-  "gc" (lambda ()
-         (interactive)
-         (when (use-region-p)
-           (comment-or-uncomment-region
-            (region-beginning)
-            (region-end)))))
+(evil-define-key 'visual 'global (kbd "g c") #'my/comment-region)
+(evil-define-key 'visual 'global
+  (kbd "I") #'my/evil-mc-visual-block-insert
+  (kbd "A") #'my/evil-mc-visual-block-append)
 
-(my-leader
-  :keymaps 'org-mode-map
-  "m" '(:ignore :wk "org")
+(define-key evil-inner-text-objects-map "b" #'evil-textobj-anyblock-inner-block)
+(define-key evil-outer-text-objects-map "b" #'evil-textobj-anyblock-a-block)
+(define-key evil-inner-text-objects-map "q" #'my-evil-textobj-anyblock-inner-quote)
+(define-key evil-outer-text-objects-map "q" #'my-evil-textobj-anyblock-a-quote)
 
-  "mt" '(org-todo :wk "TODO")
-  "ma" '(org-add-note :wk "add note")
-  "mC" '(org-capture :wk "capture")
-  "mf" '(org-fmt-buffer :wk "format buffer")
+(with-eval-after-load 'agent-shell
+  (keymap-set agent-shell-mode-map "RET" #'my/agent-shell-ret)
+  (keymap-set agent-shell-mode-map "<return>" #'my/agent-shell-ret)
+  (evil-define-key '(normal motion) agent-shell-mode-map
+    (kbd "RET") #'my/agent-shell-ret
+    (kbd "<return>") #'my/agent-shell-ret)
+  (evil-define-key 'insert agent-shell-mode-map
+    (kbd "RET") #'agent-shell-submit
+    (kbd "<return>") #'agent-shell-submit))
 
-  "mc" '(:wk "set" :ignore)
-  "mk" '(kitty-graphics-org-heading-sizes :wk "kgfx headlines")
-  "mcd" '(org-deadline :wk "deadline")
-  "mcs" '(org-schedule :wk "schedule")
-  "mce" '(org-set-effort :wk "effort")
-  "mcr" '(org-clock-report :wk "clock report")
-  "m," '(org-priority :wk "priority")
-  "mI" '(org-clock-in :wk "clock in")
-  "mO" '(org-clock-out :wk "clock out")
+(with-eval-after-load 'agent-shell
+  (keymap-set agent-shell-viewport-view-mode-map "RET" #'my/agent-shell-ret)
+  (keymap-set agent-shell-viewport-view-mode-map "<return>" #'my/agent-shell-ret)
+  (evil-define-key '(normal motion) agent-shell-viewport-view-mode-map
+    (kbd "RET") #'my/agent-shell-ret
+    (kbd "<return>") #'my/agent-shell-ret))
 
-  "l" '(:ignore :wk "link")
-  "lc" '(org-cliplink :wk "cliplink")
-  "li" '(org-download-clipboard :wk "image")
-  "ll" '(org-insert-link :wk "link various things")
+(defun my/async-shell-command-bindings ()
+  "Install bindings local to the displayed async shell buffer."
+  (evil-local-set-key 'normal (kbd "q") #'quit-window)
+  (evil-local-set-key 'motion (kbd "q") #'quit-window))
 
-  "n" '(org-toggle-narrow-to-subtree :wk "narrow"))
+(with-eval-after-load 'compile
+  (keymap-set compilation-mode-map "C-c o" #'nix-compile-goto-option))
 
-(evil-define-key 'normal org-mode-map (kbd "RET") 'org-open-at-point)
+(defun my/dired-view-file-externally ()
+  "Open the current Dired file through mailcap."
+  (interactive)
+  (mailcap-view-file (dired-get-filename)))
+
+(with-eval-after-load 'dired
+  (evil-set-initial-state 'dired-mode 'normal)
+  (keymap-set dired-mode-map "E" #'my/dired-view-file-externally)
+  (keymap-set dired-mode-map "C-c r" #'rsync-ui-dired)
+  (evil-define-key 'normal dired-mode-map
+    (kbd "h") #'dired-up-directory
+    (kbd "l") #'dired-find-file))
+
+(defvar my/dirvish-yank-map (make-sparse-keymap))
+(defvar my/dirvish-symlink-map (make-sparse-keymap))
 
 (defun dirvish-next-file (arg)
-  "Move down ARG lines, landing on the filename column.
-Uses raw line motion so hidden detail lines (permissions, owner,
-date) and the dired header are never skipped."
+  "Move down ARG raw lines and land on the filename column."
   (interactive "^p")
   (forward-line arg)
   (dired-move-to-filename))
 
 (defun dirvish-prev-file (arg)
-  "Move up ARG lines, landing on the filename column."
+  "Move up ARG raw lines and land on the filename column."
   (interactive "^p")
   (forward-line (- arg))
   (dired-move-to-filename))
 
-(general-def 'normal dired-mode-map
-  "h" 'dired-up-directory
-  "l" 'dired-find-file)
-
-(general-def 'normal dirvish-mode-map
-  "?" 'dirvish-dispatch
-  "q" 'dirvish-quit
-  "b" 'dirvish-quick-access
-  "f" 'dirvish-file-info-menu
-  "p" 'dirvish-yank
-  "S" 'dirvish-quicksort
-  "F" 'dirvish-layout-toggle
-  "z" 'zoxide-travel
-  "j" 'dirvish-next-file
-  "k" 'dirvish-prev-file
-  "gh" 'dirvish-subtree-up
-  "gl" 'dirvish-subtree-toggle
-  "h" 'dired-up-directory
-  "l" 'dired-find-file
-  "TAB" 'dirvish-subtree-toggle
-  "[h" 'dirvish-history-go-backward
-  "]h" 'dirvish-history-go-forward)
-
-(general-def '(normal visual) dirvish-mode-map
-  :prefix "y"
-  "l" 'dirvish-copy-file-true-path
-  "n" 'dirvish-copy-file-name
-  "p" 'dirvish-copy-file-path
-  "y" 'dired-do-copy)
-
-(general-def 'normal dirvish-mode-map
-  :prefix "s"
-  "s" 'dirvish-symlink
-  "S" 'dirvish-relative-symlink
-  "h" 'dirvish-hardlink)
-
 (defun my/dirvish-copy-to-clipboard (&rest _)
   (my/send-to-clipboard (car kill-ring)))
+
+(setq my/dirvish-yank-map (make-sparse-keymap)
+      my/dirvish-symlink-map (make-sparse-keymap))
+(keymap-set my/dirvish-yank-map "l" #'dirvish-copy-file-true-path)
+(keymap-set my/dirvish-yank-map "n" #'dirvish-copy-file-name)
+(keymap-set my/dirvish-yank-map "p" #'dirvish-copy-file-path)
+(keymap-set my/dirvish-yank-map "y" #'dired-do-copy)
+(keymap-set my/dirvish-symlink-map "s" #'dirvish-symlink)
+(keymap-set my/dirvish-symlink-map "S" #'dirvish-relative-symlink)
+(keymap-set my/dirvish-symlink-map "h" #'dirvish-hardlink)
+
+(with-eval-after-load 'dirvish
+  (evil-define-key 'normal dirvish-mode-map
+    (kbd "?") #'dirvish-dispatch
+    (kbd "q") #'dirvish-quit
+    (kbd "b") #'dirvish-quick-access
+    (kbd "f") #'dirvish-file-info-menu
+    (kbd "p") #'dirvish-yank
+    (kbd "S") #'dirvish-quicksort
+    (kbd "F") #'dirvish-layout-toggle
+    (kbd "z") #'zoxide-travel
+    (kbd "j") #'dirvish-next-file
+    (kbd "k") #'dirvish-prev-file
+    (kbd "g h") #'dirvish-subtree-up
+    (kbd "g l") #'dirvish-subtree-toggle
+    (kbd "h") #'dired-up-directory
+    (kbd "l") #'dired-find-file
+    (kbd "TAB") #'dirvish-subtree-toggle
+    (kbd "[ h") #'dirvish-history-go-backward
+    (kbd "] h") #'dirvish-history-go-forward
+    (kbd "s") my/dirvish-symlink-map)
+  (evil-define-key '(normal visual) dirvish-mode-map
+    (kbd "y") my/dirvish-yank-map))
 
 (dolist (fn '(dirvish-copy-file-path
               dirvish-copy-file-name
               dirvish-copy-file-true-path))
   (advice-add fn :after #'my/dirvish-copy-to-clipboard))
+
+(with-eval-after-load 'elfeed
+  (evil-define-key '(normal visual) elfeed-search-mode-map
+    (kbd "f") #'link-hint-open-link
+    (kbd "F") #'link-hint-copy-link))
+
+(with-eval-after-load 'elfeed
+  (evil-define-key '(normal visual) elfeed-show-mode-map
+    (kbd "f") #'link-hint-open-link
+    (kbd "F") #'link-hint-copy-link))
+
+(with-eval-after-load 'erc
+  (evil-set-initial-state 'erc-mode 'normal)
+  (evil-define-key 'normal erc-mode-map
+    (kbd "q") #'quit-window
+    (kbd "Q") #'my/erc-quit-all
+    (kbd "g b") #'my/erc-switch-channel
+    (kbd "g n") #'erc-track-switch-buffer
+    (kbd "g H") #'my/erc-fetch-history
+    (kbd "g o") #'erc-channel-names
+    (kbd "g j") #'erc-join-channel
+    (kbd "g l") #'my/erc-list-channels
+    (kbd "g r") #'my/erc-reconnect
+    (kbd "RET") #'erc-send-current-line)
+  (evil-define-key '(normal insert) erc-mode-map
+    (kbd "M-n") #'erc-track-switch-buffer
+    (kbd "C-k") #'erc-previous-command
+    (kbd "C-j") #'erc-next-command))
 
 (defun my/eshell-clear ()
   (interactive)
@@ -3769,33 +3751,138 @@ date) and the dired header are never skipped."
   (interactive)
   (eshell-atuin-history))
 
+(defun my/setup-eshell-bindings ()
+  "Apply native and Evil bindings to `eshell-mode-map'."
+  (keymap-set eshell-mode-map "C-l" #'my/eshell-clear)
+  (keymap-set eshell-mode-map "C-r" #'my/atuin-history)
+  (evil-define-key '(normal insert) eshell-mode-map
+    (kbd "C-r") #'my/atuin-history
+    (kbd "C-l") #'my/eshell-clear))
+
+(defun my/eshell-bindings-after-evil-collection (mode _maps &rest _)
+  "Reapply Eshell bindings after Evil Collection configures MODE."
+  (when (eq mode 'eshell)
+    (my/setup-eshell-bindings)))
+
 (with-eval-after-load 'eshell
-  (add-hook 'eshell-mode-hook
-            (lambda ()
-              (local-set-key (kbd "C-l") 'my/eshell-clear)
-              (local-set-key (kbd "C-r") 'my/atuin-history))))
+  (my/setup-eshell-bindings))
+(add-hook 'evil-collection-setup-hook
+          #'my/eshell-bindings-after-evil-collection)
 
-(with-eval-after-load 'evil
-  (with-eval-after-load 'eshell
-    (evil-define-key '(normal insert) eshell-mode-map
-      (kbd "C-r") 'my/atuin-history
-      (kbd "C-l") 'my/eshell-clear)))
+(defvar my/eww-local-leader-map (make-sparse-keymap))
+(setq my/eww-local-leader-map (make-sparse-keymap))
+(set-keymap-parent my/eww-local-leader-map my/local-leader-map)
+(keymap-set my/eww-local-leader-map "B" #'eww-add-bookmark)
+(keymap-set my/eww-local-leader-map "r" #'eww-readable)
+(keymap-set my/eww-local-leader-map "i" #'my/eww-toggle-images)
+(keymap-set my/eww-local-leader-map "y" #'my/eww-copy-as-org)
+(keymap-set my/eww-local-leader-map "d" #'eww-download)
 
-(my-local-leader
-  "a" '(org-agenda :wk "org agenda")
-  "c" '(my/centered-cursor :wk "center cursor")
-  "f" '(dirvish :wk "file manager")
-  "m" '(mu4e :wk "mu4e")
-  "i" '(clatter :wk "irc")
-  "r" '(async-shell-command :wk "run async")
-  "t" '(ghostel-project :wk "terminal (project)")
-  "T" '(ghostel-list-buffers :wk "terminal (switch)")
-  "z" '(golden-ratio-mode :wk "zoom/golden ratio")
-  "o" '(my/global-olivetti-mode :wk "center buffer")
-  "s" '(my-org-sidecar-left :wk "org sidecar"))
+(with-eval-after-load 'eww
+  (evil-define-key '(normal visual) eww-mode-map
+    (kbd ",") my/eww-local-leader-map
+    (kbd "f") #'link-hint-open-link
+    (kbd "F") #'link-hint-copy-link))
 
-(global-set-key (kbd "C-=") 'text-scale-increase)
-(global-set-key (kbd "C--") 'text-scale-decrease)
+(with-eval-after-load 'ghostel
+  (evil-define-key 'normal ghostel-mode-map
+    (kbd "g t") #'ghostel-next
+    (kbd "g T") #'ghostel-previous
+    (kbd "g n") #'ghostel
+    (kbd "g b") #'ghostel-list-buffers))
+
+(with-eval-after-load 'helm
+  (keymap-set helm-map "C-j" #'helm-next-line)
+  (keymap-set helm-map "C-k" #'helm-previous-line))
+
+(evil-set-initial-state 'help-mode 'emacs)
+
+(evil-set-initial-state 'ibuffer-mode 'normal)
+
+(evil-set-initial-state 'messages-buffer-mode 'normal)
+
+(defvar my/org-leader-map (make-sparse-keymap))
+(defvar my/org-command-map (make-sparse-keymap))
+(defvar my/org-set-map (make-sparse-keymap))
+(defvar my/org-link-map (make-sparse-keymap))
+
+(setq my/org-leader-map (make-sparse-keymap)
+      my/org-command-map (make-sparse-keymap)
+      my/org-set-map (make-sparse-keymap)
+      my/org-link-map (make-sparse-keymap))
+(set-keymap-parent my/org-leader-map my/leader-map)
+(keymap-set my/org-leader-map "m" my/org-command-map)
+(keymap-set my/org-command-map "t" #'org-todo)
+(keymap-set my/org-command-map "a" #'org-add-note)
+(keymap-set my/org-command-map "C" #'org-capture)
+(keymap-set my/org-command-map "f" #'org-fmt-buffer)
+(keymap-set my/org-command-map "k" #'kitty-graphics-org-heading-sizes)
+(keymap-set my/org-command-map "c" my/org-set-map)
+(keymap-set my/org-set-map "d" #'org-deadline)
+(keymap-set my/org-set-map "s" #'org-schedule)
+(keymap-set my/org-set-map "e" #'org-set-effort)
+(keymap-set my/org-set-map "r" #'org-clock-report)
+(keymap-set my/org-command-map "," #'org-priority)
+(keymap-set my/org-command-map "I" #'org-clock-in)
+(keymap-set my/org-command-map "O" #'org-clock-out)
+(keymap-set my/org-leader-map "l" my/org-link-map)
+(keymap-set my/org-link-map "c" #'org-cliplink)
+(keymap-set my/org-link-map "i" #'org-download-clipboard)
+(keymap-set my/org-link-map "l" #'org-insert-link)
+(keymap-set my/org-leader-map "n" #'org-toggle-narrow-to-subtree)
+
+(with-eval-after-load 'org
+  (keymap-set org-mode-map "C-c e" #'my/org-set-effort-from-complexity)
+  (keymap-set org-mode-map "C-c C-x C-i" #'org-clock-in)
+  (keymap-set org-mode-map "C-c C-x C-o" #'org-clock-out)
+  (evil-define-key '(normal visual) org-mode-map
+    (kbd "SPC") my/org-leader-map)
+  (evil-define-key 'insert org-mode-map
+    (kbd "M-SPC") my/org-leader-map
+    (kbd "TAB") #'indent-for-tab-command)
+  (evil-define-key 'normal org-mode-map
+    (kbd "RET") #'org-open-at-point))
+
+(with-eval-after-load 'which-key
+  (which-key-add-keymap-based-replacements
+    my/org-leader-map "m" "org" "l" "link")
+  (which-key-add-keymap-based-replacements
+    my/org-command-map "c" "set"))
+
+(with-eval-after-load 'pass
+  (evil-define-key 'normal pass-mode-map
+    (kbd "q") #'quit-window
+    (kbd "j") #'pass-next-entry
+    (kbd "k") #'pass-prev-entry
+    (kbd "RET") #'pass-view
+    (kbd "d") #'pass-kill
+    (kbd "y") #'pass-copy
+    (kbd "Y") #'pass-copy-field
+    (kbd "e") #'pass-edit
+    (kbd "a") #'pass-insert
+    (kbd "G") #'pass-insert-generated
+    (kbd "o") #'pass-otp-options
+    (kbd "r") #'pass-rename
+    (kbd "/") #'isearch-forward))
+
+(with-eval-after-load 'pass
+  (evil-define-key 'normal pass-view-mode-map
+    (kbd "q") #'quit-window
+    (kbd "t") #'pass-view-toggle-password
+    (kbd "y") #'pass-copy
+    (kbd "Y") #'pass-copy-field))
+
+(with-eval-after-load 'persp-mode
+  (define-key persp-mode-map [remap delete-window]
+              #'my/workspace-close-window-or-workspace)
+  (define-key persp-mode-map [remap evil-window-delete]
+              #'my/workspace-close-window-or-workspace))
+
+(with-eval-after-load 'smerge-mode
+  (keymap-set smerge-mode-map "C-c ^ u" #'smerge-keep-upper)
+  (keymap-set smerge-mode-map "C-c ^ l" #'smerge-keep-lower)
+  (keymap-set smerge-mode-map "C-c ^ n" #'smerge-next)
+  (keymap-set smerge-mode-map "C-c ^ p" #'smerge-previous))
 
 (use-package elfeed
   :ensure (:host github :repo "emacs-elfeed/elfeed" :branch "main")
@@ -3924,16 +4011,7 @@ reset is unnecessary, so do the handler resolution ourselves and skip
                 shr-max-image-proportion 0.6
                 shr-width nil
                 shr-cookie-policy nil)
-  (make-directory eww-bookmarks-directory t)
-
-  (with-eval-after-load 'general
-    (my-local-leader
-      :keymaps 'eww-mode-map
-      "B" '(eww-add-bookmark :wk "add bookmark")
-      "r" '(eww-readable :wk "reader mode")
-      "i" '(my/eww-toggle-images :wk "toggle images")
-      "y" '(my/eww-copy-as-org :wk "copy page as org")
-      "d" '(eww-download :wk "download"))))
+  (make-directory eww-bookmarks-directory t))
 
 (defun my/eww-new-buffer (url)
   "Open URL in a fresh eww buffer (keep current)."
@@ -3979,12 +4057,6 @@ reset is unnecessary, so do the handler resolution ourselves and skip
 (use-package link-hint
   :ensure t
   :commands (link-hint-open-link link-hint-copy-link))
-
-(with-eval-after-load 'general
-  (general-def :states '(normal visual)
-    :keymaps '(eww-mode-map elfeed-show-mode-map elfeed-search-mode-map)
-    "f" #'link-hint-open-link
-    "F" #'link-hint-copy-link))
 
 (use-package mu4e
   :ensure nil
@@ -4182,11 +4254,6 @@ opening another file in same project does not re-notify."
   (ghostel-compile-global-mode 1)
   (setq-default window-adjust-process-window-size-function
                 #'window-adjust-process-window-size-largest)
-  (evil-define-key 'normal ghostel-mode-map
-    (kbd "g t") #'ghostel-next
-    (kbd "g T") #'ghostel-previous
-    (kbd "g n") #'ghostel
-    (kbd "g b") #'ghostel-list-buffers)
   (defun my/ghostel-transparent-buffer-face (fg _bg)
     (unless (equal fg ghostel--face-cookie-fg-bg)
       (when ghostel--face-cookie
@@ -4216,36 +4283,45 @@ opening another file in same project does not re-notify."
   (inheritenv-add-advice 'ghostel-compile)
   (inheritenv-add-advice 'ghostel-recompile))
 
-(when-let* ((garden-dir (expand-file-name
-                         (or (alist-get 'garden my/local-packages) "~/garden")))
-            ((file-directory-p garden-dir)))
-  (use-package vui
-    :ensure (:host github :repo "d12frosted/vui.el" :files ("*.el")))
-
-  (add-to-list 'load-path (expand-file-name "lisp/" garden-dir))
-  (setq garden-directory (file-name-as-directory garden-dir))
-  (require 'garden-core)
+(use-package garden-core
+  :ensure nil
+  :demand t
+  :custom
+  (garden-directory (file-name-as-directory (expand-file-name "~/garden")))
+  :config
   (garden-auto-index-mode 1)
-  (autoload 'garden "garden-dashboard" nil t)
-  (autoload 'garden-sidecar "garden-dashboard" nil t)
-  (autoload 'garden-search "garden-dashboard" nil t)
-  (autoload 'garden-fleet "garden-fleet" nil t)
-  (autoload 'garden-connect "garden-connect" nil t)
-  (autoload 'garden-connect-pick "garden-connect" nil t)
-  (autoload 'garden-publish "garden-publish" nil t)
-  (autoload 'garden-publish-all "garden-publish" nil t)
-  (autoload 'garden-publish-wiki "garden-publish" nil t)
-  (autoload 'garden-publish-blog "garden-publish" nil t)
-  (autoload 'garden-publish-deploy "garden-publish" nil t)
-  (autoload 'denote-capf-setup "denote-capf" nil t)
-  (with-eval-after-load 'denote-capf
-    (setq denote-capf-directories '("~/org/")))
-  (add-hook 'org-mode-hook #'denote-capf-setup)
+)
 
-  (defun my/denote-capf-tab-in-insert ()
-    (when (featurep 'evil)
-      (evil-local-set-key 'insert (kbd "TAB") #'indent-for-tab-command)))
-  (add-hook 'org-mode-hook #'my/denote-capf-tab-in-insert))
+(use-package garden-dashboard
+  :ensure nil
+  :commands (garden garden-sidecar garden-search garden-search-text
+             garden-visit-random garden-reclassify-tag))
+
+(use-package garden-fleet
+  :ensure nil
+  :commands (garden-fleet garden-fleet-import-all))
+
+(use-package garden-connect
+  :ensure nil
+  :commands (garden-connect garden-connect-pick garden-connect-all))
+
+(use-package garden-publish
+  :ensure nil
+  :commands (garden-publish garden-publish-one garden-publish-all
+             garden-publish-wiki garden-publish-blog garden-publish-pages
+             garden-publish-deploy))
+
+(use-package garden-links
+  :ensure nil
+  :commands (garden-insert-denote-links garden-update-denote-links))
+
+(use-package denote-capf
+  :ensure nil
+  :commands (denote-capf-setup denote-capf-teardown denote-capf-refresh)
+  :custom
+  (denote-capf-directories '("~/org/"))
+  :hook
+  (org-mode . denote-capf-setup))
 
 (use-package sops
   :ensure (:type git :host github :repo "djgoku/sops")
@@ -4357,12 +4433,7 @@ opening another file in same project does not re-notify."
 
 (use-package rsync-ui
   :ensure nil
-  :commands (rsync-ui rsync-ui-dired)
-  :bind (:map dired-mode-map
-              ("C-c r" . rsync-ui-dired))
-  :init
-  (with-eval-after-load 'general
-    (my-leader "or" '(rsync-ui :wk "rsync"))))
+  :commands (rsync-ui rsync-ui-dired))
 
 (defun rlr/org-export-html-to-browser ()
   "Export the current Org buffer to a temporary HTML file in the system temp directory, open it, and then delete it when Emacs is killed."
@@ -4476,6 +4547,63 @@ opening another file in same project does not re-notify."
   (with-eval-after-load 'org
     (require 'clatter-org)
     (clatter-org-setup)))
+
+(defvar my/bluesky-feeds
+  '(("❄ Nix and NixOS · @alesya.social"
+     . "at://did:plc:s44h5nbko454vhpa3oyza5lf/app.bsky.feed.generator/aaah6ge3eqpck")
+    ("λ Emacs · @spathi.bsky.social"
+     . "at://did:plc:f6p7kxtbvmsujg67gayjux7m/app.bsky.feed.generator/aaabl5c2jmqaw"))
+  "Named custom feeds offered by `my/bluesky-feed'.")
+
+(defun my/bluesky-feed ()
+  "Select and open one of `my/bluesky-feeds' with Helm."
+  (interactive)
+  (require 'helm)
+  (bluesky-feed
+   (helm-comp-read "Feed: " my/bluesky-feeds
+                   :alistp t
+                   :buffer "*helm bluesky feeds*"
+                   :fuzzy t
+                   :must-match t
+                   :name "🦋 Bluesky feeds")))
+
+(use-package bluesky
+  :ensure (:host github :repo "ahyatt/emacs-bluesky")
+  :commands (bluesky
+             bluesky-author
+             bluesky-search
+             bluesky-tag
+             bluesky-feed
+             bluesky-notifications
+             bluesky-likes
+             bluesky-replies)
+  :config
+  (require 'password-store)
+
+  ;; Feed, thread, search, author, and notification buffers all use
+  ;; `bluesky-mode'; composers use `bluesky-post-mode'.
+  (with-eval-after-load 'evil
+    (evil-set-initial-state 'bluesky-mode 'emacs)
+    (evil-set-initial-state 'bluesky-post-mode 'emacs))
+
+  ;; Thread views are opened with `pop-to-buffer', so quitting the window
+  ;; naturally reveals the timeline that was underneath.
+  (keymap-set bluesky-mode-map "q" #'quit-window)
+
+  (defun my/bluesky-password-store-auth
+      (orig callback &optional username password host discard-result)
+    "Authenticate Bluesky with the password-store entry `bsky.app'."
+    (funcall orig
+             callback
+             (or username (password-store-get-field "bsky.app" "username"))
+             (or password (password-store-get "bsky.app"))
+             host
+             discard-result))
+
+  (unless (advice-member-p #'my/bluesky-password-store-auth
+                           #'bluesky--authenticate)
+    (advice-add 'bluesky--authenticate
+                :around #'my/bluesky-password-store-auth)))
 
 (use-package org-other-agenda
   :ensure (:host github

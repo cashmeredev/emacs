@@ -82,6 +82,20 @@ Same plist shape as documented there."
    ((>= (or percent 0) 75) 'warning)
    (t 'success)))
 
+(defun zfs-ui--window-width ()
+  "Return the live ZFS window body width."
+  (if-let* ((window (get-buffer-window (current-buffer) t)))
+      (window-body-width window)
+    (window-width)))
+
+(defun zfs-ui--stat-card (label value face width)
+  "Render a ZFS stat card with LABEL, VALUE, FACE, and WIDTH."
+  (vui-vstack
+   :face 'fringe
+   (vui-box (vui-text value :face `(:inherit ,face :weight bold :height 1.25))
+            :width width :align :center)
+   (vui-box (vui-text label :face 'shadow) :width width :align :center)))
+
 (defun zfs--direct-children (datasets parent)
   (let ((prefix (concat parent "/")))
     (seq-filter (lambda (entry)
@@ -344,7 +358,8 @@ Same plist shape as documented there."
   (cadr (assoc mode zfs-ui--copy-modes)))
 
 (defun zfs-ui--copy-preview-line (line)
-  (truncate-string-to-width line (max 24 (min 76 (- (window-width) 4))) nil nil "…"))
+  "Return LINE unchanged; the VUI container owns visual truncation."
+  line)
 
 (defun zfs-ui--copy-preview (output)
   (let* ((lines (mapcar #'string-trim (split-string (or output "") "\n")))
@@ -467,25 +482,23 @@ Same plist shape as documented there."
 (defun zfs-ui--dataset-row (entry depth snap-count)
   (let* ((name (car entry))
          (short (file-name-nondirectory name))
-         (label (concat (make-string (* 2 depth) ?\s)
-                        (if (> snap-count 0) "▸ " "  ")
+         (label (concat (if (> snap-count 0) "▸ " "")
                         short
                         (when (> snap-count 0) (format " (%d)" snap-count))))
          (encryption (zfs-cli-prop entry 'encryption))
          (keystatus (zfs-cli-prop entry 'keystatus)))
-    (vui-hstack
-     (vui-box (vui-button (truncate-string-to-width label 32) :no-decoration t
-                          :key (concat "ds:" name)
-                          :on-click (lambda () (zfs-ui--go 'dataset name)))
-              :width 34)
-     (vui-box (vui-text (zfs--format-bytes (zfs-cli-prop entry 'used))) :width 9)
-     (vui-box (vui-text (zfs--format-bytes (zfs-cli-prop entry 'available)) :face 'shadow) :width 9)
-     (vui-box (vui-text (format "%s" (or (zfs-cli-prop entry 'compressratio) "-")) :face 'shadow) :width 7)
-     (vui-box (cond
-               ((or (null encryption) (equal encryption "off")) (vui-text "·" :face 'shadow))
-               ((equal keystatus "available") (vui-text "🔓" :face 'success))
-               (t (vui-text "🔒" :face 'warning)))
-              :width 4))))
+    (list
+     (vui-vstack
+      :indent (* 2 depth)
+      (vui-button label :no-decoration t :key (concat "ds:" name)
+                  :on-click (lambda () (zfs-ui--go 'dataset name))))
+     (vui-text (zfs--format-bytes (zfs-cli-prop entry 'used)))
+     (vui-text (zfs--format-bytes (zfs-cli-prop entry 'available)) :face 'shadow)
+     (vui-text (format "%s" (or (zfs-cli-prop entry 'compressratio) "-")) :face 'shadow)
+     (cond
+      ((or (null encryption) (equal encryption "off")) (vui-text "·" :face 'shadow))
+      ((equal keystatus "available") (vui-text "🔓" :face 'success))
+      (t (vui-text "🔒" :face 'warning))))))
 
 (defun zfs-ui--dataset-rows (entry depth datasets snaps)
   (let* ((name (car entry))
@@ -510,19 +523,13 @@ Same plist shape as documented there."
                 (list :open (vui-with-async-context (zfs-ui--go 'pool name))
                       :create-child (vui-with-async-context (zfs-ui--go 'create name))))
           zfs-ui--row-actions)
-    (vui-hstack
-     :spacing 1
-     (vui-box (vui-button name :no-decoration t
-                          :key (concat "pool:" name)
-                          :on-click (lambda () (zfs-ui--go 'pool name)))
-              :width 10)
-     (vui-box (vui-text (or health "?") :face (zfs--health-face health)) :width 9)
-     (vui-box (vui-text (zfs--gauge capacity)
-                        :face (zfs--capacity-face capacity))
-              :width 22)
-     (vui-text (format "%d%% · %s free of %s"
-                       (or capacity 0)
-                       (zfs--format-bytes free)
+    (list
+     (vui-button name :no-decoration t :key (concat "pool:" name)
+                 :on-click (lambda () (zfs-ui--go 'pool name)))
+     (vui-text (or health "?") :face (zfs--health-face health))
+     (vui-text (zfs--gauge capacity) :face (zfs--capacity-face capacity))
+     (vui-text (format "%d%% · %s / %s free"
+                       (or capacity 0) (zfs--format-bytes free)
                        (zfs--format-bytes size))
                :face 'shadow))))
 
@@ -538,18 +545,15 @@ Same plist shape as documented there."
                       (list :import (vui-with-async-context (zfs-ui--do-import device))))
                   (list :unlock (vui-with-async-context (zfs-ui--do-unlock device)))))
           zfs-ui--row-actions)
-    (vui-hstack
-     :spacing 1
-     (vui-box (vui-text (if unlocked "🔓" "🔒") :face (if unlocked 'warning 'shadow)) :width 3)
-     (vui-box (vui-button name :no-decoration t
-                          :key (concat "lock:" name)
-                          :on-click (lambda () nil))
-              :width 10)
-     (vui-box (vui-text (or (plist-get device :model) "?") :face 'shadow) :width 24)
-     (vui-box (vui-text (zfs--format-bytes (plist-get device :size)) :face 'shadow) :width 8)
+    (list
+     (vui-text (if unlocked "🔓" "🔒") :face (if unlocked 'warning 'shadow))
+     (vui-button name :no-decoration t :key (concat "lock:" name)
+                 :on-click (lambda () nil))
+     (vui-text (or (plist-get device :model) "?") :face 'shadow)
+     (vui-text (zfs--format-bytes (plist-get device :size)) :face 'shadow)
      (vui-text (cond
                 (imported (format "pool %s imported" pool))
-                (unlocked (format "unlocked as %s · i imports pool %s" mapper (or pool "?")))
+                (unlocked (format "unlocked as %s · i imports %s" mapper (or pool "?")))
                 (t "locked · u unlock"))
                :face 'shadow))))
 
@@ -559,53 +563,73 @@ Same plist shape as documented there."
                     :admin (vui-with-async-context (zfs-ui--go 'admin))
                     :targets (vui-with-async-context (zfs-ui--go 'targets))))
         zfs-ui--row-actions)
-  (let ((roots (seq-filter (lambda (entry) (not (string-match-p "/" (car entry)))) datasets)))
-    (apply
-     #'vui-vstack
+  (let* ((roots (seq-filter (lambda (entry)
+                              (not (string-match-p "/" (car entry))))
+                            datasets))
+         (width (zfs-ui--window-width))
+         (card-width (max 10 (min 16 (/ (max 44 (- width 6)) 4))))
+         (name-width (max 18 (min 36 (- width 37)))))
+    (vui-vstack
      :spacing 1
-     (append
-      (when locked
-        (list (vui-vstack
-               :spacing 0
-               (vui-heading-3 "Disks")
-               (vui-muted "LUKS disks ZFS can use once unlocked")
-               (apply #'vui-vstack :spacing 0
-                      (mapcar (lambda (device) (zfs-ui--locked-disk-row device pools)) locked)))))
-      (list
+     (vui-hstack
+      :spacing 2
+      (zfs-ui--stat-card "pools" (number-to-string (length pools)) 'success card-width)
+      (zfs-ui--stat-card "datasets" (number-to-string (length datasets)) 'link card-width)
+      (zfs-ui--stat-card "snapshots" (number-to-string (length snaps)) 'warning card-width)
+      (zfs-ui--stat-card "locked disks" (number-to-string (length locked))
+                         (if locked 'warning 'shadow) card-width))
+     (vui-vstack
+      :spacing 0
+      (vui-heading-3 "Utilities")
+      (vui-hstack
+       :spacing 2
+       (vui-button "Copy files" :face 'success
+                   :on-click (lambda () (zfs-ui--go 'copy)))
+       (vui-button "Admin actions" :face 'warning
+                   :on-click (lambda () (zfs-ui--go 'admin)))
+       (vui-button "Backup targets" :on-click (lambda () (zfs-ui--go 'targets)))))
+     (when locked
        (vui-vstack
         :spacing 0
-        (vui-heading-3 "Utilities")
-        (vui-hstack
-         :spacing 2
-         (vui-box (vui-text "C" :face 'success) :width 3)
-         (vui-button "Copy files" :no-decoration t :face 'success
-                     :on-click (lambda () (zfs-ui--go 'copy)))
-         (vui-text "dry-run, copy, or move paths with rsync" :face 'shadow))
-        (vui-hstack
-         :spacing 2
-         (vui-box (vui-text "A" :face 'warning) :width 3)
-         (vui-button "Admin actions" :no-decoration t :face 'warning
-                     :on-click (lambda () (zfs-ui--go 'admin)))
-         (vui-text "ack-gated export and format tools" :face 'shadow)))
-       (vui-vstack
-        :spacing 0
-        (vui-heading-3 "Pools")
-        (vui-muted "teams of disks; datasets live inside them · RET details")
-        (if pools
-            (apply #'vui-vstack :spacing 0 (mapcar #'zfs-ui--pool-row pools))
-          (vui-muted "No pools found. Kernel module loaded, pools imported?")))
-       (vui-vstack
-        :spacing 0
-        (vui-heading-3 "Datasets")
-        (vui-muted "named drawers · RET details · b backup · c new dataset inside")
-        (vui-hstack
-         (vui-box (vui-text "NAME" :face 'shadow) :width 34)
-         (vui-box (vui-text "USED" :face 'shadow) :width 9)
-         (vui-box (vui-text "AVAIL" :face 'shadow) :width 9)
-         (vui-box (vui-text "RATIO" :face 'shadow) :width 7)
-         (vui-box (vui-text "ENC" :face 'shadow) :width 4))
-        (apply #'vui-vstack :spacing 0
-               (mapcan (lambda (root) (zfs-ui--dataset-rows root 0 datasets snaps)) roots))))))))
+        (vui-heading-3 "Disks")
+        (vui-muted "LUKS disks ZFS can use once unlocked")
+        (vui-table
+         :sticky-header t
+         :columns '((:header "" :width 3)
+                    (:header "Device" :width 12 :truncate t)
+                    (:header "Model" :width 24 :grow t :truncate t)
+                    (:header "Size" :width 9 :align :right)
+                    (:header "State" :width 26 :grow t :truncate t))
+         :rows (mapcar (lambda (device)
+                         (zfs-ui--locked-disk-row device pools))
+                       locked))))
+     (vui-vstack
+      :spacing 0
+      (vui-heading-3 "Pools")
+      (vui-muted "Teams of disks; RET opens health and VDEV details")
+      (if pools
+          (vui-table
+           :sticky-header t
+           :columns '((:header "Pool" :width 12 :grow t :truncate t)
+                      (:header "Health" :width 9)
+                      (:header "Capacity" :width 20)
+                      (:header "Space" :width 26 :grow t :truncate t))
+           :rows (mapcar #'zfs-ui--pool-row pools))
+        (vui-muted "No pools found. Kernel module loaded, pools imported?")))
+     (vui-vstack
+      :spacing 0
+      (vui-heading-3 "Datasets")
+      (vui-muted "RET details · b backup · c create child")
+      (vui-table
+       :sticky-header t
+       :columns `((:header "Dataset" :width ,name-width :grow t :truncate t)
+                  (:header "Used" :width 9 :align :right)
+                  (:header "Available" :width 9 :align :right)
+                  (:header "Ratio" :width 7 :align :right)
+                  (:header "Enc" :width 4 :align :center))
+       :rows (mapcan (lambda (root)
+                       (zfs-ui--dataset-rows root 0 datasets snaps))
+                     roots))))))
 
 (defun zfs-ui--property-row (entry property)
   (let* ((raw (zfs-cli-prop entry (intern property)))
@@ -617,10 +641,9 @@ Same plist shape as documented there."
                  ((numberp raw) (zfs--format-bytes raw))
                  (t (format "%s" (or raw "-")))))
          (gloss (cdr (assoc property zfs-ui--property-glossary))))
-    (vui-hstack
-     (vui-box (vui-text property :face 'shadow) :width 18)
-     (vui-box (vui-text value) :width 22)
-     (vui-text (or gloss "") :face 'shadow))))
+    (list (vui-text property :face 'shadow)
+          (vui-text value)
+          (vui-text (or gloss "") :face 'shadow))))
 
 (defun zfs-ui--snapshot-row (snap dataset host)
   (let* ((full-name (car snap))
@@ -630,12 +653,10 @@ Same plist shape as documented there."
                       :rollback (vui-with-async-context (zfs-ui--go 'rollback full-name))
                       :backup (vui-with-async-context (zfs-ui--go 'backup (cons dataset full-name)))))
           zfs-ui--row-actions)
-    (vui-hstack
-     (vui-box (vui-button (concat "@" leaf) :no-decoration t :face 'shadow
-                          :key (concat "snap:" full-name)
-                          :on-click (lambda () nil))
-              :width 38)
-     (vui-box (vui-text (zfs--format-bytes (zfs-cli-prop snap 'used)) :face 'shadow) :width 9)
+    (list
+     (vui-button (concat "@" leaf) :no-decoration t :face 'shadow
+                 :key (concat "snap:" full-name) :on-click (lambda () nil))
+     (vui-text (zfs--format-bytes (zfs-cli-prop snap 'used)) :face 'shadow)
      (vui-text (zfs--format-ago (zfs-cli-prop snap 'creation)) :face 'shadow))))
 
 (defun zfs-ui--page-dataset (name host datasets snaps)
@@ -661,8 +682,12 @@ Same plist shape as documented there."
          (vui-muted (format "Everything in this dataset and its snapshots uses %s."
                             (zfs--format-bytes (zfs-cli-prop entry 'used))))
          (vui-text "s snapshot · b backup · c new dataset inside · m mount" :face 'shadow)
-         (apply #'vui-vstack :spacing 0
-                (mapcar (lambda (property) (zfs-ui--property-row entry property))
+         (vui-table
+          :sticky-header t
+          :columns '((:header "Property" :width 18 :truncate t)
+                     (:header "Value" :width 22 :grow t :truncate t)
+                     (:header "Meaning" :width 48 :grow t :truncate t))
+          :rows (mapcar (lambda (property) (zfs-ui--property-row entry property))
                         '("used" "referenced" "usedbysnapshots" "usedbychildren" "available"
                           "compressratio" "encryption" "keystatus" "mountpoint" "recordsize"
                           "quota" "creation" "mounted"))))
@@ -674,16 +699,21 @@ Same plist shape as documented there."
            (list (vui-heading-3 (format "Snapshots (%d)" (length own-snaps)))
                  (vui-muted "frozen moments · d diff · b backup · R rollback opens an ack page"))
            (if own-snaps
-               (mapcar (lambda (snap) (zfs-ui--snapshot-row snap name host)) own-snaps)
+               (list
+                (vui-table
+                 :sticky-header t
+                 :columns '((:header "Snapshot" :width 38 :grow t :truncate t)
+                            (:header "Used" :width 9 :align :right)
+                            (:header "Age" :width 12))
+                 :rows (mapcar (lambda (snap) (zfs-ui--snapshot-row snap name host)) own-snaps)))
              (list (vui-muted "none yet — press s to freeze this moment")))))))))))
 
 (defun zfs-ui--vdev-row (vdev depth)
-  (vui-hstack
-   (vui-box (vui-text (concat (make-string (* 2 depth) ?\s) (plist-get vdev :name))) :width 40)
-   (vui-box (vui-text (or (plist-get vdev :state) "?")
-                      :face (zfs--health-face (plist-get vdev :state)))
-            :width 9)
-   (vui-text (format "%s/%s/%s errors"
+  (list
+   (vui-vstack :indent (* 2 depth) (vui-text (plist-get vdev :name)))
+   (vui-text (or (plist-get vdev :state) "?")
+             :face (zfs--health-face (plist-get vdev :state)))
+   (vui-text (format "%s/%s/%s"
                      (or (plist-get vdev :read-errors) 0)
                      (or (plist-get vdev :write-errors) 0)
                      (or (plist-get vdev :checksum-errors) 0))
@@ -719,8 +749,12 @@ Same plist shape as documented there."
          (vui-vstack
           :spacing 0
           (vui-heading-3 "Devices")
-          (apply #'vui-vstack :spacing 0
-                 (mapcar (lambda (vdev) (zfs-ui--vdev-row vdev 0)) vdevs))))))))
+          (vui-table
+           :sticky-header t
+           :columns '((:header "VDEV" :width 40 :grow t :truncate t)
+                      (:header "State" :width 9)
+                      (:header "Read/Write/Checksum" :width 20 :align :right))
+           :rows (mapcar (lambda (vdev) (zfs-ui--vdev-row vdev 0)) vdevs))))))))
 
 (defun zfs-ui--form-row (label content &optional gloss)
   (vui-hstack
@@ -1078,16 +1112,19 @@ Same plist shape as documented there."
      (vui-heading-3 "Backup targets")
      (vui-muted (format "Stored as plain elisp data in %s — edit by hand or here." zfs-targets-file)))
     (if targets
-        (list (apply
-               #'vui-vstack
-               :spacing 0
-               (mapcar (lambda (target)
-                         (vui-hstack
-                          :spacing 2
-                          (vui-box (vui-text (plist-get target :name)) :width 16)
-                          (vui-box (vui-text (or (plist-get target :ssh) "this machine") :face 'shadow) :width 24)
-                          (vui-text (plist-get target :dataset) :face 'shadow)))
-                       targets)))
+        (list
+         (vui-table
+          :sticky-header t
+          :columns '((:header "Name" :width 16 :grow t :truncate t)
+                     (:header "Host" :width 24 :grow t :truncate t)
+                     (:header "Dataset prefix" :width 32 :grow t :truncate t))
+          :rows (mapcar (lambda (target)
+                          (list
+                           (vui-text (plist-get target :name))
+                           (vui-text (or (plist-get target :ssh) "this machine")
+                                     :face 'shadow)
+                           (vui-text (plist-get target :dataset) :face 'shadow)))
+                        targets)))
       (list (vui-muted "No targets yet — add one below.")))
     (list
      (vui-vstack
@@ -1139,7 +1176,7 @@ Same plist shape as documented there."
     (setq zfs-ui--back-action
           (vui-with-async-context
            (if (eq page 'overview)
-               (bury-buffer)
+               (vui-quit)
              (zfs-ui--go 'overview))))
     (let ((content
            (cond
@@ -1175,11 +1212,11 @@ Same plist shape as documented there."
          (vui-text " "))
        content
        (vui-text (pcase page
-                   ('overview "RET open · C copy · A admin · u unlock · T targets · r refresh · q quit")
-                   ('dataset "q back · s snapshot · b backup · c new dataset · d diff · R rollback · r refresh")
-                   ('pool "q back · 1 scrub start · 2 scrub stop · x export · r refresh")
-                   ('backup "q back · click a target · r refresh")
-                   (_ "q back · r refresh"))
+                   ('overview "j/k move · RET/l open · C copy · A admin · u unlock · T targets · g refresh · ? help · q quit")
+                   ('dataset "h/q back · s snapshot · b backup · c new dataset · d diff · R rollback · g refresh")
+                   ('pool "h/q back · 1 scrub start · 2 scrub stop · x export · g refresh")
+                   ('backup "h/q back · choose a target · g refresh")
+                   (_ "h/q back · g refresh · ? help"))
                  :face 'shadow)))))
 
 (defun zfs-ui--key-on-line ()
@@ -1281,9 +1318,18 @@ Same plist shape as documented there."
   (interactive)
   (zfs-ui--invoke :scrub-stop))
 
+(defun zfs-ui-help ()
+  "Show keyboard help for the ZFS interface."
+  (interactive)
+  (message "ZFS: j/k move, TAB/S-TAB elements, RET/l activate, h/q back or close, g refresh, s snapshot, b backup, C copy, A admin, ? help"))
+
 (define-key zfs-mode-map (kbd "RET") #'zfs-ui-open)
 (define-key zfs-mode-map (kbd "<return>") #'zfs-ui-open)
 (define-key zfs-mode-map (kbd "l") #'zfs-ui-open)
+(define-key zfs-mode-map (kbd "j") #'next-line)
+(define-key zfs-mode-map (kbd "k") #'previous-line)
+(define-key zfs-mode-map (kbd "TAB") #'vui-forward)
+(define-key zfs-mode-map (kbd "<backtab>") #'vui-backward)
 (define-key zfs-mode-map (kbd "q") #'zfs-ui-back)
 (define-key zfs-mode-map (kbd "h") #'zfs-ui-back)
 (define-key zfs-mode-map (kbd "<left>") #'zfs-ui-back)
@@ -1306,6 +1352,7 @@ Same plist shape as documented there."
 (define-key zfs-mode-map (kbd "x") #'zfs-ui-export)
 (define-key zfs-mode-map (kbd "1") #'zfs-ui-scrub-start)
 (define-key zfs-mode-map (kbd "2") #'zfs-ui-scrub-stop)
+(define-key zfs-mode-map (kbd "?") #'zfs-ui-help)
 
 (with-eval-after-load 'evil
   (evil-set-initial-state 'zfs-mode 'normal)
@@ -1313,6 +1360,8 @@ Same plist shape as documented there."
     (kbd "RET") #'zfs-ui-open
     (kbd "<return>") #'zfs-ui-open
     (kbd "l") #'zfs-ui-open
+    (kbd "j") #'next-line
+    (kbd "k") #'previous-line
     (kbd "q") #'zfs-ui-back
     (kbd "h") #'zfs-ui-back
     (kbd "<left>") #'zfs-ui-back
@@ -1334,7 +1383,8 @@ Same plist shape as documented there."
     (kbd "F") #'zfs-ui-format
     (kbd "x") #'zfs-ui-export
     (kbd "1") #'zfs-ui-scrub-start
-    (kbd "2") #'zfs-ui-scrub-stop))
+    (kbd "2") #'zfs-ui-scrub-stop
+    (kbd "?") #'zfs-ui-help))
 
 ;;;###autoload
 (defun zfs ()

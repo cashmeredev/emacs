@@ -44,6 +44,12 @@
     (require 'elpaca)
     (elpaca-generate-autoloads "elpaca" repo)
     (let ((load-source-file-function nil)) (load "./elpaca-autoloads"))))
+
+;; Consult exact package revisions before declaring any Elpaca orders below.
+;; `my/elpaca-write-lock-file' in config.org refreshes this file explicitly.
+(setq elpaca-lock-file
+      (expand-file-name "elpaca-lock.eld" user-emacs-directory))
+
 (add-hook 'after-init-hook #'elpaca-process-queues)
 (elpaca `(,@elpaca-order))
 

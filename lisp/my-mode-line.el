@@ -63,6 +63,12 @@
 (defconst my/mode-line--missing (make-symbol "missing")
   "Sentinel used when checking membership in package hash tables.")
 
+(defvar my/mode-line--format nil
+  "The installed global header-line mode-line format.")
+
+(defvar-local my/mode-line--saved-mode-line-format nil
+  "Clatter's mode-line format saved while the global mode line is hidden.")
+
 (defun my/mode-line--update-title-cache ()
   "Update the cached #+title for the current buffer."
   (setq-local my/mode-line--buffer-title
@@ -228,6 +234,58 @@ Optional THEME is ignored so this function also fits
                       :inverse-video nil
                       :strike-through nil))
 
+(defun my/mode-line--hide-clatter-buffers (&rest _)
+  "Hide Clatter's local mode lines while the global mode line is disabled."
+  (unless my/global-mode-line-mode
+    (dolist (buffer (buffer-list))
+      (with-current-buffer buffer
+        (when (derived-mode-p 'clatter-mode)
+          (unless (local-variable-p 'my/mode-line--saved-mode-line-format)
+            (setq-local my/mode-line--saved-mode-line-format mode-line-format))
+          (setq-local mode-line-format nil))))))
+
+(defun my/mode-line--restore-package-mode-lines ()
+  "Restore package-local mode lines hidden by the global toggle."
+  (dolist (buffer (buffer-list))
+    (with-current-buffer buffer
+      (when (local-variable-p 'my/mode-line--saved-mode-line-format)
+        (setq-local mode-line-format my/mode-line--saved-mode-line-format)
+        (kill-local-variable 'my/mode-line--saved-mode-line-format)))))
+
+(define-minor-mode my/global-mode-line-mode
+  "Show the custom global mode line.
+
+When disabled, the header-based global mode line and Clatter's package-local
+bottom mode lines are hidden.  Local informational headers, such as Elfeed's
+column headings, remain visible."
+  :global t
+  :init-value t
+  :group 'mode-line
+  (if my/global-mode-line-mode
+      (progn
+        (setq-default header-line-format my/mode-line--format)
+        (my/mode-line--restore-package-mode-lines))
+    (setq-default header-line-format nil)
+    (my/mode-line--hide-clatter-buffers))
+  (force-mode-line-update t))
+
+(defun my/toggle-mode-line ()
+  "Toggle the custom mode line globally."
+  (interactive)
+  (my/global-mode-line-mode (if my/global-mode-line-mode -1 1)))
+
+(with-eval-after-load 'clatter-ui
+  (unless (advice-member-p #'my/mode-line--hide-clatter-buffers
+                           'clatter-ui-setup-buffer)
+    (advice-add 'clatter-ui-setup-buffer :after
+                #'my/mode-line--hide-clatter-buffers)))
+
+(with-eval-after-load 'clatter-track
+  (unless (advice-member-p #'my/mode-line--hide-clatter-buffers
+                           'clatter-track--refresh-mode-lines)
+    (advice-add 'clatter-track--refresh-mode-lines :after
+                #'my/mode-line--hide-clatter-buffers)))
+
 (defun my/mode-line-install ()
   "Install the custom mode-line built with mode-line-maker.
 The mode-line lives at the top of the window via `header-line-format';
@@ -236,25 +294,28 @@ the bottom mode-line is hidden."
   (my/mode-line-sync-theme)
   (add-hook 'enable-theme-functions #'my/mode-line-sync-theme)
   (setq-default mode-line-format nil)
-  (setq-default header-line-format
-                (mode-line-maker
-                 '((:eval (my/mode-line-evil-state)) " "
-                   (:eval (my/mode-line-buffer-state))
-                   (:eval (my/mode-line-remote)) " "
-                   (:eval (my/mode-line-buffer-icon)) " "
-                   (:eval (propertize (my/mode-line-buffer-name)
-                                      'face 'mode-line-buffer-id
-                                      'mouse-face 'mode-line-highlight
-                                      'help-echo (concat (or buffer-file-truename (buffer-name))
-                                                         "\nmouse-1: Previous buffer\nmouse-3: Next buffer")
-                                      'local-map mode-line-buffer-identification-keymap)) " "
-                   mode-line-position)
-                 '("" (:eval (my/mode-line-irc)) " "
-                   (:eval (my/mode-line-clatter)) " "
-                   (:eval (my/mode-line-mu4e)) " "
-                   mode-line-process " "
-                   (:eval (my/mode-line-time)) " "
-                   mode-name " ")))
+  (setq my/mode-line--format
+        (mode-line-maker
+         '((:eval (my/mode-line-evil-state)) " "
+           (:eval (my/mode-line-buffer-state))
+           (:eval (my/mode-line-remote)) " "
+           (:eval (my/mode-line-buffer-icon)) " "
+           (:eval (propertize (my/mode-line-buffer-name)
+                              'face 'mode-line-buffer-id
+                              'mouse-face 'mode-line-highlight
+                              'help-echo (concat (or buffer-file-truename (buffer-name))
+                                                 "\nmouse-1: Previous buffer\nmouse-3: Next buffer")
+                              'local-map mode-line-buffer-identification-keymap)) " "
+           mode-line-position)
+         '("" (:eval (my/mode-line-irc)) " "
+           (:eval (my/mode-line-clatter)) " "
+           (:eval (my/mode-line-mu4e)) " "
+           mode-line-process " "
+           (:eval (my/mode-line-time)) " "
+           mode-name " ")))
+  ;; The mode line is visible on every startup, regardless of its previous
+  ;; interactive state in a long-running session.
+  (my/global-mode-line-mode 1)
   (add-hook 'before-save-hook #'my/mode-line--invalidate-title-cache))
 
 (provide 'my-mode-line)

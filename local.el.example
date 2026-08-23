@@ -10,5 +10,4 @@
 ;; so uncommitted edits are live after a reload/restart.
 
 (setq my/local-packages
-      '((kitty-graphics . "~/code/kitty-graphics.el")
-        (garden         . "~/garden")))
+      '((kitty-graphics . "~/code/kitty-graphics.el")))

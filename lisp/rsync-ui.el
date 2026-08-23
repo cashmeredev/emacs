@@ -260,14 +260,10 @@
          (destination-label (if remote "SSH DESTINATION" "LOCAL DESTINATION"))
          (destination-glyph (if remote "⌁" "◎"))
          (destination-face (if remote 'warning 'success)))
-    (if (>= width 72)
+    (if (>= width 80)
         (let* ((card-width (min 30 (/ (- width 8) 2)))
-               (text-width (- card-width 2))
-               (source (truncate-string-to-width
-                        (rsync-ui--source-title sources) text-width nil nil "…"))
-               (destination (truncate-string-to-width
-                             (rsync-ui--destination-title kind local-target ssh-host ssh-path)
-                             text-width nil nil "…")))
+               (source (rsync-ui--source-title sources))
+               (destination (rsync-ui--destination-title kind local-target ssh-host ssh-path)))
           (vui-vstack
            :spacing 0
            (vui-hstack
@@ -293,12 +289,8 @@
             (vui-box (vui-text destination :face 'rsync-ui-strong)
                      :width card-width :align :center))))
       (let* ((card-width (min 56 width))
-             (text-width (- card-width 2))
-             (source (truncate-string-to-width
-                      (rsync-ui--source-title sources) text-width nil nil "…"))
-             (destination (truncate-string-to-width
-                           (rsync-ui--destination-title kind local-target ssh-host ssh-path)
-                           text-width nil nil "…")))
+             (source (rsync-ui--source-title sources))
+             (destination (rsync-ui--destination-title kind local-target ssh-host ssh-path)))
         (vui-vstack
          :spacing 0
          (vui-hstack
@@ -314,12 +306,12 @@
                   :width card-width :align :left :padding-left 2))))))
 
 (defun rsync-ui--field-row (label field)
-  (vui-hstack
+  (vui-flex :width 'window
    (vui-box (vui-text label :face 'rsync-ui-faded) :width 16 :align :right)
-   field))
+   (vui-flex-item :grow 1 field)))
 
-(defun rsync-ui--gauge (progress)
-  (let* ((width 44)
+(defun rsync-ui--gauge (progress &optional available)
+  (let* ((width (max 12 (min 44 (- (or available 52) 8))))
          (done (max 0 (min width (round (* width (/ progress 100.0)))))))
     (vui-vstack
      :spacing 0
@@ -328,12 +320,12 @@
        :spacing 0
        (vui-text (make-string done ?█) :face 'success)
        (vui-text (make-string (- width done) ?░) :face 'shadow))
-      :width 52 :align :center)
+      :width (or available 52) :align :center)
      (vui-box (vui-text (format "%3d%%" progress)
                         :face '(:inherit bold :height 1.6))
-              :width 52 :align :center))))
+              :width (or available 52) :align :center))))
 
-(defun rsync-ui--preview-panel (preview delete)
+(defun rsync-ui--preview-panel (preview delete width)
   (let ((count (plist-get preview :count))
         (size (plist-get preview :size)))
     (vui-vstack
@@ -343,17 +335,18 @@
                     "Everything is already in sync"
                   (format "%d changes · %s to transfer" count size))
                 :face (if (zerop count) 'success 'rsync-ui-strong))
-      :width 66 :align :center)
+      :width width :align :center)
      (when delete
        (vui-box (vui-text "Delete is enabled: extra files at the destination will be removed."
                           :face '(:inherit warning :weight bold))
-                :width 66 :align :center))
+                :width width :align :center))
      (when-let* ((sample (plist-get preview :sample)))
-       (vui-vstack
-        :spacing 0 :indent 4
-        (mapcar (lambda (line)
-                  (vui-text (truncate-string-to-width line 62 nil nil "…") :face 'shadow))
-                sample))))))
+       (vui-table
+        :sticky-header t
+        :columns `((:header "Preview — first changes"
+                    :width ,(max 20 (- width 2)) :grow t :truncate t))
+        :rows (mapcar (lambda (line) (list (vui-text line :face 'shadow)))
+                      sample))))))
 
 
 (vui-defcomponent rsync-ui-app (initial-sources initial-target)
@@ -514,7 +507,7 @@
                (vui-set-state :status nil)
                (vui-set-state :progress 0)))))
          (busy (process-live-p process))
-         (source-width (max 12 (min 42 (- (rsync-ui--window-width) 31)))))
+         (view-width (max 28 (- (rsync-ui--window-width) 2))))
     (setq rsync-ui--actions
           (list :choose-source choose-source
                 :choose-target choose-target
@@ -530,27 +523,27 @@
       ((memq stage '(running done failed cancelled))
        (vui-vstack
         :spacing 1
-        (rsync-ui--gauge progress)
+        (rsync-ui--gauge progress (min 64 view-width))
         (vui-flex
          :width 52 :justify :space-between
          (vui-text transferred :face 'rsync-ui-strong)
          (vui-text (if (string-empty-p speed) "Waiting for data…" speed) :face 'shadow)
          (vui-text (if (string-empty-p eta) "" (format "ETA %s" eta)) :face 'shadow))))
       ((eq stage 'ready)
-       (rsync-ui--preview-panel preview delete))
+       (rsync-ui--preview-panel preview delete view-width))
       (t
        (vui-vstack
         :spacing 1
         (rsync-ui--field-row
          "Source"
-         (vui-hstack
-          :spacing 1
-          (vui-box
-           (vui-text
-            (truncate-string-to-width
-             (rsync-ui--source-title sources) (max 10 (- source-width 2)) nil nil "…"))
-           :width source-width)
-          (vui-button "Choose…" :on-click choose-source :disabled busy)))
+         (lambda (width)
+           (vui-flex
+            :width width
+            (vui-flex-item
+             :grow 1
+             (vui-box (vui-text (rsync-ui--source-title sources))
+                      :width (max 8 (- width 10))))
+            (vui-button "Choose…" :on-click choose-source :disabled busy))))
         (rsync-ui--field-row
          "Destination"
          (vui-select :value kind
@@ -560,15 +553,17 @@
             (vui-vstack
              :spacing 1
              (rsync-ui--field-row
-              "SSH host"
-              (vui-field :value ssh-host :size 42 :key 'ssh-host
-                         :placeholder "user@example.org"
-                         :on-change (lambda (value) (funcall invalidate :ssh-host value))))
+             "SSH host"
+              (lambda (width)
+                (vui-field :value ssh-host :size (max 8 width) :key 'ssh-host
+                           :placeholder "user@example.org"
+                           :on-change (lambda (value) (funcall invalidate :ssh-host value)))))
              (rsync-ui--field-row
               "Remote folder"
-              (vui-field :value ssh-path :size 42 :key 'ssh-path
-                         :placeholder "~/Backups/"
-                         :on-change (lambda (value) (funcall invalidate :ssh-path value))))
+              (lambda (width)
+                (vui-field :value ssh-path :size (max 8 width) :key 'ssh-path
+                           :placeholder "~/Backups/"
+                           :on-change (lambda (value) (funcall invalidate :ssh-path value)))))
              (rsync-ui--field-row
               "SSH port"
               (vui-field :value ssh-port :size 8 :key 'ssh-port
@@ -578,12 +573,17 @@
               (vui-muted "Uses your SSH key or agent; no password is stored.")))
           (rsync-ui--field-row
            "Local folder"
-           (vui-hstack
-            :spacing 1
-            (vui-field :value local-target :size 36 :key 'local-target
-                       :placeholder "~/Backups/"
-                       :on-change (lambda (value) (funcall invalidate :local-target value)))
-            (vui-button "Choose…" :on-click choose-target :disabled busy))))
+           (lambda (width)
+             (vui-flex
+              :width width
+              (vui-flex-item
+               :grow 1
+               (lambda (field-width)
+                 (vui-field :value local-target :size (max 8 field-width)
+                            :key 'local-target :placeholder "~/Backups/"
+                            :on-change (lambda (value)
+                                         (funcall invalidate :local-target value)))))
+              (vui-button "Choose…" :on-click choose-target :disabled busy)))))
         (rsync-ui--field-row
          "Folder behavior"
          (vui-select :value mode
@@ -604,7 +604,8 @@
           (when delete
             (vui-warning "Preview deletions carefully. This option changes the destination.")))))))
      (when status
-       (vui-box (vui-text (car status) :face (cdr status)) :width 66 :align :center))
+       (vui-box (vui-text (car status) :face (cdr status))
+                :width view-width :align :center))
      (vui-flex
       :width 'fill-column
       :justify :space-between
@@ -616,7 +617,7 @@
                    :face (when (eq stage 'ready) 'success))
        (vui-button "Cancel" :on-click cancel-transfer :disabled (not busy) :face 'warning)
        (vui-button "Reset" :on-click reset :disabled busy :face 'shadow))
-      (vui-muted "p preview · s start · x cancel · r reset · q close")))))
+      (vui-muted "p preview · t transfer · x cancel · r reset · ? help · q close")))))
 
 (defun rsync-ui--invoke (action)
   (if-let* ((callback (plist-get rsync-ui--actions action)))
@@ -650,34 +651,44 @@
 (defun rsync-ui-next-widget ()
   (interactive)
   (condition-case nil
-      (widget-forward 1)
+      (vui-forward 1)
     (error
      (goto-char (point-min))
-     (widget-forward 1))))
+     (vui-forward 1))))
 
 (defun rsync-ui-previous-widget ()
   (interactive)
   (condition-case nil
-      (widget-backward 1)
+      (vui-backward 1)
     (error
      (goto-char (point-max))
-     (widget-backward 1))))
+     (vui-backward 1))))
+
+(defun rsync-ui-help ()
+  "Show keyboard help for the Rsync wizard."
+  (interactive)
+  (message "Rsync: j/k move, TAB/S-TAB elements, RET/l activate, p/g preview, t transfer, x cancel, r reset, h/q close"))
 
 (defvar rsync-ui-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map vui-mode-map)
-    (define-key map (kbd "j") #'rsync-ui-next-widget)
-    (define-key map (kbd "k") #'rsync-ui-previous-widget)
+    (define-key map (kbd "j") #'next-line)
+    (define-key map (kbd "k") #'previous-line)
     (define-key map (kbd "TAB") #'rsync-ui-next-widget)
     (define-key map (kbd "<backtab>") #'rsync-ui-previous-widget)
     (define-key map (kbd "RET") #'vui-activate)
+    (define-key map (kbd "l") #'vui-activate)
     (define-key map (kbd "p") #'rsync-ui-preview)
+    (define-key map (kbd "g") #'rsync-ui-preview)
+    (define-key map (kbd "t") #'rsync-ui-start)
     (define-key map (kbd "s") #'rsync-ui-start)
     (define-key map (kbd "x") #'rsync-ui-cancel)
     (define-key map (kbd "r") #'rsync-ui-reset)
     (define-key map (kbd "o") #'rsync-ui-choose-source)
     (define-key map (kbd "d") #'rsync-ui-choose-target)
-    (define-key map (kbd "q") #'quit-window)
+    (define-key map (kbd "?") #'rsync-ui-help)
+    (define-key map (kbd "h") #'vui-quit)
+    (define-key map (kbd "q") #'vui-quit)
     map))
 
 (define-derived-mode rsync-ui-mode vui-mode "Rsync"
@@ -689,16 +700,21 @@
 (with-eval-after-load 'evil
   (evil-set-initial-state 'rsync-ui-mode 'normal)
   (evil-define-key* '(normal motion) rsync-ui-mode-map
-    (kbd "j") #'rsync-ui-next-widget
-    (kbd "k") #'rsync-ui-previous-widget
+    (kbd "j") #'next-line
+    (kbd "k") #'previous-line
     (kbd "RET") #'vui-activate
+    (kbd "l") #'vui-activate
     (kbd "p") #'rsync-ui-preview
+    (kbd "g") #'rsync-ui-preview
+    (kbd "t") #'rsync-ui-start
     (kbd "s") #'rsync-ui-start
     (kbd "x") #'rsync-ui-cancel
     (kbd "r") #'rsync-ui-reset
     (kbd "o") #'rsync-ui-choose-source
     (kbd "d") #'rsync-ui-choose-target
-    (kbd "q") #'quit-window))
+    (kbd "?") #'rsync-ui-help
+    (kbd "h") #'vui-quit
+    (kbd "q") #'vui-quit))
 
 (defun rsync-ui--open (sources target)
   (let ((buffer (get-buffer-create rsync-ui-buffer-name)))

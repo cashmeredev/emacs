@@ -100,5 +100,6 @@ dirvish/thumbnails
 /elfeed/index
 /org-persist/
 *.eld
+!/elpaca-lock.eld
 /elfeed/
 /cache/
