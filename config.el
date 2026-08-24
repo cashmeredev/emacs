@@ -2766,11 +2766,34 @@ so the working-tree diff stays visible until the user explicitly stages."
 
 (display-time-mode 1)
 
+(defvar my/mode-line--format
+  (or (default-value 'mode-line-format)
+      (eval (car (get 'mode-line-format 'standard-value)) t))
+  "The format restored when the bottom mode line is visible.")
+
+(define-minor-mode my/global-mode-line-mode
+  "Show the traditional bottom mode line in regular buffers."
+  :global t
+  :init-value t
+  :group 'mode-line
+  (setq-default mode-line-format
+                (and my/global-mode-line-mode my/mode-line--format))
+  (force-mode-line-update t))
+
+(defun my/hide-mode-line ()
+  "Toggle the traditional bottom mode line globally."
+  (interactive)
+  (my/global-mode-line-mode (if my/global-mode-line-mode -1 1)))
+
+;; The custom header line already carries the status information, so keep the
+;; traditional bottom mode line hidden on startup (including `emacs -nw').
+(my/global-mode-line-mode -1)
+
 (use-package mode-line-maker
   :ensure (:host github :repo "rougier/mode-line-maker")
   :config
-  (require 'my-mode-line)
-  (my/mode-line-install))
+  (require 'my-header-line)
+  (my/header-line-install))
 
 (use-package adaptive-wrap
   :ensure t
@@ -2910,6 +2933,16 @@ so the working-tree diff stays visible until the user explicitly stages."
   :ensure nil
   :after textui
   :commands (fossil-ui fossil-ui-status))
+
+(use-package bbs-ui
+  :ensure nil
+  :after textui
+  :commands (bbs bbs-open)
+  :custom
+  (bbs-ui-repository-file
+   (expand-file-name "bbs-sandbox.fossil" "/home/cashmere/bbs/"))
+  (bbs-ui-web-base-url "https://bbs.copland.systems")
+  (bbs-ui-pull-on-open nil))
 
 (use-package yggdrasil-ui
   :ensure nil
@@ -4135,7 +4168,7 @@ reset is unnecessary, so do the handler resolution ourselves and skip
   :ensure t
   :after mu4e
   :custom
-  (mu4e-alert-modeline-formatter #'my/mode-line-mu4e-formatter)
+  (mu4e-alert-modeline-formatter #'my/header-line-mu4e-formatter)
   :config
   ;; Use libnotify for desktop notifications (notify-send / swaync)
   (mu4e-alert-set-default-style 'libnotify)
@@ -4610,5 +4643,10 @@ opening another file in same project does not re-notify."
            :repo "yibie/org-other-agenda"
            :files ("*.el"))
   :commands (org-other-agenda))
+
+(use-package org-clock-reminder
+  :ensure (:host github :repo "inickey/org-clock-reminder")
+  :config 
+  (org-clock-reminder-mode))
 
 (provide 'init)
