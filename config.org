@@ -3545,6 +3545,16 @@ moved to local.el
   :after textui
   :commands (fossil-ui fossil-ui-status))
 
+(use-package bbs-ui
+  :ensure nil
+  :after textui
+  :commands (bbs bbs-open)
+  :custom
+  (bbs-ui-repository-file
+   (expand-file-name "bbs-sandbox.fossil" "/home/cashmere/bbs/"))
+  (bbs-ui-web-base-url "https://bbs.copland.systems")
+  (bbs-ui-pull-on-open nil))
+
 (use-package yggdrasil-ui
   :ensure nil
   :after textui
