@@ -29,10 +29,15 @@
 
 * local packages
 
-#+begin_example
+#+begin_example emacs-lisp
 ;;; -*- lexical-binding: t -*-
 (setq my/local-packages
       '((kitty-graphics . "~/code/kitty-graphics")))
+      
+(setq cashmere/frame-alpha-background 100
+      cashmere/font-family "SFMono Nerd Font"
+      cashmere/font-height 180
+      cashmere/theme 'tinty)
 #+end_example
 
 #+begin_src emacs-lisp
