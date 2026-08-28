@@ -3444,13 +3444,36 @@ Native =undo-redo= (via =evil-undo-system='undo-redo=); just raise the undo limi
            :bold-weight semibold
            :line-spacing 0.08)))
 
+  (defun my/apply-line-number-faces (&optional _theme)
+    "Keep all line numbers typographically quiet and monospaced."
+    (let ((foreground (face-attribute 'line-number :foreground nil t)))
+      (dolist (face '(line-number line-number-current-line))
+        (set-face-attribute face nil
+                            :family cashmere/font-family
+                            :height 0.9
+                            :weight 'regular
+                            :slant 'normal
+                            :width 'normal))
+      ;; The theme makes the current number bold and accent-colored.  Use the
+      ;; regular line-number color so its width and emphasis do not jump.
+      (set-face-attribute 'line-number-current-line nil
+                          :foreground foreground
+                          :background 'unspecified
+                          :box nil
+                          :underline nil
+                          :overline nil)))
+
+  (add-hook 'fontaine-set-preset-hook #'my/apply-line-number-faces)
+  (add-hook 'enable-theme-functions #'my/apply-line-number-faces)
+
   ;; Fontaine 3 implements presets as a global theme, so applying the preset
   ;; once also covers GUI frames created later by an Emacs daemon.  Reapplying
   ;; it from `server-after-make-frame-hook' can disrupt an active minibuffer
   ;; (notably Helm) when an emacsclient frame is created or reused.
   (fontaine-set-preset
    (or (fontaine-restore-latest-preset) 'regular))
-  (fontaine-mode 1))
+  (fontaine-mode 1)
+  (my/apply-line-number-faces))
 
 ;; Give a daemon's first GUI frame the final base font before its first
 ;; redisplay.  This avoids fallback-font geometry and a visible layout jump;
@@ -4314,19 +4337,13 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 ** global evil bindings
 
 #+begin_src emacs-lisp
-(defun my/s-key-dispatch ()
+(evil-define-motion my/s-key-dispatch (count)
   "Run Flash with stable viewport margins."
-  (interactive)
+  :type inclusive
+  :jump t
   (let ((scroll-margin 0)
         (maximum-scroll-margin 0))
-    (call-interactively #'flash-evil-jump)))
-
-;; The wrapper must retain Flash's inclusive operator semantics.  Without
-;; these properties `d s' becomes exclusive and stops before the target.
-(evil-set-command-properties #'my/s-key-dispatch
-  :type 'inclusive
-  :keep-visual t
-  :repeat 'motion)
+    (flash-evil-jump count)))
 
 ;; Flash's enhanced character motions claim `;' and `,'.  Keep `;' free for
 ;; mode-local prefixes and reserve `,' for the local leader below.
@@ -4336,7 +4353,15 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 (evil-define-key '(normal visual) 'global (kbd "SPC") my/leader-map)
 (evil-define-key 'insert 'global (kbd "M-SPC") my/leader-map)
 (evil-define-key '(normal visual) 'global (kbd ",") my/local-leader-map)
-(evil-define-key '(normal visual operator) 'global (kbd "s") #'my/s-key-dispatch)
+(evil-define-key '(normal visual motion operator) 'global
+  (kbd "s") #'my/s-key-dispatch)
+
+(with-eval-after-load 'evil-surround
+  (evil-define-key 'operator evil-surround-mode-map
+    (kbd "s") #'my/s-key-dispatch
+    (kbd "S") #'evil-surround-edit
+    (kbd "g S") #'evil-Surround-edit))
+
 (evil-define-key 'insert 'global (kbd "C-w") evil-window-map)
 
 (evil-define-key 'normal 'global

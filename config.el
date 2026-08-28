@@ -723,54 +723,51 @@ Temporarily disables notifications during the fetch."
 
 (use-package markdown-mode
   :ensure t
-  :hook (markdown-mode . nb/markdown-unhighlight)
-  :init
-  (setq-default abbrev-mode t)
+  :mode (("README\\.md\\'" . gfm-mode)
+         ("\\.md\\'" . markdown-mode)
+         ("\\.markdown\\'" . markdown-mode))
+  :hook (markdown-mode . abbrev-mode)
+  :custom
+  ;; Use markdown-mode's display properties only: the source text is never
+  ;; replaced, and markup can always be restored with SPC m v.
+  (markdown-hide-markup t)
+  ;; Let the full markup toggle reveal link destinations as well.
+  (markdown-hide-urls nil)
+  (markdown-header-scaling t)
+  (markdown-header-scaling-values '(1.6 1.3 1.15 1.08 1.0 1.0))
+  (markdown-fontify-code-blocks-natively t)
+  (markdown-asymmetric-header t)
+  (markdown-indent-on-enter 'indent-and-new-item)
+  (markdown-make-gfm-checkboxes-buttons t)
+  (markdown-gfm-uppercase-checkbox nil)
+  (markdown-enable-math t)
+  (markdown-list-item-bullets '("●" "○" "◆" "◇"))
+  (markdown-blockquote-display-char '("▌" ">"))
+  (markdown-hr-display-char '(?─ ?-))
   :config
-  (defvar nb/current-line '(0 . 0)
-    "(start . end) of current line in current buffer")
-  (make-variable-buffer-local 'nb/current-line)
+  (defun my/markdown-apply-minimal-faces (&optional _theme)
+    "Apply the quiet, theme-adaptive typography used by Org buffers."
+    (let ((foreground (face-attribute 'default :foreground nil t))
+          (muted (face-attribute 'shadow :foreground nil t)))
+      (dolist (spec '((markdown-header-face-1 1.60 medium)
+                      (markdown-header-face-2 1.30 semibold)
+                      (markdown-header-face-3 1.15 semibold)
+                      (markdown-header-face-4 1.08 semibold)
+                      (markdown-header-face-5 1.00 medium)))
+        (set-face-attribute (car spec) nil
+                            :family "SF Pro Display"
+                            :height (cadr spec)
+                            :weight (caddr spec)
+                            :foreground foreground))
+      (set-face-attribute 'markdown-header-face-6 nil
+                          :family "SF Pro Display" :height 1.0
+                          :weight 'regular :foreground muted)
+      (set-face-attribute 'markdown-header-delimiter-face nil
+                          :height 0.9 :weight 'normal :foreground muted)
+      (set-face-attribute 'markdown-markup-face nil :foreground muted)))
 
-  (defun nb/unhide-current-line (limit)
-    "Font-lock function"
-    (let ((start (max (point) (car nb/current-line)))
-          (end (min limit (cdr nb/current-line))))
-      (when (< start end)
-        (remove-text-properties start end
-                                '(invisible t display "" composition ""))
-        (goto-char limit)
-        t)))
-
-  (defun nb/refontify-on-linemove ()
-    "Post-command-hook"
-    (let* ((start (line-beginning-position))
-           (end (line-beginning-position 2))
-           (needs-update (not (equal start (car nb/current-line)))))
-      (setq nb/current-line (cons start end))
-      (when needs-update
-        ;; FIX: Verwende jit-lock-refontify statt font-lock-fontify-block
-        (jit-lock-refontify start end))))
-
-  (defun nb/markdown-unhighlight ()
-    "Enable markdown concealling"
-    (interactive)
-    (markdown-toggle-markup-hiding 'toggle)
-    (font-lock-add-keywords nil '((nb/unhide-current-line)) t)
-    ;; FIX: Stelle sicher dass jit-lock aktiv ist
-    (jit-lock-register #'font-lock-fontify-region)
-    (add-hook 'post-command-hook #'nb/refontify-on-linemove nil t))
-
-  :custom-face
-  (markdown-header-delimiter-face ((t (:foreground "#616161" :height 0.9))))
-  (markdown-header-face-1 ((t (:family "SF Pro Display" :height 1.65 :foreground "#A3BE8C" :weight bold :inherit markdown-header-face))))
-  (markdown-header-face-2 ((t (:family "SF Pro Display" :height 1.45 :foreground "#EBCB8B" :weight bold :inherit markdown-header-face))))
-  (markdown-header-face-3 ((t (:family "SF Pro Display" :height 1.3 :foreground "#D08770" :weight semibold :inherit markdown-header-face))))
-  (markdown-header-face-4 ((t (:family "SF Pro Display" :height 1.2 :foreground "#BF616A" :weight semibold :inherit markdown-header-face))))
-  (markdown-header-face-5 ((t (:family "SF Pro Display" :height 1.12 :foreground "#b48ead" :weight medium :inherit markdown-header-face))))
-  (markdown-header-face-6 ((t (:family "SF Pro Display" :height 1.08 :foreground "#5e81ac" :weight medium :inherit markdown-header-face))))
-  (markdown-code-face ((t (:inherit fixed-pitch))))
-  (markdown-inline-code-face ((t (:inherit fixed-pitch))))
-  (markdown-pre-face ((t (:inherit fixed-pitch)))))
+  (add-hook 'enable-theme-functions #'my/markdown-apply-minimal-faces)
+  (my/markdown-apply-minimal-faces))
 
 (defun my/agent-shell-autoscroll (&rest _)
   (dolist (win (get-buffer-window-list (current-buffer) 'visible))
@@ -1053,23 +1050,6 @@ Temporarily disables notifications during the fetch."
                       :weight 'regular))
 
 
-
-(use-package kitty-graphics
-  :ensure (:host github :repo "cashmeredev/kitty-graphics.el")
-  :demand t
-  :custom
-  (kitty-graphics-enable-video t)
-  (kitty-graphics-shr-scale 'fit)
-  (kitty-graphics-shr-fit-width 0.4)
-  (kitty-graphics-shr-fit-height 20)
-  (kitty-graphics-doc-view-resolution-scale 2.0)
-  :hook (dired-mode . kitty-graphics-dired-auto-preview-mode)
-  :config
-  (setq kitty-graphics-enable-browser t
-        kitty-graphics-casty-program "~/projects/casty/bin/casty.js"
-        kitty-graphics-casty-chrome "helium-browser")
-
-  (kitty-graphics-setup))
 
 (with-eval-after-load 'org
   (setq org-confirm-babel-evaluate nil)
@@ -2443,13 +2423,14 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
   :ensure t
   :commands (olivetti-mode)
   :preface
-  (defun my/org-writing-layout ()
-    "Use a centered, comfortably spaced writing layout in Org buffers."
+  (defun my/prose-writing-layout ()
+    "Use a centered, comfortably spaced prose-writing layout."
     (setq-local olivetti-body-width 88
                 line-spacing 0.14)
     (display-line-numbers-mode -1)
     (olivetti-mode 1))
-  :hook (org-mode . my/org-writing-layout)
+  :hook ((org-mode . my/prose-writing-layout)
+         (markdown-mode . my/prose-writing-layout))
   :custom
   (olivetti-style nil)  ; Use window margins (fringes disabled in early-init)
   (olivetti-margin-width 10)  ; No side margins
@@ -2847,13 +2828,36 @@ so the working-tree diff stays visible until the user explicitly stages."
            :bold-weight semibold
            :line-spacing 0.08)))
 
+  (defun my/apply-line-number-faces (&optional _theme)
+    "Keep all line numbers typographically quiet and monospaced."
+    (let ((foreground (face-attribute 'line-number :foreground nil t)))
+      (dolist (face '(line-number line-number-current-line))
+        (set-face-attribute face nil
+                            :family cashmere/font-family
+                            :height 0.9
+                            :weight 'regular
+                            :slant 'normal
+                            :width 'normal))
+      ;; The theme makes the current number bold and accent-colored.  Use the
+      ;; regular line-number color so its width and emphasis do not jump.
+      (set-face-attribute 'line-number-current-line nil
+                          :foreground foreground
+                          :background 'unspecified
+                          :box nil
+                          :underline nil
+                          :overline nil)))
+
+  (add-hook 'fontaine-set-preset-hook #'my/apply-line-number-faces)
+  (add-hook 'enable-theme-functions #'my/apply-line-number-faces)
+
   ;; Fontaine 3 implements presets as a global theme, so applying the preset
   ;; once also covers GUI frames created later by an Emacs daemon.  Reapplying
   ;; it from `server-after-make-frame-hook' can disrupt an active minibuffer
   ;; (notably Helm) when an emacsclient frame is created or reused.
   (fontaine-set-preset
    (or (fontaine-restore-latest-preset) 'regular))
-  (fontaine-mode 1))
+  (fontaine-mode 1)
+  (my/apply-line-number-faces))
 
 ;; Give a daemon's first GUI frame the final base font before its first
 ;; redisplay.  This avoids fallback-font geometry and a visible layout jump;
@@ -3602,19 +3606,13 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 (keymap-global-set "C-=" #'text-scale-increase)
 (keymap-global-set "C--" #'text-scale-decrease)
 
-(defun my/s-key-dispatch ()
+(evil-define-motion my/s-key-dispatch (count)
   "Run Flash with stable viewport margins."
-  (interactive)
+  :type inclusive
+  :jump t
   (let ((scroll-margin 0)
         (maximum-scroll-margin 0))
-    (call-interactively #'flash-evil-jump)))
-
-;; The wrapper must retain Flash's inclusive operator semantics.  Without
-;; these properties `d s' becomes exclusive and stops before the target.
-(evil-set-command-properties #'my/s-key-dispatch
-  :type 'inclusive
-  :keep-visual t
-  :repeat 'motion)
+    (flash-evil-jump count)))
 
 ;; Flash's enhanced character motions claim `;' and `,'.  Keep `;' free for
 ;; mode-local prefixes and reserve `,' for the local leader below.
@@ -3624,7 +3622,15 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 (evil-define-key '(normal visual) 'global (kbd "SPC") my/leader-map)
 (evil-define-key 'insert 'global (kbd "M-SPC") my/leader-map)
 (evil-define-key '(normal visual) 'global (kbd ",") my/local-leader-map)
-(evil-define-key '(normal visual operator) 'global (kbd "s") #'my/s-key-dispatch)
+(evil-define-key '(normal visual motion operator) 'global
+  (kbd "s") #'my/s-key-dispatch)
+
+(with-eval-after-load 'evil-surround
+  (evil-define-key 'operator evil-surround-mode-map
+    (kbd "s") #'my/s-key-dispatch
+    (kbd "S") #'evil-surround-edit
+    (kbd "g S") #'evil-Surround-edit))
+
 (evil-define-key 'insert 'global (kbd "C-w") evil-window-map)
 
 (evil-define-key 'normal 'global
@@ -3833,6 +3839,58 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 (evil-set-initial-state 'ibuffer-mode 'normal)
 
 (evil-set-initial-state 'messages-buffer-mode 'normal)
+
+(defvar my/markdown-leader-map (make-sparse-keymap))
+(defvar my/markdown-command-map (make-sparse-keymap))
+(defvar my/markdown-insert-map (make-sparse-keymap))
+(defvar my/markdown-table-map (make-sparse-keymap))
+
+;; Recreate these maps on reload so removed bindings cannot linger.
+(setq my/markdown-leader-map (make-sparse-keymap)
+      my/markdown-command-map (make-sparse-keymap)
+      my/markdown-insert-map (make-sparse-keymap)
+      my/markdown-table-map (make-sparse-keymap))
+(set-keymap-parent my/markdown-leader-map my/leader-map)
+(keymap-set my/markdown-leader-map "m" my/markdown-command-map)
+(keymap-set my/markdown-command-map "v" #'markdown-toggle-markup-hiding)
+(keymap-set my/markdown-command-map "p" #'markdown-toggle-inline-images)
+(keymap-set my/markdown-command-map "j" #'imenu)
+(keymap-set my/markdown-command-map "b" #'markdown-cycle)
+(keymap-set my/markdown-command-map "x" #'markdown-toggle-gfm-checkbox)
+(keymap-set my/markdown-command-map "i" my/markdown-insert-map)
+(keymap-set my/markdown-command-map "t" my/markdown-table-map)
+(keymap-set my/markdown-insert-map "h" #'markdown-insert-header-dwim)
+(keymap-set my/markdown-insert-map "l" #'markdown-insert-link)
+(keymap-set my/markdown-insert-map "i" #'markdown-insert-image)
+(keymap-set my/markdown-insert-map "q" #'markdown-insert-blockquote)
+(keymap-set my/markdown-insert-map "c" #'markdown-insert-code)
+(keymap-set my/markdown-insert-map "C" #'markdown-insert-gfm-code-block)
+(keymap-set my/markdown-insert-map "f" #'markdown-insert-footnote)
+(keymap-set my/markdown-insert-map "r" #'markdown-insert-hr)
+(keymap-set my/markdown-table-map "i" #'markdown-insert-table)
+(keymap-set my/markdown-table-map "a" #'markdown-table-align)
+(keymap-set my/markdown-table-map "r" #'markdown-table-insert-row)
+(keymap-set my/markdown-table-map "R" #'markdown-table-delete-row)
+(keymap-set my/markdown-table-map "c" #'markdown-table-insert-column)
+(keymap-set my/markdown-table-map "C" #'markdown-table-delete-column)
+
+(with-eval-after-load 'markdown-mode
+  (evil-define-key '(normal visual) markdown-mode-map
+    (kbd "SPC") my/markdown-leader-map
+    (kbd "RET") #'markdown-follow-thing-at-point)
+  (evil-define-key 'normal markdown-mode-map
+    (kbd "M-<up>") #'markdown-move-up
+    (kbd "M-<down>") #'markdown-move-down
+    (kbd "M-<left>") #'markdown-promote
+    (kbd "M-<right>") #'markdown-demote)
+  (evil-define-key 'insert markdown-mode-map
+    (kbd "M-SPC") my/markdown-leader-map))
+
+(with-eval-after-load 'which-key
+  (which-key-add-keymap-based-replacements
+    my/markdown-leader-map "m" "markdown")
+  (which-key-add-keymap-based-replacements
+    my/markdown-command-map "i" "insert" "t" "table"))
 
 (defvar my/org-leader-map (make-sparse-keymap))
 (defvar my/org-command-map (make-sparse-keymap))
