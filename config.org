@@ -2606,6 +2606,7 @@ Auto switch silos (different workspaces/folders) based on preconfigured director
   (helm-move-to-line-cycle-in-source nil)
   (helm-split-window-inside-p t)
   (helm-autoresize-mode 1)
+  (helm-buffers-show-icons t)
   (helm-boring-buffer-regexp-list
    '("\\` "
      "\\`\\*helm"
@@ -2795,6 +2796,16 @@ Built-in tree-sitter mode (Emacs 29+). The =c= grammar ships via =treesit-gramma
   :custom
   (c-ts-mode-indent-offset 2)
   (c-ts-mode-indent-style 'k&r))
+#+end_src
+
+** rust-ts-mode
+
+#+begin_src emacs-lisp
+(use-package rust-ts-mode
+  :ensure nil
+  :mode "\\.rs\\'"
+  :custom
+  (rust-ts-indent-offset 4))
 #+end_src
 
 ** python-ts-mode

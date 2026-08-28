@@ -34,16 +34,6 @@
   :type 'string
   :group 'yggdrasil-ui)
 
-(defcustom yggdrasil-ui-service-program "systemctl"
-  "Program used to query the Yggdrasil service state."
-  :type 'string
-  :group 'yggdrasil-ui)
-
-(defcustom yggdrasil-ui-service-name "yggdrasil"
-  "System service name for Yggdrasil."
-  :type 'string
-  :group 'yggdrasil-ui)
-
 (defcustom yggdrasil-ui-known-hosts
   '(("chiefsosa" . "201:6904:7fcb:6fa6:b869:48cc:a863:e9a6")
     ("md" . "202:5e97:a5ba:a207:ce38:ac4a:ca3:8f86")
@@ -153,36 +143,34 @@ Return (EXIT OUTPUT)."
   "Run yggdrasilctl ARGS and decode JSON.
 Return (ok VALUE) or (error MESSAGE)."
   (pcase-let ((`(,code ,out) (apply #'yggdrasil-ui--run args)))
-    (if (zerop code)
-        (condition-case err
-            (list 'ok (json-parse-string out
-                                         :object-type 'alist
-                                         :array-type 'list
-                                         :null-object nil
-                                         :false-object nil))
-          (error (list 'error (error-message-string err))))
+    (cond
+     ((not (zerop code))
       (list 'error (if (string-empty-p out)
                        (format "%s exited %s" yggdrasil-ui-control-program code)
-                     out)))))
-
-(defun yggdrasil-ui--service-state ()
-  "Return the local service state as a string."
-  (with-temp-buffer
-    (let ((code (condition-case nil
-                    (call-process yggdrasil-ui-service-program nil t nil
-                                  "is-active" yggdrasil-ui-service-name)
-                  (error 127)))
-          (out (string-trim (buffer-string))))
-      (cond ((zerop code) out)
-            ((string-empty-p out) "unknown")
-            (t out)))))
+                     out)))
+     ((string-empty-p out)
+      (list 'error (format "%s returned no output"
+                           yggdrasil-ui-control-program)))
+     ((not (member (substring out 0 1) '("{" "[")))
+      ;; Yggdrasil 0.5.14 can print a fatal connection error to stdout and
+      ;; still exit successfully.  Preserve that useful error instead of
+      ;; reporting a misleading JSON parser failure.
+      (list 'error out))
+     (t
+      (condition-case err
+          (list 'ok (json-parse-string out
+                                       :object-type 'alist
+                                       :array-type 'list
+                                       :null-object nil
+                                       :false-object nil))
+        (error (list 'error (error-message-string err))))))))
 
 (defun yggdrasil-ui--snapshot ()
   "Collect current Yggdrasil status."
   (let ((self (yggdrasil-ui--json "getSelf"))
         (peers (yggdrasil-ui--json "getPeers")))
     (list :updated (format-time-string "%Y-%m-%d %H:%M:%S")
-          :service (yggdrasil-ui--service-state)
+          :service (if (eq (car self) 'ok) "active" "unavailable")
           :self (and (eq (car self) 'ok) (cadr self))
           :self-error (and (eq (car self) 'error) (cadr self))
           :peers (and (eq (car peers) 'ok) (alist-get 'peers (cadr peers)))
@@ -237,7 +225,7 @@ Return (ok VALUE) or (error MESSAGE)."
          'yggdrasil-ui-salient)
         ((or (null state)
              (eq state 'down)
-             (member state '("inactive" "Down")))
+             (member state '("inactive" "Down" "unavailable")))
          'yggdrasil-ui-critical)
         (t 'yggdrasil-ui-warning)))
 

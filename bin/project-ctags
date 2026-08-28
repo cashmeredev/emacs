@@ -30,6 +30,7 @@ IGNORED_DIRECTORIES = {
     "tests",
 }
 PYTHON_SUFFIXES = {".py", ".pyi"}
+RUST_SUFFIXES = {".rs"}
 C_SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".m", ".mm"}
 C_HEADER_SUFFIXES = {".h", ".hh", ".hpp", ".hxx"}
 NIX_CTAGS_OPTIONS = [
@@ -79,8 +80,10 @@ def parse_arguments():
     parser.add_argument("--ctags")
     parser.add_argument("--python")
     parser.add_argument("--python-command")
+    parser.add_argument("--cargo")
     parser.add_argument("--source", action="append", default=[])
     parser.add_argument("--no-python-deps", action="store_true")
+    parser.add_argument("--no-rust-deps", action="store_true")
     parser.add_argument("--no-c-deps", action="store_true")
     return parser.parse_args()
 
@@ -226,6 +229,81 @@ def python_dependency_files(args, root, files):
             module_files.extend(walk_files(path, PYTHON_SUFFIXES))
         dependency_files.update(module_files)
     return sorted(dependency_files), shlex.join(command), unresolved
+
+
+def cargo_command(args, root):
+    value = args.cargo or os.environ.get("PROJECT_CTAGS_CARGO")
+    if value:
+        path = Path(os.path.expandvars(os.path.expanduser(value)))
+        if not path.is_absolute():
+            path = root / path
+        return str(path.absolute())
+    return shutil.which("cargo")
+
+
+def rust_host_target(root):
+    rustc = shutil.which("rustc")
+    if rustc is None:
+        return None
+    result = subprocess.run(
+        [rustc, "-vV"],
+        cwd=root,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if result.returncode == 0:
+        for line in result.stdout.splitlines():
+            if line.startswith("host: "):
+                return line.removeprefix("host: ")
+    return None
+
+
+def rust_dependency_files(args, root):
+    manifest = root / "Cargo.toml"
+    if not manifest.is_file():
+        return [], None
+    cargo = cargo_command(args, root)
+    if cargo is None:
+        return [], None
+    command = [
+        cargo,
+        "metadata",
+        "--format-version=1",
+        "--locked",
+        "--offline",
+        "--manifest-path",
+        str(manifest),
+    ]
+    target = rust_host_target(root)
+    if target:
+        command.extend(["--filter-platform", target])
+    result = subprocess.run(
+        command,
+        cwd=root,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0:
+        if result.stderr:
+            print(result.stderr.rstrip(), file=sys.stderr)
+        return [], None
+    try:
+        metadata = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        print("Could not read Cargo metadata", file=sys.stderr)
+        return [], None
+    workspace_members = set(metadata.get("workspace_members", []))
+    files = set()
+    for package in metadata.get("packages", []):
+        if package.get("id") in workspace_members:
+            continue
+        package_root = Path(package["manifest_path"]).resolve().parent
+        files.update(walk_files(package_root, RUST_SUFFIXES))
+    return sorted(files), cargo
 
 
 def compilation_database(root):
@@ -378,11 +456,15 @@ def main():
     unresolved = []
     if not args.no_python_deps:
         python_files, python, unresolved = python_dependency_files(args, root, local_files)
+    rust_files = []
+    cargo = None
+    if not args.no_rust_deps:
+        rust_files, cargo = rust_dependency_files(args, root)
     c_headers = []
     if not args.no_c_deps:
         c_headers = c_dependency_files(root, local_files)
     extra_files = extra_source_files(args, root)
-    all_files = sorted(set(local_files + python_files + c_headers + extra_files))
+    all_files = sorted(set(local_files + python_files + rust_files + c_headers + extra_files))
     if not all_files:
         raise SystemExit("No source files found")
 
@@ -392,6 +474,8 @@ def main():
         print(f"python: {python}; {len(python_files)} dependency files")
     if unresolved:
         print(f"python unresolved: {', '.join(unresolved)}")
+    if cargo:
+        print(f"rust: {cargo}; {len(rust_files)} dependency files")
     if c_headers:
         print(f"c: {len(c_headers)} dependency headers")
     if extra_files:
