@@ -2200,6 +2200,7 @@ Timers that expired while Emacs was closed fire immediately."
   (helm-move-to-line-cycle-in-source nil)
   (helm-split-window-inside-p t)
   (helm-autoresize-mode 1)
+  (helm-buffers-show-icons t)
   (helm-boring-buffer-regexp-list
    '("\\` "
      "\\`\\*helm"
@@ -2353,6 +2354,12 @@ Timers that expired while Emacs was closed fire immediately."
   :custom
   (c-ts-mode-indent-offset 2)
   (c-ts-mode-indent-style 'k&r))
+
+(use-package rust-ts-mode
+  :ensure nil
+  :mode "\\.rs\\'"
+  :custom
+  (rust-ts-indent-offset 4))
 
 (use-package pyvenv
   :ensure t
@@ -3694,6 +3701,7 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
   (evil-set-initial-state 'dired-mode 'normal)
   (keymap-set dired-mode-map "E" #'my/dired-view-file-externally)
   (keymap-set dired-mode-map "C-c r" #'rsync-ui-dired)
+  (evil-define-key '(normal visual) dired-mode-map (kbd "SPC") my/leader-map)
   (evil-define-key 'normal dired-mode-map
     (kbd "h") #'dired-up-directory
     (kbd "l") #'dired-find-file))
@@ -3756,11 +3764,13 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 
 (with-eval-after-load 'elfeed
   (evil-define-key '(normal visual) elfeed-search-mode-map
+    (kbd "SPC") my/leader-map
     (kbd "f") #'link-hint-open-link
     (kbd "F") #'link-hint-copy-link))
 
 (with-eval-after-load 'elfeed
   (evil-define-key '(normal visual) elfeed-show-mode-map
+    (kbd "SPC") my/leader-map
     (kbd "f") #'link-hint-open-link
     (kbd "F") #'link-hint-copy-link))
 
@@ -3839,6 +3849,9 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 (evil-set-initial-state 'ibuffer-mode 'normal)
 
 (evil-set-initial-state 'messages-buffer-mode 'normal)
+
+(with-eval-after-load 'magit
+  (evil-define-key '(normal visual) magit-mode-map (kbd "SPC") my/leader-map))
 
 (defvar my/markdown-leader-map (make-sparse-keymap))
 (defvar my/markdown-command-map (make-sparse-keymap))

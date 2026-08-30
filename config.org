@@ -4456,6 +4456,7 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
   (evil-set-initial-state 'dired-mode 'normal)
   (keymap-set dired-mode-map "E" #'my/dired-view-file-externally)
   (keymap-set dired-mode-map "C-c r" #'rsync-ui-dired)
+  (evil-define-key '(normal visual) dired-mode-map (kbd "SPC") my/leader-map)
   (evil-define-key 'normal dired-mode-map
     (kbd "h") #'dired-up-directory
     (kbd "l") #'dired-find-file))
@@ -4526,6 +4527,7 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 #+begin_src emacs-lisp
 (with-eval-after-load 'elfeed
   (evil-define-key '(normal visual) elfeed-search-mode-map
+    (kbd "SPC") my/leader-map
     (kbd "f") #'link-hint-open-link
     (kbd "F") #'link-hint-copy-link))
 #+end_src
@@ -4535,6 +4537,7 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 #+begin_src emacs-lisp
 (with-eval-after-load 'elfeed
   (evil-define-key '(normal visual) elfeed-show-mode-map
+    (kbd "SPC") my/leader-map
     (kbd "f") #'link-hint-open-link
     (kbd "F") #'link-hint-copy-link))
 #+end_src
@@ -4645,6 +4648,13 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 
 #+begin_src emacs-lisp
 (evil-set-initial-state 'messages-buffer-mode 'normal)
+#+end_src
+
+** magit-mode
+
+#+begin_src emacs-lisp
+(with-eval-after-load 'magit
+  (evil-define-key '(normal visual) magit-mode-map (kbd "SPC") my/leader-map))
 #+end_src
 
 ** markdown-mode
