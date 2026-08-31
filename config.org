@@ -877,7 +877,6 @@ Not necessary but an eyecandy to look at!
   (my/markdown-apply-minimal-faces))
 #+end_src
 
-
 ** agent-shell
 
 let's give agent-shell another try
@@ -3633,7 +3632,8 @@ moved to local.el
   :commands (sync-ui))
 #+end_src
 
-* my/fns
+* my
+* ~my/reload-config()~
 
 #+begin_src emacs-lisp
 (defun my/reload-config ()
@@ -3667,6 +3667,54 @@ still require a restart since elpaca queues run at init time."
 ;; (my/centered-cursor)
 ;; (my/global-olivetti-mode)
 #+end_src
+
+** ~my/startup-time~
+
+#+begin_src emacs-lisp
+(defvar my-recorded-startup-time-message nil
+  "Stores the formatted string of the Emacs startup metrics.")
+
+(defun my-record-startup-time ()
+  "Calculate and record the elapsed startup time.
+This function records the time when `window-setup-hook' runs."
+  (setq my-recorded-startup-time-message
+        (format "Emacs loaded in %.2f seconds (Init time: %.2fs) with %d garbage collections."
+                (float-time (time-since before-init-time))
+                (float-time (time-subtract after-init-time before-init-time))
+                gcs-done))
+  ;; Output to the *Messages* buffer during the initial launch
+  (message "%s" my-recorded-startup-time-message))
+
+(defun my-display-startup-time ()
+  "Display the previously recorded Emacs startup time in the echo area."
+  (interactive)
+  (if my-recorded-startup-time-message
+      (message "%s" my-recorded-startup-time-message)
+    (message "Startup time was not recorded.")))
+(defvar my-recorded-startup-time-message nil
+  "Stores the formatted string of the Emacs startup metrics.")
+
+(defun my-record-startup-time ()
+  "Calculate and record the elapsed startup time.
+This function records the time when `window-setup-hook' runs."
+  (setq my-recorded-startup-time-message
+        (format "Emacs loaded in %.2f seconds (Init time: %.2fs) with %d garbage collections."
+                (float-time (time-since before-init-time))
+                (float-time (time-subtract after-init-time before-init-time))
+                gcs-done))
+  ;; Output to the *Messages* buffer during the initial launch
+  (message "%s" my-recorded-startup-time-message))
+
+(my-record-startup-time)
+
+(defun my-display-startup-time ()
+  "Display the previously recorded Emacs startup time in the echo area."
+  (interactive)
+  (if my-recorded-startup-time-message
+      (message "%s" my-recorded-startup-time-message)
+    (message "Startup time was not recorded.")))
+#+end_src
+
 
 * ibuffer hide
 
@@ -4060,7 +4108,6 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 #+end_src
 
 * keybindings
-
 ** command helpers
 
 #+begin_src emacs-lisp
@@ -4402,7 +4449,7 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 (define-key evil-outer-text-objects-map "q" #'my-evil-textobj-anyblock-a-quote)
 #+end_src
 
-** agent-shell-mode
+** COMMENT agent-shell-mode
 
 #+begin_src emacs-lisp
 (with-eval-after-load 'agent-shell
@@ -4416,7 +4463,7 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
     (kbd "<return>") #'agent-shell-submit))
 #+end_src
 
-** agent-shell-viewport-view-mode
+*** COMMENT agent-shell-viewport-view-mode
 
 #+begin_src emacs-lisp
 (with-eval-after-load 'agent-shell
@@ -4427,7 +4474,7 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
     (kbd "<return>") #'my/agent-shell-ret))
 #+end_src
 
-** async-shell-command buffer
+*** COMMENT async-shell-command buffer
 
 #+begin_src emacs-lisp
 (defun my/async-shell-command-bindings ()
@@ -5572,15 +5619,6 @@ opening another file in same project does not re-notify."
   "Stylesheet injected into throwaway HTML previews of Org buffers.")
 #+end_src
 
-* javelin
-
-#+begin_src emacs-lisp
-(use-package javelin
-  :ensure t
-  :config
-  (global-javelin-minor-mode 1))
-#+end_src
-
 * clatter
 
 #+begin_src emacs-lisp
@@ -5628,86 +5666,6 @@ opening another file in same project does not re-notify."
   (with-eval-after-load 'org
     (require 'clatter-org)
     (clatter-org-setup)))
-#+end_src
-
-* bluesky
-
-#+begin_src emacs-lisp
-(defvar my/bluesky-feeds
-  '(("❄ Nix and NixOS · @alesya.social"
-     . "at://did:plc:s44h5nbko454vhpa3oyza5lf/app.bsky.feed.generator/aaah6ge3eqpck")
-    ("λ Emacs · @spathi.bsky.social"
-     . "at://did:plc:f6p7kxtbvmsujg67gayjux7m/app.bsky.feed.generator/aaabl5c2jmqaw"))
-  "Named custom feeds offered by `my/bluesky-feed'.")
-
-(defun my/bluesky-feed ()
-  "Select and open one of `my/bluesky-feeds' with Helm."
-  (interactive)
-  (require 'helm)
-  (bluesky-feed
-   (helm-comp-read "Feed: " my/bluesky-feeds
-                   :alistp t
-                   :buffer "*helm bluesky feeds*"
-                   :fuzzy t
-                   :must-match t
-                   :name "🦋 Bluesky feeds")))
-
-(use-package bluesky
-  :ensure (:host github :repo "ahyatt/emacs-bluesky")
-  :commands (bluesky
-             bluesky-author
-             bluesky-search
-             bluesky-tag
-             bluesky-feed
-             bluesky-notifications
-             bluesky-likes
-             bluesky-replies)
-  :config
-  (require 'password-store)
-
-  ;; Feed, thread, search, author, and notification buffers all use
-  ;; `bluesky-mode'; composers use `bluesky-post-mode'.
-  (with-eval-after-load 'evil
-    (evil-set-initial-state 'bluesky-mode 'emacs)
-    (evil-set-initial-state 'bluesky-post-mode 'emacs))
-
-  ;; Thread views are opened with `pop-to-buffer', so quitting the window
-  ;; naturally reveals the timeline that was underneath.
-  (keymap-set bluesky-mode-map "q" #'quit-window)
-
-  (defun my/bluesky-password-store-auth
-      (orig callback &optional username password host discard-result)
-    "Authenticate Bluesky with the password-store entry `bsky.app'."
-    (funcall orig
-             callback
-             (or username (password-store-get-field "bsky.app" "username"))
-             (or password (password-store-get "bsky.app"))
-             host
-             discard-result))
-
-  (unless (advice-member-p #'my/bluesky-password-store-auth
-                           #'bluesky--authenticate)
-    (advice-add 'bluesky--authenticate
-                :around #'my/bluesky-password-store-auth)))
-#+end_src
-
-* org-other-agenda
-
-#+begin_src emacs-lisp
-(use-package org-other-agenda
-  :ensure (:host github
-           :repo "yibie/org-other-agenda"
-           :files ("*.el"))
-  :commands (org-other-agenda))
-#+end_src
-
-* org-clock-reminder
-
-#+begin_src emacs-lisp
-(use-package org-clock-reminder
-  :ensure (:host github :repo "inickey/org-clock-reminder")
-  :config 
-  (org-clock-reminder-mode))
 #+end_src
 
 * provide init
