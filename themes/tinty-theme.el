@@ -78,7 +78,7 @@
        ;; Tinted8 UI accent/status colors
        (ui-accent "#b4befe")
        (ui-link "#80ffea")
-       (ui-info "#8a75f0")
+       (ui-info "#8c78f0")
        (ui-error "#ff9580")
        (ui-success "#8aff80")
        (ui-warning "#ffca80")
@@ -108,7 +108,7 @@
        ;; the default foreground.
        (syntax-variable "#f8f8f2")
        (syntax-warning "#ff9580")
-       (syntax-preprocessor "#8a75f0")
+       (syntax-preprocessor "#8c78f0")
        (syntax-annotation "#ffff80")
        (syntax-attribute "#80ffea")
        (syntax-number "#ffca80")
@@ -123,9 +123,9 @@
        (pal-cyan "#80ffea")
        (pal-blue "#9580ff")
        (pal-magenta "#ff80bf")
-       (pal-gray "#7970a9")
+       (pal-gray "#8a83b4")
        (pal-white "#f8f8f2")
-       (pal-black "#22212c")
+       (pal-black "#8a898f")
        (h1 (if tinty-scale-headings tinty-height-1 1.0))
        (h2 (if tinty-scale-headings tinty-height-2 1.0))
        (h3 (if tinty-scale-headings tinty-height-3 1.0))
@@ -556,7 +556,7 @@
    `(ansi-color-magenta ((t (:foreground ,pal-magenta :background ,pal-magenta))))
    `(ansi-color-cyan ((t (:foreground ,pal-cyan :background ,pal-cyan))))
    `(ansi-color-white ((t (:foreground ,pal-white :background ,pal-white))))
-   `(ansi-color-bright-black ((t (:foreground "#36334c" :background "#36334c"))))
+   `(ansi-color-bright-black ((t (:foreground "#8a8997" :background "#8a8997"))))
    `(ansi-color-bright-red ((t (:foreground "#ff9580" :background "#ff9580"))))
    `(ansi-color-bright-green ((t (:foreground "#8aff80" :background "#8aff80"))))
    `(ansi-color-bright-yellow ((t (:foreground "#ffff80" :background "#ffff80"))))
@@ -772,6 +772,18 @@
    `(shr-selected-link ((t (:foreground ,ui-warning :underline t))))
    `(shr-code ((t (:foreground ,ui-info :background ,ui-bg-dark))))
    `(shr-mark ((t (:foreground ,ui-search-fg :background ,ui-search-bg))))
+   ;; Shrface otherwise derives its hyperlink faces from a dark-theme
+   ;; palette, which makes protocol-specific links unreadable in Elfeed and
+   ;; EWW when a light scheme is active.
+   `(shrface-href-face ((t (:foreground ,ui-link :underline t))))
+   `(shrface-href-other-face ((t (:foreground ,ui-link :underline t))))
+   `(shrface-href-http-face ((t (:foreground ,ui-link :underline t))))
+   `(shrface-href-https-face ((t (:foreground ,ui-link :underline t))))
+   `(shrface-href-ftp-face ((t (:foreground ,ui-link :underline t))))
+   `(shrface-href-file-face ((t (:foreground ,ui-link :underline t))))
+   `(shrface-href-mailto-face ((t (:foreground ,ui-link :underline t))))
+   `(shrface-code ((t (:foreground ,ui-info :background ,ui-bg-dark))))
+   `(shrface-verbatim ((t (:foreground ,ui-accent :background ,ui-bg-dark))))
    `(vundo-branch-stem ((t (:foreground ,ui-border))))
    `(vundo-diff-highlight ((t (:foreground ,ui-warning :weight bold))))
    `(vundo-highlight ((t (:foreground ,ui-accent :weight bold))))
@@ -1353,7 +1365,7 @@
    ;; === Term (extended) ===
    `(term ((t (:foreground ,ui-fg :background ,ui-bg))))
    `(term-bold ((t (:weight bold))))
-   `(term-color-bright-black ((t (:foreground "#36334c" :background "#36334c"))))
+   `(term-color-bright-black ((t (:foreground "#8a8997" :background "#8a8997"))))
    `(term-color-bright-red ((t (:foreground "#ff9580" :background "#ff9580"))))
    `(term-color-bright-green ((t (:foreground "#8aff80" :background "#8aff80"))))
    `(term-color-bright-yellow ((t (:foreground "#ffff80" :background "#ffff80"))))
@@ -1582,6 +1594,39 @@
    `(mu4e-column-faces-flags ((t (:foreground ,ui-link))))
    `(mu4e-column-faces-to-from ((t (:foreground ,ui-accent))))
 
+   ;; === Clatter ===
+   ;; Clatter's defaults are intentionally tuned for dark backgrounds.  Keep
+   ;; its semantics, but source every foreground from the active Tinty
+   ;; palette so messages and nicknames remain legible in light schemes.
+   `(clatter-timestamp ((t (:foreground ,ui-fg-dim))))
+   `(clatter-nick ((t (:weight bold))))
+   `(clatter-my-nick ((t (:foreground ,ui-accent :weight bold))))
+   `(clatter-action ((t (:foreground ,ui-success :slant italic))))
+   `(clatter-notice ((t (:foreground ,ui-warning))))
+   `(clatter-reaction ((t (:foreground ,ui-warning))))
+   `(clatter-system ((t (:foreground ,ui-fg-dim))))
+   `(clatter-error ((t (:foreground ,ui-error :weight bold))))
+   `(clatter-prompt ((t (:foreground ,ui-accent :weight bold))))
+   `(clatter-mention ((t (:foreground ,ui-error :weight bold))))
+   `(clatter-channel ((t (:foreground ,ui-link))))
+   `(clatter-muted-reaction ((t (:foreground ,ui-fg-dim :strike-through t))))
+   `(clatter-hl-keyword ((t (:foreground ,ui-search-fg :background ,ui-search-bg :weight bold))))
+   `(clatter-pal ((t (:foreground ,ui-success :weight bold))))
+   `(clatter-track-mention ((t (:foreground ,ui-error :weight bold))))
+   `(clatter-track-activity ((t (:foreground ,ui-success))))
+   `(clatter-track-muted ((t (:foreground ,ui-fg-dim))))
+   `(clatter-track-dm ((t (:foreground ,ui-warning :weight bold))))
+   `(clatter-read-marker-line ((t (:strike-through ,ui-border :extend t))))
+   `(clatter-rawlog-incoming ((t (:foreground ,ui-success))))
+   `(clatter-rawlog-outgoing ((t (:foreground ,ui-accent))))
+   `(clatter-rawlog-timestamp ((t (:foreground ,ui-fg-dim))))
+   `(clatter-rawlog-tag ((t (:foreground ,syntax-keyword))))
+   `(clatter-rawlog-command ((t (:foreground ,ui-warning :weight bold))))
+   `(clatter-rawlog-prefix ((t (:foreground ,ui-link))))
+   `(clatter-search-match ((t (:foreground ,ui-search-fg :background ,ui-search-bg :weight bold))))
+   `(clatter-search-file ((t (:foreground ,ui-link :slant italic))))
+   `(clatter-search-timestamp ((t (:foreground ,ui-fg-dim))))
+
    ;; === ERC ===
    `(erc-action-face ((t (:weight bold))))
    `(erc-button ((t (:weight bold :underline t))))
@@ -1658,6 +1703,20 @@
    `(sml/vc-edited ((t (:foreground ,ui-warning))))
 
    )
+
+  ;; Clatter uses 40 named nick faces, selected deterministically from a
+  ;; nickname hash.  Cycling the scheme's readable semantic colors keeps the
+  ;; mapping stable without importing Clatter's light-on-dark palette.
+  (let ((clatter-nick-colors
+         (vector ui-error ui-warning ui-success ui-link
+                 syntax-keyword syntax-function syntax-type)))
+    (dotimes (index 40)
+      (custom-theme-set-faces
+       'tinty
+       `(,(intern (format "clatter-nick-color-%d" index))
+         ((t (:foreground ,(aref clatter-nick-colors
+                                  (% index (length clatter-nick-colors)))
+                          :weight bold)))))))
 
   ;; === Theme variables ===
   (custom-theme-set-variables

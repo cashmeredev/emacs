@@ -2534,11 +2534,10 @@ Auto switch silos (different workspaces/folders) based on preconfigured director
   (company-idle-delay nil)
   ;; (company-minimum-prefix-length 2)
   (company-require-match nil)
-  (company-transformers '(my/company-limit-candidates))
-  (company-backends '(company-capf))
-  :config
-  (defun my/company-limit-candidates (candidates)
-    (seq-take candidates 4)))
+  ;; Limit the visible menu, not the candidate set.  Truncating candidates
+  ;; here made valid mu4e contacts and IRC nicks impossible to select.
+  (company-tooltip-limit 4)
+  (company-backends '(company-capf)))
 #+end_src
 
 * which-key
@@ -5034,6 +5033,26 @@ reset is unnecessary, so do the handler resolution ourselves and skip
   :ensure nil
   :defer t
   :commands (mu4e mu4e-compose-new)
+  :init
+  (defun my/mu4e-ensure-running-for-compose ()
+    "Start mu4e in the background before constructing a draft.
+This makes its asynchronous contact cache available even when a draft is
+opened directly with `mu4e-compose-new'."
+    (require 'mu4e)
+    (unless (bound-and-true-p mu4e--started)
+      (mu4e t)))
+
+  (defun my/mu4e-compose-tab ()
+    "Complete a contact in address fields, otherwise run `message-tab'."
+    (interactive)
+    (if (mu4e--compose-complete-contact-field)
+        (company-complete)
+      (message-tab)))
+
+  (add-hook 'mu4e-compose-pre-hook #'my/mu4e-ensure-running-for-compose)
+  (with-eval-after-load 'mu4e-compose
+    (keymap-set mu4e-compose-mode-map "TAB" #'my/mu4e-compose-tab)
+    (keymap-set mu4e-compose-mode-map "<tab>" #'my/mu4e-compose-tab))
   :config
 
   (setq mu4e-mu-binary (executable-find "mu"))
@@ -5568,6 +5587,7 @@ opening another file in same project does not re-notify."
 (use-package clatter
   :ensure (:host github :repo "parenworks/clatter.el")
   :commands (clatter clatter-quick-connect)
+  :hook (clatter-mode . my/clatter-company-mode)
   :custom
   (clatter-message-order 'oldest-first)
   (clatter-notify-enabled t)
@@ -5592,6 +5612,16 @@ opening another file in same project does not re-notify."
       :sasl plain
       :bouncer t)))
   :config
+  (defvar-keymap my/clatter-company-mode-map
+    "TAB" #'company-complete
+    "<tab>" #'company-complete)
+
+  (define-minor-mode my/clatter-company-mode
+    "Use Company for explicit completion in Clatter buffers."
+    :init-value nil
+    :lighter nil
+    :keymap my/clatter-company-mode-map)
+
   (require 'gnutls)
   (clatter-setup)
   (clatter-dcc-setup)
