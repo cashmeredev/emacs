@@ -109,6 +109,7 @@ Set per-host in the gitignored `local.el'.")
   (warning-minimum-level :emergency) ;; Set the minimum level of warnings to display.
   :hook ;; Add hooks to enable specific features in certain modes.
   (prog-mode . display-line-numbers-mode)
+  (conf-mode . display-line-numbers-mode)
   (markdown-mode . display-line-numbers-mode)
   (text-mode . visual-line-mode)       ;; Soft-wrap prose/text files at window edge.
   (conf-mode . visual-line-mode)       ;; Soft-wrap .conf and similar config files.
@@ -2156,13 +2157,45 @@ Timers that expired while Emacs was closed fire immediately."
   :demand t
   :hook (after-init . global-company-mode)
   :custom
-  (company-idle-delay nil)
-  ;; (company-minimum-prefix-length 2)
+  (company-idle-delay 0.1)
+  (company-minimum-prefix-length 2)
   (company-require-match nil)
-  ;; Limit the visible menu, not the candidate set.  Truncating candidates
-  ;; here made valid mu4e contacts and IRC nicks impossible to select.
-  (company-tooltip-limit 4)
-  (company-backends '(company-capf)))
+  (company-insertion-on-trigger nil)
+  (company-tooltip-limit 8)
+  (company-tooltip-align-annotations t)
+  (company-selection-wrap-around t)
+  (company-backends '(company-capf))
+  (company-frontends '(my/company-popup-frontend company-echo-metadata-frontend))
+  :config
+  (require 'company-childframe)
+  (defun my/company-popup-frontend (command)
+    "Use an aligned child frame in graphical Emacs and an overlay in terminals."
+    (cond
+     ((eq command 'hide)
+      (company-childframe-hide)
+      (company-pseudo-tooltip-hide))
+     ((display-graphic-p)
+      (company-childframe-frontend command))
+     (t
+      (company-pseudo-tooltip-frontend command))))
+  (setq company-selection-default 0)
+  (defun my/company-abort-and-normal-state ()
+    "Close completion and leave Evil insert state."
+    (interactive)
+    (company-abort)
+    (when (bound-and-true-p evil-local-mode)
+      (evil-normal-state)))
+  (defun my/company-navigation-keys (&rest _)
+    "Keep completion navigation consistent after Evil Collection loads."
+    (dolist (key '("TAB" "<tab>" "C-n" "C-j"))
+      (keymap-set company-active-map key #'company-select-next))
+    (dolist (key '("<backtab>" "S-TAB" "C-p" "C-k"))
+      (keymap-set company-active-map key #'company-select-previous))
+    (keymap-set company-active-map "RET" #'company-complete-selection)
+    (keymap-set company-active-map "<return>" #'company-complete-selection)
+    (keymap-set company-active-map "<escape>" #'my/company-abort-and-normal-state))
+  (my/company-navigation-keys)
+  (add-hook 'evil-collection-setup-hook #'my/company-navigation-keys))
 
 (use-package which-key
   :ensure t
@@ -2238,65 +2271,47 @@ Timers that expired while Emacs was closed fire immediately."
   (citre-default-create-tags-file-location 'in-dir)
   (citre-edit-ctags-options-manually nil)
   (citre-auto-enable-citre-mode-modes '(prog-mode))
+  (citre-completion-backends '(my-index))
+  (citre-find-definition-backends '(my-index))
+  (citre-identifier-list-backends '(my-index))
+  (citre-tags-in-buffer-backends '(my-index))
+  (citre-find-reference-backends '(global))
+  (citre-capf-optimize-for-popup t)
   :config
-  (defvar my/project-ctags-program
-    (expand-file-name "bin/project-ctags" user-emacs-directory))
-
-  (defvar-local my/project-ctags-arguments nil)
-
-  (put 'my/project-ctags-arguments 'safe-local-variable
-       (lambda (value)
-         (and (listp value) (seq-every-p #'stringp value))))
-
-  (defun my/project-ctags-root ()
-    (or (projectile-project-root)
-        (user-error "Not in a Projectile project")))
-
-  (defun my/project-ctags-enable-citre (root)
-    (dolist (buffer (buffer-list))
-      (with-current-buffer buffer
-        (when (and buffer-file-name
-                   (file-in-directory-p buffer-file-name root))
-          (citre-mode 1)))))
-
-  (defun my/project-ctags-sentinel (process _event)
-    (when (memq (process-status process) '(exit signal))
-      (let ((root (process-get process 'project-root)))
-        (if (and (eq (process-status process) 'exit)
-                 (zerop (process-exit-status process)))
-            (progn
-              (citre-clear-tags-file-cache)
-              (my/project-ctags-enable-citre root)
-              (message "Ctags ready for %s" root))
-          (display-buffer (process-buffer process))
-          (message "Ctags failed for %s; see %s"
-                   root
-                   (buffer-name (process-buffer process)))))))
-
-  (defun my/project-ctags-start (root arguments)
-    (unless (file-executable-p my/project-ctags-program)
-      (user-error "Project Ctags generator is not executable: %s"
-                  my/project-ctags-program))
-    (let ((output (get-buffer-create "*project-ctags*")))
-      (with-current-buffer output
-        (erase-buffer))
-      (let ((process
-             (make-process
-              :name (format "ctags:%s"
-                            (file-name-nondirectory
-                             (directory-file-name root)))
-              :buffer output
-              :command (append (list my/project-ctags-program root)
-                               arguments)
-              :connection-type 'pipe
-              :sentinel #'my/project-ctags-sentinel)))
-        (process-put process 'project-root root)))
-    (message "Generating Ctags for %s..." root))
-
-  (defun my/project-ctags-setup ()
-    (interactive)
-    (my/project-ctags-start (my/project-ctags-root)
-                            my/project-ctags-arguments)))
+  (require 'citre-index)
+  (require 'citre-backend)
+  (setq my/project-ctags-program (expand-file-name "bin/project-ctags" user-emacs-directory)
+        my/citre-index-cache-directory (expand-file-name "citre-cache/" user-emacs-directory)
+        my/citre-index-idle-delay 0.1
+        my/citre-index-refresh-delay 0.2
+        my/citre-index-check-interval 30
+        my/citre-index-dependency-check-interval 300
+        my/citre-index-max-buffer-size (* 2 1024 1024)
+        my/citre-index-max-watches 256
+        my/citre-index-process-timeout 120
+        my/citre-index-excluded-directories
+        '(".git" ".hg" ".svn" ".direnv" ".venv" ".pixi" "__pycache__"
+          "node_modules" "target" "build" "dist" "citre-cache"
+          "elpaca" "elpa" "eln-cache" "tree-sitter" "workspaces"))
+  (defun my/citre-completion-at-point ()
+    "Allow buffer-word fallback when Citre has no matching completion."
+    (when-let* ((completion (citre-completion-at-point)))
+      (append completion '(:exclusive no))))
+  (defun my/citre-completion-sources ()
+    "Use file completion before language sources and buffer words as a fallback."
+    (when (derived-mode-p 'prog-mode)
+      (setq-local completion-at-point-functions
+                  (cl-subst #'my/citre-completion-at-point #'citre-completion-at-point completion-at-point-functions))
+      (add-hook 'completion-at-point-functions #'cape-file nil t)
+      (add-hook 'completion-at-point-functions #'cape-dabbrev 90 t)))
+  (defun my/citre-auto-enable ()
+    "Let Citre enable unmanaged buffers without toggling an already active mode."
+    (unless (bound-and-true-p citre-mode)
+      (citre-auto-enable-citre-mode)))
+  (remove-hook 'find-file-hook #'citre-auto-enable-citre-mode)
+  (add-hook 'find-file-hook #'my/citre-auto-enable 90)
+  (add-hook 'citre-mode-hook #'my/citre-completion-sources)
+  (my/citre-index-mode 1))
 
 (use-package nov
   :ensure t
@@ -2758,6 +2773,7 @@ so the working-tree diff stays visible until the user explicitly stages."
   ((dired-mode . diredfl-mode)
    (dirvish-directory-view-mode . diredfl-mode)))
 
+(setq display-time-default-load-average nil)
 (display-time-mode 1)
 
 (defvar my/mode-line--format
@@ -3354,6 +3370,18 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
       (ibuffer nil (format "*ibuffer: %s*" name)
                (list (cons 'persp t))))))
 
+(use-package my-quick-access
+  :ensure nil
+  :after persp-mode
+  :demand t
+  :custom
+  (my/quick-access-recent-count 5) ; Recent buffers, excluding the active buffer.
+  (my/quick-access-selection-keys '("f" "j" "d" "k" "g" "h")) ; Recent selection and initial collisions.
+  (my/quick-access-page-size 6) ; Maximum visible entries before paging.
+  (my/quick-access-max-height 0.48) ; At most 48% of the frame height.
+  :config
+  (my/quick-access-mode 1))
+
 (use-package pass
   :ensure t
   :defer t
@@ -3525,6 +3553,7 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 (keymap-set my/leader-project-map "i" #'projectile-invalidate-cache)
 (keymap-set my/leader-project-map "t" #'projectile-run-task)
 (keymap-set my/leader-project-map "c" #'my/project-ctags-setup)
+(keymap-set my/leader-project-map "C" #'my/citre-index-status)
 
 (keymap-set my/leader-map "g" my/leader-git-map)
 (keymap-set my/leader-git-map "c" #'magit-clone)
@@ -3689,7 +3718,12 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 
 (evil-define-key 'insert 'global (kbd "C-w") evil-window-map)
 
+(keymap-global-set "M-b" #'my/quick-access)
+(evil-define-key '(normal visual motion insert emacs) 'global
+  (kbd "M-b") #'my/quick-access)
+
 (evil-define-key 'normal 'global
+  (kbd "t") #'my/toggle-header-line-workspaces
   (kbd "K") #'my/eldoc-and-jump
   (kbd "] d") #'flycheck-next-error
   (kbd "[ d") #'flycheck-previous-error
@@ -3870,6 +3904,7 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 (evil-define-key '(normal insert) helm-map
   (kbd "C-j") #'helm-next-line
   (kbd "C-k") #'helm-previous-line
+  (kbd "C-z") #'helm-toggle-full-frame
   (kbd "C-g") #'helm-keyboard-quit)
 (evil-define-key 'normal helm-map
   (kbd "<escape>") #'helm-keyboard-quit

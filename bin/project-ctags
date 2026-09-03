@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import argparse
 import ast
+import fcntl
+import hashlib
 import json
 import os
 import shlex
@@ -8,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 IGNORED_DIRECTORIES = {
@@ -85,6 +88,12 @@ def parse_arguments():
     parser.add_argument("--no-python-deps", action="store_true")
     parser.add_argument("--no-rust-deps", action="store_true")
     parser.add_argument("--no-c-deps", action="store_true")
+    parser.add_argument("--cache-dir", help="Maintain project and dependency indexes here")
+    parser.add_argument("--force", action="store_true")
+    parser.add_argument("--snapshot-request", help="JSON list of source/snapshot/output mappings")
+    parser.add_argument("--exclude-dir", action="append", default=[])
+    parser.add_argument("--watch-limit", type=int, default=256)
+    parser.add_argument("--dependency-check-interval", type=float, default=300)
     return parser.parse_args()
 
 
@@ -405,7 +414,7 @@ def extra_source_files(args, root):
     return sorted(files)
 
 
-def generate_tags(ctags, output, files):
+def generate_tags(ctags, output, files, mappings=None):
     output.parent.mkdir(parents=True, exist_ok=True)
     list_file = tempfile.NamedTemporaryFile(mode="w", prefix="project-ctags-", delete=False)
     temporary_output = tempfile.NamedTemporaryFile(
@@ -414,6 +423,8 @@ def generate_tags(ctags, output, files):
     temporary_output.close()
     try:
         for path in files:
+            if "\n" in str(path) or "\r" in str(path):
+                raise ValueError(f"Ctags file lists cannot represent this path: {path!r}")
             list_file.write(f"{path}\n")
         list_file.close()
         command = [
@@ -433,11 +444,148 @@ def generate_tags(ctags, output, files):
         result = subprocess.run(command, check=False)
         if result.returncode != 0:
             raise SystemExit(result.returncode)
+        if mappings:
+            data = Path(temporary_output.name).read_bytes()
+            for source, original in mappings.items():
+                data = data.replace(b"\t" + tag_path(source) + b"\t", b"\t" + tag_path(original) + b"\t")
+            Path(temporary_output.name).write_bytes(data)
         os.replace(temporary_output.name, output)
     finally:
         list_file.close()
         Path(list_file.name).unlink(missing_ok=True)
         Path(temporary_output.name).unlink(missing_ok=True)
+
+
+
+def tag_path(path):
+    """Encode filenames in the tags input field."""
+    return os.fsencode(path).replace(b"\\", b"\\\\").replace(b"\t", b"\\t").replace(b"\n", b"\\n").replace(b"\r", b"\\r")
+
+
+def file_stamp(path):
+    try:
+        value = Path(path).stat()
+        return [value.st_mtime_ns, value.st_ctime_ns, value.st_size]
+    except OSError:
+        return None
+
+
+def atomic_json(path, value):
+    with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, delete=False) as stream:
+        temporary = Path(stream.name)
+        json.dump(value, stream)
+    try:
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def incremental_tags(ctags, output, current, previous, force=False):
+    """Parse changed files and replace their old records, including empty/deleted files."""
+    changed = {name for name, stamp in current.items() if previous.get(name) != stamp}
+    removed = previous.keys() - current.keys()
+    if force or not output.exists():
+        generate_tags(ctags, output, [Path(name) for name in current])
+        return True
+    if not changed and not removed:
+        return False
+    with tempfile.TemporaryDirectory(prefix="update-", dir=output.parent) as temporary:
+        delta = Path(temporary) / "delta.tags"
+        generate_tags(ctags, delta, [Path(name) for name in sorted(changed)])
+        replaced = {tag_path(name) for name in changed | removed}
+        headers = {}
+        records = []
+        for source, old in ((output, True), (delta, False)):
+            for line in source.read_bytes().splitlines(keepends=True):
+                if line.startswith(b"!_TAG_"):
+                    headers[line.split(b"\t", 1)[0]] = line
+                elif line.strip():
+                    fields = line.split(b"\t", 2)
+                    if not old or (len(fields) > 1 and fields[1] not in replaced):
+                        records.append(line)
+        merged = Path(temporary) / "merged.tags"
+        merged.write_bytes(b"".join(headers.values()) + b"".join(sorted(set(records))))
+        os.replace(merged, output)
+    return True
+
+
+def dependency_signature(args, root, files):
+    """Track declarations without resolving dependencies on every source edit."""
+    declarations = []
+    for path in files:
+        if path.name in {"Cargo.toml", "Cargo.lock", "pyproject.toml", "uv.lock", "poetry.lock", "pixi.lock", "pixi.toml", "requirements.txt", "compile_commands.json", "flake.lock", "flake.nix", ".envrc"}:
+            declarations.append((str(path), file_stamp(path)))
+        elif path.suffix.lower() in C_SOURCE_SUFFIXES | C_HEADER_SUFFIXES:
+            try:
+                includes = [line.strip() for line in path.read_text(errors="replace").splitlines() if line.lstrip().startswith(("#include", "# include"))]
+                declarations.append((str(path), includes))
+            except OSError:
+                pass
+    value = [imported_modules(files), declarations,
+             {key: item for key, item in vars(args).items() if key != "force"},
+             {key: os.environ.get(key) for key in ("PATH", "VIRTUAL_ENV", "CC", "CFLAGS", "CPPFLAGS", "PROJECT_CTAGS_PYTHON_COMMAND", "PROJECT_CTAGS_CARGO", "PROJECT_CTAGS_SOURCES")},
+             [(str(root / name), file_stamp(root / name)) for name in (".venv", ".pixi/envs/default", ".devenv/state/venv")]]
+    return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
+
+
+def refresh_cache(args, root, ctags):
+    cache = resolved_path(args.cache_dir, root)
+    cache.mkdir(parents=True, exist_ok=True)
+    # Different Emacs instances may share a cache; only the worker waits for this lock.
+    with (cache / "lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        manifest_path = cache / "manifest.json"
+        try:
+            old = json.loads(manifest_path.read_text())
+        except (OSError, ValueError):
+            old = {}
+        identity = [3, str(root), str(ctags), file_stamp(ctags), file_stamp(__file__), args.exclude_dir]
+        force = args.force or old.get("identity") != identity
+        project_output = cache / "project.tags"
+        dependency_output = cache / "dependencies.tags"
+        excluded = set(args.exclude_dir)
+        files = [path for path in project_files(root, resolved_path(args.output, root))
+                 if not path.is_relative_to(cache)
+                 and not any(part in excluded for part in path.parts)]
+        current = {str(path): file_stamp(path) for path in files}
+        project_changed = incremental_tags(ctags, project_output, current, old.get("files", {}),
+                                           force or old.get("project_stamp") != file_stamp(project_output))
+        # Publish project readiness before slower dependency discovery finishes.
+        print(json.dumps({"event": "project", "changed": project_changed}), flush=True)
+        signature = dependency_signature(args, root, files)
+        resolve = force or old.get("dependency_signature") != signature or time.time() - old.get("dependency_checked", 0) >= args.dependency_check_interval
+        dependencies = old.get("dependencies", {})
+        checked = old.get("dependency_checked", 0)
+        if resolve:
+            dependency_files = []
+            if not args.no_python_deps:
+                dependency_files.extend(python_dependency_files(args, root, files)[0])
+            if not args.no_rust_deps:
+                dependency_files.extend(rust_dependency_files(args, root)[0])
+            if not args.no_c_deps:
+                dependency_files.extend(c_dependency_files(root, files))
+            dependency_files.extend(extra_source_files(args, root))
+            dependencies = {str(path): file_stamp(path) for path in sorted(set(dependency_files)) if str(path) not in current}
+            checked = time.time()
+        else:
+            dependencies = {name: stamp for name in dependencies if (stamp := file_stamp(name)) is not None}
+        dependency_changed = incremental_tags(ctags, dependency_output, dependencies, old.get("dependencies", {}),
+                                              force or old.get("dependency_stamp") != file_stamp(dependency_output))
+        manifest = {"identity": identity, "files": current, "dependencies": dependencies,
+                    "dependency_signature": signature, "dependency_checked": checked,
+                    "project_stamp": file_stamp(project_output), "dependency_stamp": file_stamp(dependency_output),
+                    "directories": sorted({str(path.parent) for path in files} | {str(root)}),
+                    "checked": time.time()}
+        atomic_json(manifest_path, manifest)
+        print(json.dumps({"event": "complete", "changed": project_changed or dependency_changed,
+                          "project_files": len(files), "dependency_files": len(dependencies),
+                          "directories": manifest["directories"][:max(0, args.watch_limit)]}), flush=True)
+
+
+def snapshot_tags(args, ctags):
+    for entry in json.loads(Path(args.snapshot_request).read_text()):
+        source = Path(entry["snapshot"])
+        generate_tags(ctags, Path(entry["output"]), [source], {source: Path(entry["source"])})
 
 
 def main():
@@ -450,6 +598,12 @@ def main():
     if ctags is None:
         raise SystemExit("Universal Ctags is not available")
 
+    if args.snapshot_request:
+        snapshot_tags(args, ctags)
+        return
+    if args.cache_dir:
+        refresh_cache(args, root, ctags)
+        return
     local_files = project_files(root, output)
     python_files = []
     python = None

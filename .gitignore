@@ -104,3 +104,6 @@ dirvish/thumbnails
 /elfeed/
 /cache/
 /clatter/
+
+# Automatic Citre project indexes and session snapshots
+/citre-cache/
