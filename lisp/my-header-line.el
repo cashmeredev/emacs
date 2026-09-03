@@ -37,10 +37,6 @@ Matches the default height of Dirvish's full-frame header line."
   '((t (:inherit font-lock-builtin-face :weight bold)))
   "Face for the evil Emacs state indicator.")
 
-(defface my/header-line-buffer-icon-face
-  '((t (:inherit mode-line-buffer-id)))
-  "Face for the current buffer's file or mode icon.")
-
 (defface my/header-line-irc-face
   '((t (:inherit font-lock-builtin-face :weight bold)))
   "Face for the IRC activity indicator.")
@@ -144,11 +140,9 @@ the project root, falling back to the plain buffer name."
   (when (my/header-line--nerd-icons-p)
     (or (and buffer-file-name
              (ignore-errors
-               (nerd-icons-icon-for-file
-                buffer-file-name :face 'my/header-line-buffer-icon-face)))
+               (nerd-icons-icon-for-file buffer-file-name)))
         (ignore-errors
-          (nerd-icons-icon-for-mode
-           major-mode :face 'my/header-line-buffer-icon-face)))))
+          (nerd-icons-icon-for-mode major-mode)))))
 
 (defconst my/header-line--evil-states
   '((normal  "N" my/header-line-evil-normal)
