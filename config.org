@@ -2596,10 +2596,15 @@ Auto switch silos (different workspaces/folders) based on preconfigured director
 #+begin_src emacs-lisp
 (use-package helm
   :ensure (:wait t)
+  :after evil-collection
   :hook
   (after-init . helm-mode)
+  (helm-minibuffer-set-up . (lambda ()
+                            (evil-insert-state)
+                            (add-hook 'minibuffer-exit-hook #'turn-off-evil-mode nil t)))
   :custom
   (helm-M-x-fuzzy-match t)
+  (helm-occur-buffer-substring-default-mode 'buffer-substring)
   (helm-buffers-fuzzy-matching t)
   (helm-recentf-fuzzy-match t)
   (helm-move-to-line-cycle-in-source nil)
@@ -3150,6 +3155,7 @@ so the working-tree diff stays visible until the user explicitly stages."
   :after evil
   :ensure (:wait t)
   :config
+  (evil-collection-require 'minibuffer)
   (evil-collection-init))
 #+end_src
 
@@ -4674,9 +4680,14 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 ** helm
 
 #+begin_src emacs-lisp
-(with-eval-after-load 'helm
-  (keymap-set helm-map "C-j" #'helm-next-line)
-  (keymap-set helm-map "C-k" #'helm-previous-line))
+(evil-define-key '(normal insert) helm-map
+  (kbd "C-j") #'helm-next-line
+  (kbd "C-k") #'helm-previous-line
+  (kbd "C-g") #'helm-keyboard-quit)
+(evil-define-key 'normal helm-map
+  (kbd "<escape>") #'helm-keyboard-quit
+  (kbd "c") #'evil-collection-change-in-minibuffer
+  (kbd "M-SPC") my/leader-map)
 #+end_src
 
 ** help-mode

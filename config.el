@@ -1,4 +1,5 @@
 ;;; config.el --- Emacs-Kick --- A feature rich Emacs config for (neo)vi(m)mers -*- lexical-binding: t; -*-
+(pixel-scroll-precision-mode 1)
 (setq pgtk-wait-for-event-timeout 0.001)
 (setq package-enable-at-startup nil)
 ;; (setq-default mode-line-format t) ;; disabled: boolean t is not valid for mode-line-format
@@ -2158,11 +2159,10 @@ Timers that expired while Emacs was closed fire immediately."
   (company-idle-delay nil)
   ;; (company-minimum-prefix-length 2)
   (company-require-match nil)
-  (company-transformers '(my/company-limit-candidates))
-  (company-backends '(company-capf))
-  :config
-  (defun my/company-limit-candidates (candidates)
-    (seq-take candidates 4)))
+  ;; Limit the visible menu, not the candidate set.  Truncating candidates
+  ;; here made valid mu4e contacts and IRC nicks impossible to select.
+  (company-tooltip-limit 4)
+  (company-backends '(company-capf)))
 
 (use-package which-key
   :ensure t
@@ -2191,10 +2191,15 @@ Timers that expired while Emacs was closed fire immediately."
 
 (use-package helm
   :ensure (:wait t)
+  :after evil-collection
   :hook
   (after-init . helm-mode)
+  (helm-minibuffer-set-up . (lambda ()
+                            (evil-insert-state)
+                            (add-hook 'minibuffer-exit-hook #'turn-off-evil-mode nil t)))
   :custom
   (helm-M-x-fuzzy-match t)
+  (helm-occur-buffer-substring-default-mode 'buffer-substring)
   (helm-buffers-fuzzy-matching t)
   (helm-recentf-fuzzy-match t)
   (helm-move-to-line-cycle-in-source nil)
@@ -2601,6 +2606,7 @@ so the working-tree diff stays visible until the user explicitly stages."
   :after evil
   :ensure (:wait t)
   :config
+  (evil-collection-require 'minibuffer)
   (evil-collection-init))
 
 (use-package evil-surround
@@ -2992,6 +2998,49 @@ still require a restart since elpaca queues run at init time."
   (lambda () (when (my/olivetti-suitable-buffer-p) (olivetti-mode 1))))
 ;; (my/centered-cursor)
 ;; (my/global-olivetti-mode)
+
+(defvar my-recorded-startup-time-message nil
+  "Stores the formatted string of the Emacs startup metrics.")
+
+(defun my-record-startup-time ()
+  "Calculate and record the elapsed startup time.
+This function records the time when `window-setup-hook' runs."
+  (setq my-recorded-startup-time-message
+        (format "Emacs loaded in %.2f seconds (Init time: %.2fs) with %d garbage collections."
+                (float-time (time-since before-init-time))
+                (float-time (time-subtract after-init-time before-init-time))
+                gcs-done))
+  ;; Output to the *Messages* buffer during the initial launch
+  (message "%s" my-recorded-startup-time-message))
+
+(defun my-display-startup-time ()
+  "Display the previously recorded Emacs startup time in the echo area."
+  (interactive)
+  (if my-recorded-startup-time-message
+      (message "%s" my-recorded-startup-time-message)
+    (message "Startup time was not recorded.")))
+(defvar my-recorded-startup-time-message nil
+  "Stores the formatted string of the Emacs startup metrics.")
+
+(defun my-record-startup-time ()
+  "Calculate and record the elapsed startup time.
+This function records the time when `window-setup-hook' runs."
+  (setq my-recorded-startup-time-message
+        (format "Emacs loaded in %.2f seconds (Init time: %.2fs) with %d garbage collections."
+                (float-time (time-since before-init-time))
+                (float-time (time-subtract after-init-time before-init-time))
+                gcs-done))
+  ;; Output to the *Messages* buffer during the initial launch
+  (message "%s" my-recorded-startup-time-message))
+
+(my-record-startup-time)
+
+(defun my-display-startup-time ()
+  "Display the previously recorded Emacs startup time in the echo area."
+  (interactive)
+  (if my-recorded-startup-time-message
+      (message "%s" my-recorded-startup-time-message)
+    (message "Startup time was not recorded.")))
 
 (setq ibuffer-never-show-predicates
       '(;; System buffers
@@ -3667,28 +3716,6 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 (define-key evil-inner-text-objects-map "q" #'my-evil-textobj-anyblock-inner-quote)
 (define-key evil-outer-text-objects-map "q" #'my-evil-textobj-anyblock-a-quote)
 
-(with-eval-after-load 'agent-shell
-  (keymap-set agent-shell-mode-map "RET" #'my/agent-shell-ret)
-  (keymap-set agent-shell-mode-map "<return>" #'my/agent-shell-ret)
-  (evil-define-key '(normal motion) agent-shell-mode-map
-    (kbd "RET") #'my/agent-shell-ret
-    (kbd "<return>") #'my/agent-shell-ret)
-  (evil-define-key 'insert agent-shell-mode-map
-    (kbd "RET") #'agent-shell-submit
-    (kbd "<return>") #'agent-shell-submit))
-
-(with-eval-after-load 'agent-shell
-  (keymap-set agent-shell-viewport-view-mode-map "RET" #'my/agent-shell-ret)
-  (keymap-set agent-shell-viewport-view-mode-map "<return>" #'my/agent-shell-ret)
-  (evil-define-key '(normal motion) agent-shell-viewport-view-mode-map
-    (kbd "RET") #'my/agent-shell-ret
-    (kbd "<return>") #'my/agent-shell-ret))
-
-(defun my/async-shell-command-bindings ()
-  "Install bindings local to the displayed async shell buffer."
-  (evil-local-set-key 'normal (kbd "q") #'quit-window)
-  (evil-local-set-key 'motion (kbd "q") #'quit-window))
-
 (with-eval-after-load 'compile
   (keymap-set compilation-mode-map "C-c o" #'nix-compile-goto-option))
 
@@ -3840,9 +3867,14 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
     (kbd "g n") #'ghostel
     (kbd "g b") #'ghostel-list-buffers))
 
-(with-eval-after-load 'helm
-  (keymap-set helm-map "C-j" #'helm-next-line)
-  (keymap-set helm-map "C-k" #'helm-previous-line))
+(evil-define-key '(normal insert) helm-map
+  (kbd "C-j") #'helm-next-line
+  (kbd "C-k") #'helm-previous-line
+  (kbd "C-g") #'helm-keyboard-quit)
+(evil-define-key 'normal helm-map
+  (kbd "<escape>") #'helm-keyboard-quit
+  (kbd "c") #'evil-collection-change-in-minibuffer
+  (kbd "M-SPC") my/leader-map)
 
 (evil-set-initial-state 'help-mode 'emacs)
 
@@ -4166,6 +4198,26 @@ reset is unnecessary, so do the handler resolution ourselves and skip
   :ensure nil
   :defer t
   :commands (mu4e mu4e-compose-new)
+  :init
+  (defun my/mu4e-ensure-running-for-compose ()
+    "Start mu4e in the background before constructing a draft.
+This makes its asynchronous contact cache available even when a draft is
+opened directly with `mu4e-compose-new'."
+    (require 'mu4e)
+    (unless (bound-and-true-p mu4e--started)
+      (mu4e t)))
+
+  (defun my/mu4e-compose-tab ()
+    "Complete a contact in address fields, otherwise run `message-tab'."
+    (interactive)
+    (if (mu4e--compose-complete-contact-field)
+        (company-complete)
+      (message-tab)))
+
+  (add-hook 'mu4e-compose-pre-hook #'my/mu4e-ensure-running-for-compose)
+  (with-eval-after-load 'mu4e-compose
+    (keymap-set mu4e-compose-mode-map "TAB" #'my/mu4e-compose-tab)
+    (keymap-set mu4e-compose-mode-map "<tab>" #'my/mu4e-compose-tab))
   :config
 
   (setq mu4e-mu-binary (executable-find "mu"))
@@ -4613,14 +4665,10 @@ opening another file in same project does not re-notify."
 </style>"
   "Stylesheet injected into throwaway HTML previews of Org buffers.")
 
-(use-package javelin
-  :ensure t
-  :config
-  (global-javelin-minor-mode 1))
-
 (use-package clatter
   :ensure (:host github :repo "parenworks/clatter.el")
   :commands (clatter clatter-quick-connect)
+  :hook (clatter-mode . my/clatter-company-mode)
   :custom
   (clatter-message-order 'oldest-first)
   (clatter-notify-enabled t)
@@ -4645,79 +4693,21 @@ opening another file in same project does not re-notify."
       :sasl plain
       :bouncer t)))
   :config
+  (defvar-keymap my/clatter-company-mode-map
+    "TAB" #'company-complete
+    "<tab>" #'company-complete)
+
+  (define-minor-mode my/clatter-company-mode
+    "Use Company for explicit completion in Clatter buffers."
+    :init-value nil
+    :lighter nil
+    :keymap my/clatter-company-mode-map)
+
   (require 'gnutls)
   (clatter-setup)
   (clatter-dcc-setup)
   (with-eval-after-load 'org
     (require 'clatter-org)
     (clatter-org-setup)))
-
-(defvar my/bluesky-feeds
-  '(("❄ Nix and NixOS · @alesya.social"
-     . "at://did:plc:s44h5nbko454vhpa3oyza5lf/app.bsky.feed.generator/aaah6ge3eqpck")
-    ("λ Emacs · @spathi.bsky.social"
-     . "at://did:plc:f6p7kxtbvmsujg67gayjux7m/app.bsky.feed.generator/aaabl5c2jmqaw"))
-  "Named custom feeds offered by `my/bluesky-feed'.")
-
-(defun my/bluesky-feed ()
-  "Select and open one of `my/bluesky-feeds' with Helm."
-  (interactive)
-  (require 'helm)
-  (bluesky-feed
-   (helm-comp-read "Feed: " my/bluesky-feeds
-                   :alistp t
-                   :buffer "*helm bluesky feeds*"
-                   :fuzzy t
-                   :must-match t
-                   :name "🦋 Bluesky feeds")))
-
-(use-package bluesky
-  :ensure (:host github :repo "ahyatt/emacs-bluesky")
-  :commands (bluesky
-             bluesky-author
-             bluesky-search
-             bluesky-tag
-             bluesky-feed
-             bluesky-notifications
-             bluesky-likes
-             bluesky-replies)
-  :config
-  (require 'password-store)
-
-  ;; Feed, thread, search, author, and notification buffers all use
-  ;; `bluesky-mode'; composers use `bluesky-post-mode'.
-  (with-eval-after-load 'evil
-    (evil-set-initial-state 'bluesky-mode 'emacs)
-    (evil-set-initial-state 'bluesky-post-mode 'emacs))
-
-  ;; Thread views are opened with `pop-to-buffer', so quitting the window
-  ;; naturally reveals the timeline that was underneath.
-  (keymap-set bluesky-mode-map "q" #'quit-window)
-
-  (defun my/bluesky-password-store-auth
-      (orig callback &optional username password host discard-result)
-    "Authenticate Bluesky with the password-store entry `bsky.app'."
-    (funcall orig
-             callback
-             (or username (password-store-get-field "bsky.app" "username"))
-             (or password (password-store-get "bsky.app"))
-             host
-             discard-result))
-
-  (unless (advice-member-p #'my/bluesky-password-store-auth
-                           #'bluesky--authenticate)
-    (advice-add 'bluesky--authenticate
-                :around #'my/bluesky-password-store-auth)))
-
-(use-package org-other-agenda
-  :ensure (:host github
-           :repo "yibie/org-other-agenda"
-           :files ("*.el"))
-  :commands (org-other-agenda))
-
-(use-package org-clock-reminder
-  :ensure (:host github :repo "inickey/org-clock-reminder")
-  :config 
-  (org-clock-reminder-mode))
 
 (provide 'init)
