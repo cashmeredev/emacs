@@ -4450,7 +4450,9 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 (evil-define-key 'insert 'global (kbd "M-SPC") my/leader-map)
 (evil-define-key '(normal visual) 'global (kbd ",") my/local-leader-map)
 (evil-define-key '(normal visual motion operator) 'global
-  (kbd "s") #'my/s-key-dispatch)
+  (kbd "s") #'my/s-key-dispatch
+  (kbd "H") #'evil-beginning-of-line
+  (kbd "L") #'evil-end-of-line)
 
 (with-eval-after-load 'evil-surround
   (evil-define-key 'operator evil-surround-mode-map
