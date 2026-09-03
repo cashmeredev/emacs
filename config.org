@@ -84,6 +84,15 @@ Set per-host in the gitignored `local.el'.")
 (advice-add 'use-package-normalize/:ensure :around #'my/elpaca-skip-local)
 #+end_src
 
+* tinty-theme-sync
+
+#+begin_src emacs-lisp
+(require 'my-tinty)
+(setq my/tinty-theme-file (expand-file-name "themes/tinty-theme.el" user-emacs-directory)
+      my/tinty-reload-delay 0.15)
+(my/tinty-auto-reload-mode 1)
+#+end_src
+
 * elpaca
 
 The lock file is activated in =init.el= before the first package order is
@@ -229,6 +238,17 @@ normal package updates cannot silently rewrite pinned revisions.
   "Configuration for using Nerd Fonts Symbols."
   :type 'boolean
   :group 'appearance)
+#+end_src
+
+** shared bookmarks
+
+#+begin_src emacs-lisp
+(use-package bookmark
+  :ensure nil
+  :custom
+  (bookmark-default-file (locate-user-emacs-file "bookmarks"))
+  (bookmark-save-flag 1)
+  (bookmark-watch-bookmark-file 'silent))
 #+end_src
 
 * freebsd
@@ -3660,19 +3680,20 @@ moved to local.el
 
 #+begin_src emacs-lisp
 (defun my/reload-config ()
-  "Re-tangle config.org and reload the generated config.el in place.
-Applies changes to customs, hooks, keybindings, and variable
-settings without restarting Emacs. Packages that are newly added
-still require a restart since elpaca queues run at init time."
+  "Save, tangle and reload config.org in this Emacs process only."
   (interactive)
+  (require 'ob-tangle)
   (let* ((org-file  (expand-file-name "config.org" user-emacs-directory))
          (el-file   (expand-file-name "config.el"  user-emacs-directory))
          (start     (current-time)))
-    (message "Reloading config…")
-    ;; 1. Tangle org → el (skips up-to-date blocks automatically)
-    (org-babel-tangle-file org-file el-file "emacs-lisp")
-    ;; 2. Load the freshly tangled file
-    (load-file el-file)
+    (let ((inhibit-message t)
+          (message-log-max nil))
+      (when-let* ((buffer (find-buffer-visiting org-file)))
+        (with-current-buffer buffer
+          (when (buffer-modified-p)
+            (save-buffer))))
+      (org-babel-tangle-file org-file el-file "emacs-lisp")
+      (load el-file nil 'nomessage))
     (message "Config reloaded in %.2fs"
              (float-time (time-since start)))))
 #+end_src
@@ -3817,8 +3838,11 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 
 #+begin_src emacs-lisp
 (defun my/helm-find-in (dir)
+  "Recursively find files below DIR with Helm."
   (interactive "DFind files in: ")
-  (helm-find-1 dir))
+  (let ((default-directory (file-name-as-directory
+                            (expand-file-name dir))))
+    (helm-find nil)))
 
 (defun my/helm-rg-in (dir)
   "Search DIR recursively with ripgrep via Helm."
@@ -4495,38 +4519,55 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 (define-key evil-outer-text-objects-map "q" #'my-evil-textobj-anyblock-a-quote)
 #+end_src
 
-** COMMENT agent-shell-mode
+*** move-visual-lines
 
 #+begin_src emacs-lisp
-(with-eval-after-load 'agent-shell
-  (keymap-set agent-shell-mode-map "RET" #'my/agent-shell-ret)
-  (keymap-set agent-shell-mode-map "<return>" #'my/agent-shell-ret)
-  (evil-define-key '(normal motion) agent-shell-mode-map
-    (kbd "RET") #'my/agent-shell-ret
-    (kbd "<return>") #'my/agent-shell-ret)
-  (evil-define-key 'insert agent-shell-mode-map
-    (kbd "RET") #'agent-shell-submit
-    (kbd "<return>") #'agent-shell-submit))
-#+end_src
+(defun my/evil-move-visual-lines (direction)
+  "Move the selected lines by DIRECTION, preserving the Visual selection."
+  (let* ((anchor (marker-position evil-visual-mark))
+         (cursor (marker-position evil-visual-point))
+         (type (evil-visual-type))
+         (beg (save-excursion
+                (goto-char (min anchor cursor))
+                (line-beginning-position)))
+         (end (save-excursion
+                (goto-char (max anchor cursor))
+                (forward-line 1)
+                (point)))
+         (first-line (line-number-at-pos beg))
+         (last-line (line-number-at-pos (max beg (1- end))))
+         (final-newline (eq (char-before (point-max)) ?\n)))
+    (when (if (> direction 0) (< end (point-max)) (> beg (point-min)))
+      (evil-with-single-undo
+        (evil-move beg end (if (> direction 0) (1+ last-line) (- first-line 2)))
+        (unless final-newline
+          (save-excursion
+            (goto-char (point-max))
+            (when (eq (char-before) ?\n)
+              (delete-char -1))))
+        (let ((start (save-excursion
+                       (goto-char (point-min))
+                       (forward-line (+ first-line direction -1))
+                       (point))))
+          (evil-visual-make-selection
+           (+ start (- anchor beg)) (+ start (- cursor beg)) type))))
+    (setq deactivate-mark nil)))
 
-*** COMMENT agent-shell-viewport-view-mode
+(evil-define-command my/evil-move-visual-lines-down ()
+  "Move selected lines down one line and remain in Visual state."
+  :keep-visual t
+  (interactive "*")
+  (my/evil-move-visual-lines 1))
 
-#+begin_src emacs-lisp
-(with-eval-after-load 'agent-shell
-  (keymap-set agent-shell-viewport-view-mode-map "RET" #'my/agent-shell-ret)
-  (keymap-set agent-shell-viewport-view-mode-map "<return>" #'my/agent-shell-ret)
-  (evil-define-key '(normal motion) agent-shell-viewport-view-mode-map
-    (kbd "RET") #'my/agent-shell-ret
-    (kbd "<return>") #'my/agent-shell-ret))
-#+end_src
+(evil-define-command my/evil-move-visual-lines-up ()
+  "Move selected lines up one line and remain in Visual state."
+  :keep-visual t
+  (interactive "*")
+  (my/evil-move-visual-lines -1))
 
-*** COMMENT async-shell-command buffer
-
-#+begin_src emacs-lisp
-(defun my/async-shell-command-bindings ()
-  "Install bindings local to the displayed async shell buffer."
-  (evil-local-set-key 'normal (kbd "q") #'quit-window)
-  (evil-local-set-key 'motion (kbd "q") #'quit-window))
+(evil-define-key 'visual 'global
+  (kbd "N") #'my/evil-move-visual-lines-down
+  (kbd "P") #'my/evil-move-visual-lines-up)
 #+end_src
 
 ** compilation-mode

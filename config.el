@@ -60,6 +60,11 @@ Set per-host in the gitignored `local.el'.")
     (funcall orig name _keyword args)))
 (advice-add 'use-package-normalize/:ensure :around #'my/elpaca-skip-local)
 
+(require 'my-tinty)
+(setq my/tinty-theme-file (expand-file-name "themes/tinty-theme.el" user-emacs-directory)
+      my/tinty-reload-delay 0.15)
+(my/tinty-auto-reload-mode 1)
+
 (defun my/elpaca-write-lock-file ()
   "Write exact revisions of all queued packages to `elpaca-lock-file'."
   (interactive)
@@ -194,6 +199,13 @@ Set per-host in the gitignored `local.el'.")
   "Configuration for using Nerd Fonts Symbols."
   :type 'boolean
   :group 'appearance)
+
+(use-package bookmark
+  :ensure nil
+  :custom
+  (bookmark-default-file (locate-user-emacs-file "bookmarks"))
+  (bookmark-save-flag 1)
+  (bookmark-watch-bookmark-file 'silent))
 
 (when (eq system-type 'berkeley-unix)
   ;; Start the Emacs server so emacsclient (and pinentry-emacs) can connect.
@@ -2987,19 +2999,20 @@ so the working-tree diff stays visible until the user explicitly stages."
   :commands (sync-ui))
 
 (defun my/reload-config ()
-  "Re-tangle config.org and reload the generated config.el in place.
-Applies changes to customs, hooks, keybindings, and variable
-settings without restarting Emacs. Packages that are newly added
-still require a restart since elpaca queues run at init time."
+  "Save, tangle and reload config.org in this Emacs process only."
   (interactive)
+  (require 'ob-tangle)
   (let* ((org-file  (expand-file-name "config.org" user-emacs-directory))
          (el-file   (expand-file-name "config.el"  user-emacs-directory))
          (start     (current-time)))
-    (message "Reloading config…")
-    ;; 1. Tangle org → el (skips up-to-date blocks automatically)
-    (org-babel-tangle-file org-file el-file "emacs-lisp")
-    ;; 2. Load the freshly tangled file
-    (load-file el-file)
+    (let ((inhibit-message t)
+          (message-log-max nil))
+      (when-let* ((buffer (find-buffer-visiting org-file)))
+        (with-current-buffer buffer
+          (when (buffer-modified-p)
+            (save-buffer))))
+      (org-babel-tangle-file org-file el-file "emacs-lisp")
+      (load el-file nil 'nomessage))
     (message "Config reloaded in %.2fs"
              (float-time (time-since start)))))
 
@@ -3118,8 +3131,11 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
   (call-interactively #'helm-projectile-rg))
 
 (defun my/helm-find-in (dir)
+  "Recursively find files below DIR with Helm."
   (interactive "DFind files in: ")
-  (helm-find-1 dir))
+  (let ((default-directory (file-name-as-directory
+                            (expand-file-name dir))))
+    (helm-find nil)))
 
 (defun my/helm-rg-in (dir)
   "Search DIR recursively with ripgrep via Helm."
@@ -3751,6 +3767,53 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 (define-key evil-outer-text-objects-map "b" #'evil-textobj-anyblock-a-block)
 (define-key evil-inner-text-objects-map "q" #'my-evil-textobj-anyblock-inner-quote)
 (define-key evil-outer-text-objects-map "q" #'my-evil-textobj-anyblock-a-quote)
+
+(defun my/evil-move-visual-lines (direction)
+  "Move the selected lines by DIRECTION, preserving the Visual selection."
+  (let* ((anchor (marker-position evil-visual-mark))
+         (cursor (marker-position evil-visual-point))
+         (type (evil-visual-type))
+         (beg (save-excursion
+                (goto-char (min anchor cursor))
+                (line-beginning-position)))
+         (end (save-excursion
+                (goto-char (max anchor cursor))
+                (forward-line 1)
+                (point)))
+         (first-line (line-number-at-pos beg))
+         (last-line (line-number-at-pos (max beg (1- end))))
+         (final-newline (eq (char-before (point-max)) ?\n)))
+    (when (if (> direction 0) (< end (point-max)) (> beg (point-min)))
+      (evil-with-single-undo
+        (evil-move beg end (if (> direction 0) (1+ last-line) (- first-line 2)))
+        (unless final-newline
+          (save-excursion
+            (goto-char (point-max))
+            (when (eq (char-before) ?\n)
+              (delete-char -1))))
+        (let ((start (save-excursion
+                       (goto-char (point-min))
+                       (forward-line (+ first-line direction -1))
+                       (point))))
+          (evil-visual-make-selection
+           (+ start (- anchor beg)) (+ start (- cursor beg)) type))))
+    (setq deactivate-mark nil)))
+
+(evil-define-command my/evil-move-visual-lines-down ()
+  "Move selected lines down one line and remain in Visual state."
+  :keep-visual t
+  (interactive "*")
+  (my/evil-move-visual-lines 1))
+
+(evil-define-command my/evil-move-visual-lines-up ()
+  "Move selected lines up one line and remain in Visual state."
+  :keep-visual t
+  (interactive "*")
+  (my/evil-move-visual-lines -1))
+
+(evil-define-key 'visual 'global
+  (kbd "N") #'my/evil-move-visual-lines-down
+  (kbd "P") #'my/evil-move-visual-lines-up)
 
 (with-eval-after-load 'compile
   (keymap-set compilation-mode-map "C-c o" #'nix-compile-goto-option))
