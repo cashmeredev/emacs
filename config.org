@@ -7,6 +7,7 @@
 
 #+begin_src emacs-lisp 
 ;;; config.el --- Emacs-Kick --- A feature rich Emacs config for (neo)vi(m)mers -*- lexical-binding: t; -*-
+(pixel-scroll-precision-mode 1)
 (setq pgtk-wait-for-event-timeout 0.001)
 (setq package-enable-at-startup nil)
 ;; (setq-default mode-line-format t) ;; disabled: boolean t is not valid for mode-line-format
