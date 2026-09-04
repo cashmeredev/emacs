@@ -1,7 +1,9 @@
 ;;; config.el --- Emacs-Kick --- A feature rich Emacs config for (neo)vi(m)mers -*- lexical-binding: t; -*-
 (pixel-scroll-precision-mode 1)
 (setq pgtk-wait-for-event-timeout 0.001)
-(setq package-enable-at-startup nil)
+(setq package-enable-at-startup nil
+      ;; Local modules are edited independently of their optional byte-code files, so never let an older .elc silently shadow newer source.
+      load-prefer-newer t)
 ;; (setq-default mode-line-format t) ;; disabled: boolean t is not valid for mode-line-format
 (add-to-list 'default-frame-alist '(undecorated . t))
 ;; GC + file-name-handler-alist tuning lives in early-init.el now.
@@ -3971,6 +3973,12 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
   (kbd "C-k") #'helm-previous-line
   (kbd "C-z") #'helm-toggle-full-frame
   (kbd "C-g") #'helm-keyboard-quit)
+(evil-define-key '(normal insert) helm-find-files-map
+  ;; Preserve Helm's directory-aware RET behavior instead of inheriting
+  ;; `helm-maybe-exit-minibuffer' from Evil Collection's generic Helm map.
+  (kbd "RET") #'helm-ff-RET)
+(evil-define-key '(normal insert) helm-read-file-map
+  (kbd "RET") #'helm-ff-RET)
 (evil-define-key 'normal helm-map
   (kbd "<escape>") #'helm-keyboard-quit
   (kbd "c") #'evil-collection-change-in-minibuffer
@@ -4646,7 +4654,10 @@ opening another file in same project does not re-notify."
 
 (use-package zfs
   :ensure nil
-  :commands (zfs))
+  :commands (zfs)
+  :custom
+  (zfs-privileged-command '("doas" "-n"))
+  (zfs-authentication-command '("doas")))
 
 (use-package minimal-dashboard
   :ensure t

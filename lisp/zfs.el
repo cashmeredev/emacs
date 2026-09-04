@@ -26,6 +26,7 @@ Same plist shape as documented there."
 (defvar-local zfs-ui--row-actions nil)
 (defvar-local zfs-ui--refresh-fn nil)
 (defvar-local zfs-ui--back-action nil)
+(defvar-local zfs-ui--unlock-process nil)
 
 
 (defun zfs-ui--targets-load ()
@@ -113,27 +114,28 @@ Same plist shape as documented there."
 
 (defun zfs-ui--fetch (host include-disks callback)
   (let ((cli-dir (file-name-directory (locate-library "zfs-cli.el"))))
-    (async-start
-     `(lambda ()
-        (add-to-list 'load-path ,cli-dir)
-        (require 'zfs-cli)
-        (list :pools (condition-case err (zfs-cli-pools ',host)
-                       (error (cons :error (error-message-string err))))
-              :datasets (condition-case err (zfs-cli-datasets ',host)
-                          (error (cons :error (error-message-string err))))
-              :snaps (condition-case err (zfs-cli-snapshots ',host)
-                       (error (cons :error (error-message-string err))))
-              :locked ,(if include-disks
-                           '(condition-case err
-                                (mapcar (lambda (device)
-                                          (append device
-                                                  (list :pool (and (zfs-cli-disk-unlocked-p device)
-                                                                   (zfs-cli-pool-on-device
-                                                                    (concat "/dev/mapper/" (zfs-cli-disk-mapper device)))))))
-                                        (zfs-cli-locked-disks))
-                              (error (cons :error (error-message-string err))))
-                         nil)))
-     callback)))
+    (let ((async-prompt-for-password nil))
+      (async-start
+       `(lambda ()
+          (add-to-list 'load-path ,cli-dir)
+          (require 'zfs-cli)
+          (list :pools (condition-case err (zfs-cli-pools ',host)
+                         (error (cons :error (error-message-string err))))
+                :datasets (condition-case err (zfs-cli-datasets ',host)
+                            (error (cons :error (error-message-string err))))
+                :snaps (condition-case err (zfs-cli-snapshots ',host)
+                         (error (cons :error (error-message-string err))))
+                :locked ,(if include-disks
+                             '(condition-case err
+                                  (mapcar (lambda (device)
+                                            (append device
+                                                    (list :pool (and (zfs-cli-disk-unlocked-p device)
+                                                                     (zfs-cli-pool-on-device
+                                                                      (concat "/dev/mapper/" (zfs-cli-disk-mapper device)))))))
+                                          (zfs-cli-locked-disks))
+                                (error (cons :error (error-message-string err))))
+                           nil)))
+       callback))))
 
 (defun zfs-ui--fetch-done (result)
   (let ((pools (plist-get result :pools))
@@ -241,29 +243,37 @@ Same plist shape as documented there."
          (vui-set-state :format-status (cons (format "Format failed: %s" err) 'error)))))))
 
 
+(defun zfs-ui--start-open-or-import (device passphrase)
+  (if (process-live-p zfs-ui--unlock-process)
+      (vui-set-state :message (cons "Unlock or import is already running" 'warning))
+    (vui-set-state :message (cons "Waiting for Nitrokey PIN…" 'warning))
+    (setq zfs-ui--unlock-process
+          (zfs-cli-luks-unlock-and-import-async
+           (plist-get device :path) (concat "luks-" (plist-get device :name)) passphrase
+           (vui-async-callback (status pool error-text)
+             (setq zfs-ui--unlock-process nil)
+             (if (zerop status)
+                 (progn
+                   (vui-set-state :message
+                                  (if pool
+                                      (cons (format "Unlocked — pool %s imported" pool) 'success)
+                                    (cons "Unlocked, but no ZFS pool found on the device" 'warning)))
+                   (zfs-ui--refresh nil))
+               (vui-set-state :message (cons (format "Error: %s" error-text) 'error))))))))
+
 (defun zfs-ui--do-unlock (device)
-  (let ((passphrase (read-passwd (format "LUKS passphrase for %s: " (plist-get device :name)))))
-    (condition-case err
-        (let ((mapper (concat "luks-" (plist-get device :name))))
-          (zfs-cli-luks-open (plist-get device :path) mapper passphrase)
-          (let ((pool (zfs-cli-pool-on-device (concat "/dev/mapper/" mapper))))
-            (if pool
-                (progn
-                  (zfs-cli-import nil pool t)
-                  (vui-set-state :message (cons (format "Unlocked — pool %s imported" pool) 'success)))
-              (vui-set-state :message (cons "Unlocked, but no ZFS pool found on the device" 'warning))))
-          (zfs-ui--refresh nil))
-      (error (zfs-ui--fail err)))))
+  (condition-case err
+      (if (zfs-cli-disk-unlocked-p device)
+          (zfs-ui--start-open-or-import device nil)
+        (let ((passphrase (read-passwd (format "LUKS passphrase for %s: " (plist-get device :name)))))
+          (unwind-protect
+              (zfs-ui--start-open-or-import device passphrase)
+            (clear-string passphrase))))
+    (error (zfs-ui--fail err))))
 
 (defun zfs-ui--do-import (device)
   (condition-case err
-      (let ((pool (zfs-cli-pool-on-device (concat "/dev/mapper/" (zfs-cli-disk-mapper device)))))
-        (if pool
-            (progn
-              (zfs-cli-import nil pool t)
-              (vui-set-state :message (cons (format "Imported %s" pool) 'success))
-              (zfs-ui--refresh nil))
-          (vui-set-state :message (cons "No ZFS pool found on the device" 'warning))))
+      (zfs-ui--start-open-or-import device nil)
     (error (zfs-ui--fail err))))
 
 
@@ -576,7 +586,7 @@ Same plist shape as documented there."
       (zfs-ui--stat-card "pools" (number-to-string (length pools)) 'success card-width)
       (zfs-ui--stat-card "datasets" (number-to-string (length datasets)) 'link card-width)
       (zfs-ui--stat-card "snapshots" (number-to-string (length snaps)) 'warning card-width)
-      (zfs-ui--stat-card "locked disks" (number-to-string (length locked))
+      (zfs-ui--stat-card "LUKS devices" (number-to-string (length locked))
                          (if locked 'warning 'shadow) card-width))
      (vui-vstack
       :spacing 0
@@ -592,7 +602,7 @@ Same plist shape as documented there."
        (vui-vstack
         :spacing 0
         (vui-heading-3 "Disks")
-        (vui-muted "LUKS disks ZFS can use once unlocked")
+        (vui-muted "LUKS disks and partitions ZFS can use once unlocked")
         (vui-table
          :sticky-header t
          :columns '((:header "" :width 3)
