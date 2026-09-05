@@ -2504,7 +2504,8 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
 
 (use-package diff-hl
   :ensure t
-  :hook ((prog-mode text-mode conf-mode) . diff-hl-mode)
+  :hook (((prog-mode text-mode conf-mode) . diff-hl-mode)
+         (magit-post-refresh . diff-hl-magit-post-refresh))
   :custom
   (diff-hl-margin-symbols-alist
    '((insert . "┃") (delete . "▁") (change . "┃")
