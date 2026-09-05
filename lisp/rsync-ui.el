@@ -186,7 +186,7 @@
 (defun rsync-ui--find-remote-rsync (host port callback)
   (let* ((buffer (generate-new-buffer " *rsync-ui-ssh-check*"))
          (script (concat
-                  "command -v rsync 2>/dev/null || "
+                  "command -v rsync 2>/dev/null && exit 0; "
                   "for path in /run/current-system/sw/bin/rsync "
                   "/nix/var/nix/profiles/default/bin/rsync "
                   "/usr/local/bin/rsync; do "
