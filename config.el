@@ -25,8 +25,10 @@
   (defvar my/local-packages nil
     "Alist of (PACKAGE . DIRECTORY) loaded from a local checkout.
 Set per-host in the gitignored `local.el'.")
+  (defvar cashmere/frame-alpha nil
+    "Per-host opacity for the entire frame, or nil to keep foreground elements opaque.")
   (defvar cashmere/frame-alpha-background nil
-    "Per-host frame opacity, or nil for the Emacs default.")
+    "Per-host background-only opacity, or nil for the Emacs default.")
   (defvar cashmere/font-family "Maple Mono NF"
     "Per-host default monospace font family.")
   (defvar cashmere/font-height 180
@@ -35,15 +37,20 @@ Set per-host in the gitignored `local.el'.")
     "Per-host theme to load, or nil for no theme.")
   (load (locate-user-emacs-file "local.el") 'noerror 'nomessage))
 
-;; Apply appearance settings at runtime only.  Keeping these outside
-;; `eval-and-compile' avoids loading themes or mutating the initial daemon
-;; frame while native compilation is inspecting the configuration.
-(when cashmere/frame-alpha-background
-  (add-to-list 'default-frame-alist
-               `(alpha-background . ,cashmere/frame-alpha-background))
+;; Apply appearance settings at runtime only.  Keeping these outside `eval-and-compile' avoids loading themes or mutating the initial daemon frame while native compilation is inspecting the configuration.  Whole-frame opacity takes precedence because combining both alpha modes would dim the frame twice.
+(cond
+ (cashmere/frame-alpha
+  (add-to-list 'default-frame-alist '(alpha-background . 100))
+  (add-to-list 'default-frame-alist `(alpha . ,cashmere/frame-alpha))
   (when (display-graphic-p)
-    (set-frame-parameter nil 'alpha-background
-                         cashmere/frame-alpha-background)))
+    (set-frame-parameter nil 'alpha-background 100)
+    (set-frame-parameter nil 'alpha cashmere/frame-alpha)))
+ (cashmere/frame-alpha-background
+  (add-to-list 'default-frame-alist '(alpha . 100))
+  (add-to-list 'default-frame-alist `(alpha-background . ,cashmere/frame-alpha-background))
+  (when (display-graphic-p)
+    (set-frame-parameter nil 'alpha 100)
+    (set-frame-parameter nil 'alpha-background cashmere/frame-alpha-background))))
 
 (when cashmere/theme
   (add-to-list 'custom-theme-load-path
@@ -2171,7 +2178,7 @@ Timers that expired while Emacs was closed fire immediately."
   :demand t
   :hook (after-init . global-company-mode)
   :custom
-  (company-idle-delay 0.1)
+  (company-idle-delay 0.25)
   (company-minimum-prefix-length 2)
   (company-require-match nil)
   (company-insertion-on-trigger nil)
@@ -2182,32 +2189,51 @@ Timers that expired while Emacs was closed fire immediately."
   (company-frontends '(my/company-popup-frontend company-echo-metadata-frontend))
   :config
   (require 'company-childframe)
-  (defun my/company-popup-frontend (command)
-    "Use an aligned child frame in graphical Emacs and an overlay in terminals."
-    (cond
-     ((eq command 'hide)
-      (company-childframe-hide)
-      (company-pseudo-tooltip-hide))
-     ((display-graphic-p)
-      (company-childframe-frontend command))
-     (t
-      (company-pseudo-tooltip-frontend command))))
-  (setq company-selection-default 0)
-  (defun my/company-abort-and-normal-state ()
-    "Close completion and leave Evil insert state."
-    (interactive)
-    (company-abort)
-    (when (bound-and-true-p evil-local-mode)
-      (evil-normal-state)))
-  (defun my/company-navigation-keys (&rest _)
-    "Keep completion navigation consistent after Evil Collection loads."
-    (dolist (key '("TAB" "<tab>" "C-n" "C-j"))
-      (keymap-set company-active-map key #'company-select-next))
-    (dolist (key '("<backtab>" "S-TAB" "C-p" "C-k"))
-      (keymap-set company-active-map key #'company-select-previous))
-    (keymap-set company-active-map "RET" #'company-complete-selection)
-    (keymap-set company-active-map "<return>" #'company-complete-selection)
-    (keymap-set company-active-map "<escape>" #'my/company-abort-and-normal-state))
+  (setq company-selection-default 0))
+
+(defun my/company-popup-frontend (command)
+  "Use an aligned child frame in graphical Emacs and an overlay in terminals."
+  (cond
+   ((eq command 'hide)
+    (company-childframe-hide)
+    (company-pseudo-tooltip-hide))
+   ((display-graphic-p)
+    (company-childframe-frontend command))
+   (t
+    (company-pseudo-tooltip-frontend command))))
+
+(defun my/company-abort-and-normal-state ()
+  "Close completion and leave Evil insert state."
+  (interactive)
+  (company-abort)
+  (when (bound-and-true-p evil-local-mode)
+    (evil-normal-state)))
+
+(defun my/company-tab ()
+  "Indent programming buffers or advance an active snippet; otherwise select a candidate."
+  (interactive)
+  (if (derived-mode-p 'prog-mode)
+      (progn
+        (company-abort)
+        (if (and (bound-and-true-p yas-minor-mode)
+                 (yas-active-snippets))
+            (yas-next-field)
+          (indent-for-tab-command)))
+    (company-select-next)))
+
+(defun my/company-navigation-keys (&rest _)
+  "Keep completion navigation consistent after Evil Collection loads."
+  (dolist (key '("TAB" "<tab>"))
+    (keymap-set company-active-map key #'my/company-tab))
+  (dolist (key '("C-n" "C-j"))
+    (keymap-set company-active-map key #'company-select-next))
+  (dolist (key '("<backtab>" "S-TAB" "C-p" "C-k"))
+    (keymap-set company-active-map key #'company-select-previous))
+  (keymap-set company-active-map "RET" #'company-complete-selection)
+  (keymap-set company-active-map "<return>" #'company-complete-selection)
+  (keymap-set company-active-map "<escape>" #'my/company-abort-and-normal-state))
+
+(with-eval-after-load 'company
   (my/company-navigation-keys)
   (add-hook 'evil-collection-setup-hook #'my/company-navigation-keys))
 
@@ -2334,6 +2360,12 @@ Timers that expired while Emacs was closed fire immediately."
   :custom
   (nov-text-width 100))
 
+(defun my/programming-indent-setup ()
+  "Use TAB to indent programming buffers without starting completion."
+  (setq-local tab-always-indent t))
+
+(add-hook 'prog-mode-hook #'my/programming-indent-setup)
+
 (use-package typst-ts-mode
   :ensure t
   :mode "\\.typ\\'")
@@ -2350,6 +2382,11 @@ Timers that expired while Emacs was closed fire immediately."
   :after yasnippet
   :config
   (yas-reload-all))
+
+(defun my/yas-tab-filter (command)
+  "Offer Yasnippet expansion through TAB outside programming buffers."
+  (unless (derived-mode-p 'prog-mode)
+    (yas-maybe-expand-abbrev-key-filter command)))
 
 (use-package nix-ts-mode
   :ensure t
@@ -2388,6 +2425,23 @@ Timers that expired while Emacs was closed fire immediately."
   :custom
   (c-ts-mode-indent-offset 2)
   (c-ts-mode-indent-style 'k&r))
+
+(use-package c3-ts-mode
+  :ensure (:host github :repo "c3lang/c3-ts-mode"
+           :ref "d6ad0e39351d4a5430e731d05474a064dcdb2bc6"
+           :files ("c3-ts-mode.el"))
+  :mode "\\.c3[it]?\\'"
+  :init
+  (with-eval-after-load 'treesit
+    (setf (alist-get 'c3 treesit-language-source-alist)
+          '("https://github.com/c3lang/tree-sitter-c3"
+            :commit "56d73880751a3f442296d7042e7f0a3d21967238")))
+  :custom
+  (c3-ts-mode-indent-offset 2)
+  (c3-ts-mode-highlight-variable t)
+  (c3-ts-mode-highlight-property t)
+  (c3-ts-mode-highlight-assignment t)
+  (c3-ts-mode-highlight-punctuation t))
 
 (use-package rust-ts-mode
   :ensure nil
@@ -2505,7 +2559,8 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
 (use-package diff-hl
   :ensure t
   :hook (((prog-mode text-mode conf-mode) . diff-hl-mode)
-         (magit-post-refresh . diff-hl-magit-post-refresh))
+         (magit-post-refresh . diff-hl-magit-post-refresh)
+         (fossil-ui-post-refresh . fossil-ui-diff-hl-refresh))
   :custom
   (diff-hl-margin-symbols-alist
    '((insert . "┃") (delete . "▁") (change . "┃")
@@ -2548,35 +2603,6 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
       (lambda (window buffer bury-or-kill)
         (string-match-p "\\*magit" (buffer-name buffer))))
 
-(defcustom my/auto-git-add-exclude-regexps
-  '("/\\.git/" "/node_modules/" "/\\.direnv/" "/straight/" "/elpaca/"
-    "\\.gpg\\'" "/\\.cache/" "/__pycache__/")
-  "Paths matching these regexps are skipped by `my/auto-git-add-new-file'."
-  :type '(repeat regexp)
-  :group 'my)
-
-(defun my/auto-git-add-new-file ()
-  "Stage newly created file with intent-to-add so magit shows diffs.
-Runs on `after-save-hook'. Only acts when the saved file is inside a
-git project and currently untracked. Uses `git add -N' (intent-to-add)
-so the working-tree diff stays visible until the user explicitly stages."
-  (let ((file buffer-file-name))
-    (when (and file
-               (file-exists-p file)
-               (not (seq-some (lambda (re) (string-match-p re file))
-                              my/auto-git-add-exclude-regexps))
-               (locate-dominating-file file ".git"))
-      (let ((default-directory (file-name-directory file)))
-        (when (and (zerop (call-process "git" nil nil nil "rev-parse" "--is-inside-work-tree"))
-                   ;; ls-files --error-unmatch exits non-zero if untracked
-                   (not (zerop (call-process "git" nil nil nil
-                                             "ls-files" "--error-unmatch" file))))
-          (call-process "git" nil nil nil "add" "-N" file)
-          (when (fboundp 'magit-refresh)
-            (magit-refresh))
-          (message "auto-staged (intent-to-add): %s" (file-name-nondirectory file)))))))
-
-(add-hook 'after-save-hook #'my/auto-git-add-new-file)
 
 (defun my/magit-uncommit ()
   "Undo the last commit, leaving its changes in the working tree, unstaged."
@@ -2975,12 +3001,7 @@ so the working-tree diff stays visible until the user explicitly stages."
              croc-ui-send-text croc-ui-receive))
 
 (use-package textui
-  :ensure (:host github :repo "yibie/textui" :files ("*.el")))
-
-(use-package fossil-ui
-  :ensure nil
-  :after textui
-  :commands (fossil-ui fossil-ui-status))
+  :ensure (:host github :repo "yibie/textui" :ref "v0.8.0" :files ("*.el")))
 
 (use-package bbs-ui
   :ensure nil
@@ -2991,6 +3012,31 @@ so the working-tree diff stays visible until the user explicitly stages."
    (expand-file-name "bbs-sandbox.fossil" "/home/cashmere/bbs/"))
   (bbs-ui-web-base-url "https://bbs.copland.systems")
   (bbs-ui-pull-on-open nil))
+
+(use-package fossil-ui
+  :ensure nil
+  :demand t
+  :after textui
+  :commands (fossil-ui fossil-ui-status)
+  :hook (fossil-ui-diff-mode . visual-line-mode)
+  :custom
+  (fossil-ui-title-alignment 'center)
+  (fossil-ui-text-wrap 'greedy)
+  (fossil-ui-preview-lines 20)
+  (fossil-ui-diff-renderer 'auto)
+  (fossil-ui-stage-directory (expand-file-name "fossil-stage/" user-emacs-directory))
+  (fossil-ui-max-stage-bytes (* 5 1024 1024))
+  (fossil-ui-keyed-timeline t)
+  (fossil-ui-full-frame t)
+  (fossil-ui-confirm-revert t)
+  (fossil-ui-compact-layout t)
+  :config
+  (with-eval-after-load 'zoom
+    (dolist (mode '(fossil-ui-mode fossil-ui-diff-mode))
+      (add-to-list 'zoom-ignored-major-modes mode)))
+  (with-eval-after-load 'golden-ratio
+    (dolist (mode '(fossil-ui-mode fossil-ui-diff-mode))
+      (add-to-list 'golden-ratio-exclude-modes mode))))
 
 (use-package yggdrasil-ui
   :ensure nil
@@ -3096,6 +3142,25 @@ This function records the time when `window-setup-hook' runs."
         projectile-require-project-root nil
         projectile-globally-ignored-buffers '("\\*magit.*"))
   (add-hook 'after-save-hook #'projectile-cache-current-file))
+
+(defun my/projectile-fossil-command (original vcs &optional directory)
+  "Return a Fossil listing relative to DIRECTORY, delegating other VCS to ORIGINAL."
+  (if (not (eq vcs 'fossil))
+      (funcall original vcs directory)
+    (let* ((directory (file-name-as-directory
+                       (expand-file-name (or directory default-directory))))
+           (checkout (or (locate-dominating-file directory ".fslckout")
+                         (locate-dominating-file directory "_FOSSIL_")
+                         (user-error "No Fossil checkout for %s" directory)))
+           (prefix (if (file-equal-p directory checkout)
+                       ""
+                     (file-relative-name directory checkout))))
+      (format "fossil ls . | cut -b %d- | tr '\\n' '\\0'"
+              (1+ (string-bytes prefix))))))
+
+(with-eval-after-load 'projectile
+  (advice-add 'projectile-get-ext-command :around
+              #'my/projectile-fossil-command))
 
 (defun my/projectile-dashboard-fullscreen ()
   "Show the Projectile dashboard in the full frame."
@@ -3818,6 +3883,10 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
   (kbd "N") #'my/evil-move-visual-lines-down
   (kbd "P") #'my/evil-move-visual-lines-up)
 
+(with-eval-after-load 'yasnippet
+  (define-key yas-minor-mode-map (kbd "TAB")
+              '(menu-item "" yas-expand :filter my/yas-tab-filter)))
+
 (with-eval-after-load 'compile
   (keymap-set compilation-mode-map "C-c o" #'nix-compile-goto-option))
 
@@ -3961,6 +4030,47 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
     (kbd ",") my/eww-local-leader-map
     (kbd "f") #'link-hint-open-link
     (kbd "F") #'link-hint-copy-link))
+
+(with-eval-after-load 'fossil-ui
+  (evil-define-key '(normal motion visual) fossil-ui-mode-map
+    (kbd "SPC") my/leader-map
+    (kbd "V") #'evil-visual-line
+    (kbd "s") #'fossil-ui-stage
+    (kbd "u") #'fossil-ui-unstage
+    (kbd "r") #'fossil-ui-refresh
+    (kbd "x") #'fossil-ui-discard
+    (kbd "d") #'fossil-ui-delete
+    (kbd "G") #'evil-goto-line
+    (kbd "TAB") #'fossil-ui-diff
+    (kbd "<tab>") #'fossil-ui-diff
+    (kbd "c") nil
+    (kbd "c c") #'fossil-ui-commit
+    (kbd "S") #'fossil-ui-sync
+    (kbd "F") #'fossil-ui-update
+    (kbd "RET") #'fossil-ui-visit-file
+    (kbd "<return>") #'fossil-ui-visit-file
+    (kbd "D") #'fossil-ui-staged-diff
+    (kbd "q") #'fossil-ui-quit
+    (kbd "?") #'fossil-ui-help)
+  (evil-define-key '(normal motion visual) fossil-ui-diff-mode-map
+    (kbd "SPC") my/leader-map
+    (kbd "V") #'evil-visual-line
+    (kbd "G") #'evil-goto-line
+    (kbd "s") #'fossil-ui-stage
+    (kbd "u") #'fossil-ui-unstage
+    (kbd "x") #'fossil-ui-discard
+    (kbd "r") #'fossil-ui-diff-refresh
+    (kbd "D") #'fossil-ui-diff-toggle
+    (kbd "q") #'fossil-ui-quit)
+  (evil-define-key 'visual fossil-ui-mode-map
+    (kbd "j") #'evil-next-line
+    (kbd "k") #'evil-previous-line)
+  (evil-define-key 'visual fossil-ui-diff-mode-map
+    (kbd "j") #'evil-next-line
+    (kbd "k") #'evil-previous-line)
+  (evil-define-key '(normal insert visual motion) fossil-ui-commit-mode-map
+    (kbd "C-c C-c") #'fossil-ui-commit-submit
+    (kbd "C-c C-k") #'fossil-ui-commit-cancel))
 
 (with-eval-after-load 'ghostel
   (evil-define-key 'normal ghostel-mode-map

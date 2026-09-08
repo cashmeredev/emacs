@@ -108,9 +108,10 @@
         (setq textui-state (plist-put textui-state :height height))
         (dolist (width '(80 120 190))
           (let* ((frame (fossil-ui--frame width))
-                 (rendered (substring-no-properties
-                            (textui--render-specs
-                             (textui--prepare-frame frame) width))))
+                 (rendered
+                  (substring-no-properties
+                   (textui--render-specs
+                    (textui--prepare-frame frame) width))))
             (should (string-match-p "tracked.txt" rendered))
             (should (string-match-p "\\[x\\].*tracked.txt" rendered))
             (should (string-match-p
@@ -118,16 +119,21 @@
             (when (= width 80)
               (should (string-match-p "EDITED.*[+].*−" rendered))
               (should-not (string-match-p "Changes.*Recent commits" rendered)))
-            (when (>= width fossil-ui--wide-layout-width)
-              (should (string-match-p "Changes.*Recent commits" rendered)))
+            (should (string-match-p "Staged changes" rendered))
+            (should (string-match-p "Unstaged changes" rendered))
             (dolist (line (split-string rendered "\n"))
-              (should (<= (string-width (string-trim-right line))
-                          (if fossil-ui-content-width
-                              (min width fossil-ui-content-width)
-                            width))))
+              (should
+               (<=
+                (string-width (string-trim-right line))
+                (if fossil-ui-content-width
+                    (min width fossil-ui-content-width)
+                  width))))
             (when (= width 190)
-              (should (cl-some (lambda (line) (= (string-width line) 190))
-                               (split-string rendered "\n"))))))))))
+              (should
+               (cl-some
+                (lambda (line)
+                  (= (string-width line) 190))
+                (split-string rendered "\n"))))))))))
 
 (ert-deftest fossil-ui-icons-have-portable-fallback ()
   (let ((fossil-ui-use-icons nil))
@@ -160,7 +166,7 @@
           (substring-no-properties
            (textui--render-specs
             (textui--prepare-frame (fossil-ui--frame 120)) 120))))
-    (should (string-match-p "Working checkout is clean" rendered))
+    (should (string-match-p "No unstaged changes" rendered))
     (should (string-match-p "Running" rendered))
     (should (string-match-p "sync is running" rendered))
     (should (string-match-p "Error" rendered))
@@ -243,6 +249,49 @@
     (unwind-protect
         (should-error (fossil-ui--checkout-info directory) :type 'user-error)
       (delete-directory directory t))))
+
+(ert-deftest fossil-ui-preview-block-resizes-and-retains-diff-faces ()
+  (let* ((fossil-ui-preview-lines 3)
+         (widget
+          (widget-convert 'fossil-ui-preview
+                          :path "tracked.txt"
+                          :value "@@ -1 +1 @@\n-old\n+new\n context")))
+    (dolist (width '(20 80 120))
+      (let ((rendered (textui-layout-widget widget width)))
+        (should (text-property-not-all 0 (length rendered) 'face nil rendered))
+        (dolist (line (split-string rendered "\n"))
+          (should (<= (string-width line) width)))
+        (with-temp-buffer
+          (insert rendered)
+          (textui-attach-widget widget (point-min) (point-max))
+          (should (equal (buffer-string) rendered))
+          (widget-delete widget))))))
+
+(ert-deftest fossil-ui-preview-toggle-refresh-and-clean-checkout ()
+  (fossil-ui-test--with-checkout
+    (fossil-ui-test--write (expand-file-name "tracked.txt" root) "preview change\n")
+    (let ((buffer (save-window-excursion (fossil-ui-status root))))
+      (unwind-protect
+          (with-current-buffer buffer
+            (fossil-ui--goto-path "tracked.txt")
+            (should (eq (key-binding (kbd "P")) #'fossil-ui-toggle-preview))
+            (fossil-ui-toggle-preview)
+            (should (equal (plist-get textui-state :preview-path) "tracked.txt"))
+            (textui-refresh buffer)
+            (should (string-search "+preview change" (buffer-substring-no-properties (point-min) (point-max))))
+            (fossil-ui-test--write (expand-file-name "tracked.txt" root) "new preview\n")
+            (fossil-ui-refresh)
+            (textui-refresh buffer)
+            (should (string-search "+new preview" (buffer-substring-no-properties (point-min) (point-max))))
+            (fossil-ui--goto-path "tracked.txt")
+            (fossil-ui-toggle-preview)
+            (should-not (plist-get textui-state :preview-path))
+            (fossil-ui-toggle-preview)
+            (fossil-ui-test--write (expand-file-name "tracked.txt" root) "initial\n")
+            (fossil-ui-refresh)
+            (should-not (plist-get textui-state :preview-path)))
+        (when (buffer-live-p buffer)
+          (kill-buffer buffer))))))
 
 (provide 'fossil-ui-test)
 ;;; fossil-ui-test.el ends here

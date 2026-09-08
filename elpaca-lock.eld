@@ -107,6 +107,12 @@
                    :repo "ahyatt/emacs-bluesky" :type git :protocol
                    https :inherit t :depth treeless :ref
                    "b4b7957a3af0533918535486f44afcb808d38d24"))
+ (c3-ts-mode :source "elpaca-menu-lock-file" :recipe
+             (:source nil :package "c3-ts-mode" :id c3-ts-mode :host
+                      github :repo "c3lang/c3-ts-mode" :ref
+                      "d6ad0e39351d4a5430e731d05474a064dcdb2bc6"
+                      :files ("c3-ts-mode.el") :type git :protocol
+                      https :inherit t :depth treeless))
  (cape :source "elpaca-menu-lock-file" :recipe
        (:package "cape" :repo "minad/cape" :fetcher github :files
                  ("*.el" "*.el.in" "dir" "*.info" "*.texi" "*.texinfo"
@@ -1399,7 +1405,7 @@
          (:source nil :package "textui" :id textui :host github :repo
                   "yibie/textui" :files ("*.el") :type git :protocol
                   https :inherit t :depth treeless :ref
-                  "f6b3a06b95d80e2a2122d38c13d0df94bdf4df85"))
+                  "ce37202ec910e03008bd50472b2df1217b5f1a7e"))
  (tldr :source "elpaca-menu-lock-file" :recipe
        (:package "tldr" :fetcher github :repo "kuanyui/tldr.el" :files
                  ("*.el" "*.el.in" "dir" "*.info" "*.texi" "*.texinfo"

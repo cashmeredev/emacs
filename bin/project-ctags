@@ -2,6 +2,7 @@
 import argparse
 import ast
 import fcntl
+import functools
 import hashlib
 import json
 import os
@@ -36,6 +37,29 @@ PYTHON_SUFFIXES = {".py", ".pyi"}
 RUST_SUFFIXES = {".rs"}
 C_SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".m", ".mm"}
 C_HEADER_SUFFIXES = {".h", ".hh", ".hpp", ".hxx"}
+C3_SUFFIXES = {".c3", ".c3i", ".c3t"}
+C3_SKIP = r'(?s:/\*.*?\*/|<\*.*?\*>|`[^`]*`|"(?:\\.|[^"\\])*"|//[^\n]*)(*SKIP)(*F)|(?m)^\h*'
+C3_CTAGS_OPTIONS = [
+    "--langdef=C3",
+    "--map-C3=+.c3.c3i.c3t",
+    "--kinddef-C3=f,function,functions",
+    "--kinddef-C3=m,macro,macros",
+    "--kinddef-C3=t,type,types",
+    "--kinddef-C3=c,constant,constants",
+    "--kinddef-C3=v,variable,variables",
+    "--kinddef-C3=n,module,modules",
+    *[
+        rf"--mline-regex-C3=~{C3_SKIP}{pattern}~\1~{kind}~p{{mgroup=1}}"
+        for pattern, kind in [
+            (r"fn\s+[^;{}()]*?(@?[a-z_]\w*)\s*\(", "f"),
+            (r"macro\s+[^;{}()]*?(@?[a-z_]\w*)\s*\(", "m"),
+            (r"(?:struct|union|enum|bitstruct|interface|def|typedef|distinct|alias|faultdef|attrdef)\s+(@?[A-Za-z_]\w*)", "t"),
+            (r"const\s+[^=;{}]*?\b([A-Z_][A-Z_0-9]*)\s*(?=[=;@])", "c"),
+            (r"module\s+([a-z_]\w*(?:::[a-z_]\w*)*)", "n"),
+            (r"(?:static\s+|tlocal\s+)?(?:(?:[a-z_]\w*::)*[A-Z]\w*|bool|char|ichar|short|ushort|int|uint|long|ulong|int128|uint128|float|double|float16|float128|usz|isz|uptr|iptr|any|typeid)(?:[*!?]|\[[^\]\n]*\])*\s+([a-z_]\w*)\s*(?=[=;@])", "v"),
+        ]
+    ],
+]
 NIX_CTAGS_OPTIONS = [
     "--langdef=nix",
     "--map-nix=+.nix",
@@ -84,10 +108,13 @@ def parse_arguments():
     parser.add_argument("--python")
     parser.add_argument("--python-command")
     parser.add_argument("--cargo")
+    parser.add_argument("--c3c")
+    parser.add_argument("--c3-stdlib")
     parser.add_argument("--source", action="append", default=[])
     parser.add_argument("--no-python-deps", action="store_true")
     parser.add_argument("--no-rust-deps", action="store_true")
     parser.add_argument("--no-c-deps", action="store_true")
+    parser.add_argument("--no-c3-deps", action="store_true")
     parser.add_argument("--cache-dir", help="Maintain project and dependency indexes here")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--snapshot-request", help="JSON list of source/snapshot/output mappings")
@@ -414,6 +441,41 @@ def extra_source_files(args, root):
     return sorted(files)
 
 
+@functools.lru_cache(maxsize=4)
+def c3_ctags_options(ctags):
+    result = subprocess.run(
+        [ctags, "--options=NONE", "--list-languages"],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return [] if "C3" in result.stdout.splitlines() else C3_CTAGS_OPTIONS
+
+
+def c3_dependency_files(args, root, files):
+    """Include the installed C3 standard library when indexing a C3 project."""
+    if args.no_c3_deps or not any(
+        path.suffix.lower() in C3_SUFFIXES for path in files
+    ):
+        return []
+    library = args.c3_stdlib or os.environ.get("C3_STDLIB")
+    if library:
+        return walk_files(resolved_path(library, root), C3_SUFFIXES)
+    compiler = args.c3c or os.environ.get("PROJECT_CTAGS_C3C") or shutil.which("c3c")
+    if not compiler:
+        return []
+    executable = shutil.which(compiler) or compiler
+    prefix = resolved_path(executable, root).parent.parent
+    for candidate in (
+        prefix / "lib" / "c3",
+        prefix / "bin" / "lib",
+        prefix / "lib",
+    ):
+        if (candidate / "std").is_dir():
+            return walk_files(candidate, C3_SUFFIXES)
+    return []
+
+
 def generate_tags(ctags, output, files, mappings=None):
     output.parent.mkdir(parents=True, exist_ok=True)
     list_file = tempfile.NamedTemporaryFile(mode="w", prefix="project-ctags-", delete=False)
@@ -432,6 +494,7 @@ def generate_tags(ctags, output, files, mappings=None):
             "--options=NONE",
             "--output-format=e-ctags",
             *NIX_CTAGS_OPTIONS,
+            *c3_ctags_options(ctags),
             "--languages=all",
             "--kinds-all=*",
             "--fields=*",
@@ -513,7 +576,11 @@ def dependency_signature(args, root, files):
     """Track declarations without resolving dependencies on every source edit."""
     declarations = []
     for path in files:
-        if path.name in {"Cargo.toml", "Cargo.lock", "pyproject.toml", "uv.lock", "poetry.lock", "pixi.lock", "pixi.toml", "requirements.txt", "compile_commands.json", "flake.lock", "flake.nix", ".envrc"}:
+        if path.name in {
+            "Cargo.toml", "Cargo.lock", "project.json", "pyproject.toml", "uv.lock",
+            "poetry.lock", "pixi.lock", "pixi.toml", "requirements.txt",
+            "compile_commands.json", "flake.lock", "flake.nix", ".envrc",
+        }:
             declarations.append((str(path), file_stamp(path)))
         elif path.suffix.lower() in C_SOURCE_SUFFIXES | C_HEADER_SUFFIXES:
             try:
@@ -523,7 +590,14 @@ def dependency_signature(args, root, files):
                 pass
     value = [imported_modules(files), declarations,
              {key: item for key, item in vars(args).items() if key != "force"},
-             {key: os.environ.get(key) for key in ("PATH", "VIRTUAL_ENV", "CC", "CFLAGS", "CPPFLAGS", "PROJECT_CTAGS_PYTHON_COMMAND", "PROJECT_CTAGS_CARGO", "PROJECT_CTAGS_SOURCES")},
+             {
+                 key: os.environ.get(key)
+                 for key in (
+                     "PATH", "VIRTUAL_ENV", "CC", "CFLAGS", "CPPFLAGS",
+                     "PROJECT_CTAGS_PYTHON_COMMAND", "PROJECT_CTAGS_CARGO",
+                     "PROJECT_CTAGS_C3C", "C3_STDLIB", "PROJECT_CTAGS_SOURCES",
+                 )
+             },
              [(str(root / name), file_stamp(root / name)) for name in (".venv", ".pixi/envs/default", ".devenv/state/venv")]]
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
@@ -531,7 +605,6 @@ def dependency_signature(args, root, files):
 def refresh_cache(args, root, ctags):
     cache = resolved_path(args.cache_dir, root)
     cache.mkdir(parents=True, exist_ok=True)
-    # Different Emacs instances may share a cache; only the worker waits for this lock.
     with (cache / "lock").open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         manifest_path = cache / "manifest.json"
@@ -550,7 +623,6 @@ def refresh_cache(args, root, ctags):
         current = {str(path): file_stamp(path) for path in files}
         project_changed = incremental_tags(ctags, project_output, current, old.get("files", {}),
                                            force or old.get("project_stamp") != file_stamp(project_output))
-        # Publish project readiness before slower dependency discovery finishes.
         print(json.dumps({"event": "project", "changed": project_changed}), flush=True)
         signature = dependency_signature(args, root, files)
         resolve = force or old.get("dependency_signature") != signature or time.time() - old.get("dependency_checked", 0) >= args.dependency_check_interval
@@ -565,6 +637,7 @@ def refresh_cache(args, root, ctags):
             if not args.no_c_deps:
                 dependency_files.extend(c_dependency_files(root, files))
             dependency_files.extend(extra_source_files(args, root))
+            dependency_files.extend(c3_dependency_files(args, root, files))
             dependencies = {str(path): file_stamp(path) for path in sorted(set(dependency_files)) if str(path) not in current}
             checked = time.time()
         else:
@@ -618,7 +691,10 @@ def main():
     if not args.no_c_deps:
         c_headers = c_dependency_files(root, local_files)
     extra_files = extra_source_files(args, root)
-    all_files = sorted(set(local_files + python_files + rust_files + c_headers + extra_files))
+    c3_files = c3_dependency_files(args, root, local_files)
+    all_files = sorted(
+        set(local_files + python_files + rust_files + c_headers + c3_files + extra_files)
+    )
     if not all_files:
         raise SystemExit("No source files found")
 
@@ -632,6 +708,8 @@ def main():
         print(f"rust: {cargo}; {len(rust_files)} dependency files")
     if c_headers:
         print(f"c: {len(c_headers)} dependency headers")
+    if c3_files:
+        print(f"c3: {len(c3_files)} standard-library files")
     if extra_files:
         print(f"extra: {len(extra_files)} files")
     print(f"tags: {output}")

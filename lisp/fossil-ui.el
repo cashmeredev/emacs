@@ -3,48 +3,84 @@
 ;; Copyright (C) 2026 cashmere
 
 ;; Author: cashmere
-;; Version: 0.1.0
-;; Package-Requires: ((emacs "29.1") (textui "0.5.1"))
+;; Version: 0.2.0
+;; Package-Requires: ((emacs "29.1") (textui "0.8.0"))
 ;; Keywords: tools, vc
 
 ;;; Commentary:
 
-;; A deliberately small Fossil dashboard.  It follows Fossil's own model:
-;; files may be selected for a partial commit, but there is no staging area.
-;; Local inspection is synchronous; operations which may trigger autosync run
-;; asynchronously.
+;; Fossil dashboard with persistent local staging, partial commits, and recovery.
 
 ;;; Code:
 
 (require 'ansi-color)
 (require 'cl-lib)
+(declare-function evil-make-overriding-map "evil-core" (keymap &optional state copy))
+(require 'textui-keyed-region)
 (require 'diff-mode)
 (require 'json)
 (require 'outline)
 (require 'seq)
 (require 'subr-x)
+(require 'text-property-search)
+(require 'vc)
 (require 'textui)
 (require 'textui-widgets)
 
 (declare-function evil-define-key* "evil-core" (state keymap key def &rest bindings))
-(declare-function evil-get-auxiliary-keymap "evil-core"
-                  (map state &optional create noinherit))
-(declare-function evil-make-intercept-map "evil-core" (keymap &optional state aux))
 (declare-function evil-normalize-keymaps "evil-core" (&optional state))
 (declare-function evil-set-initial-state "evil-core" (mode state))
-(declare-function general-define-key "general" (&rest args))
-(declare-function general-local-map "general" ())
-(defvar general-override-local-mode-map)
+(declare-function evil-visual-range "evil-states" ())
+(declare-function evil-exit-visual-state "evil-states" ())
+(declare-function diff-hl-update "diff-hl" ())
+(declare-function diff-hl-remove-overlays "diff-hl" ())
 
 (defgroup fossil-ui nil
   "A compact TextUI frontend for Fossil."
   :group 'tools
   :prefix "fossil-ui-")
 
+(defvar fossil-ui-post-refresh-hook nil
+  "Hook run in the dashboard after a successful checkout refresh.")
+
 (defcustom fossil-ui-program "fossil"
   "Fossil executable used by the dashboard."
   :type 'string
   :group 'fossil-ui)
+
+(defcustom fossil-ui-stage-directory (expand-file-name "fossil-stage/" user-emacs-directory)
+  "Private local staging snapshots and interrupted-commit recovery files."
+  :type 'directory
+  :group 'fossil-ui)
+
+(defcustom fossil-ui-max-stage-bytes (* 5 1024 1024)
+  "Maximum text file size accepted for partial staging."
+  :type 'integer
+  :group 'fossil-ui)
+
+(defcustom fossil-ui-full-frame t
+  "Open Fossil using the entire Emacs frame."
+  :type 'boolean
+  :group 'fossil-ui)
+
+(defcustom fossil-ui-confirm-revert t
+  "Confirm before discarding selected working changes."
+  :type 'boolean
+  :group 'fossil-ui)
+
+(defcustom fossil-ui-compact-layout t
+  "Keep dashboard cards compact so changes and recent commits fit together."
+  :type 'boolean
+  :group 'fossil-ui)
+
+(defcustom fossil-ui-keyed-timeline t
+  "Reconcile timeline entries using TextUI's stable keyed regions."
+  :type 'boolean
+  :group 'fossil-ui)
+
+(defvar-local fossil-ui-window-configuration nil)
+(defvar-local fossil-ui-diff-context nil)
+(defvar-local fossil-ui-commit-index nil)
 
 (defcustom fossil-ui-timeline-limit 25
   "Maximum number of recent check-ins loaded for the dashboard."
@@ -92,6 +128,113 @@ runs an external renderer."
   "Arguments passed to Delta after the Fossil diff on standard input."
   :type '(repeat string)
   :group 'fossil-ui)
+
+(defcustom fossil-ui-title-alignment 'center
+  "TextUI alignment of the project heading."
+  :type '(choice (const left) (const center) (const right))
+  :group 'fossil-ui)
+
+(defcustom fossil-ui-text-wrap 'greedy
+  "TextUI line-breaking strategy for commit messages and status banners."
+  :type '(choice (const greedy) (const balanced))
+  :group 'fossil-ui)
+
+(defcustom fossil-ui-preview-lines 20
+  "Maximum number of diff lines shown in the inline preview."
+  :type '(integer 1 *)
+  :group 'fossil-ui)
+
+(defun fossil-ui--text (value &optional face align)
+  "Return wrapping TextUI text for VALUE with FACE and ALIGN."
+  `(:type :text
+    :value ,(if face
+                (propertize value 'face face)
+              value)
+    :align ,(or align 'left)
+    :wrap ,fossil-ui-text-wrap))
+
+(defun fossil-ui--preview-layout (widget width)
+  "Lay out a read-only diff WIDGET at WIDTH without wrapping code lines."
+  (let* ((width
+          (if fossil-ui-content-width
+              (min width fossil-ui-content-width)
+            width))
+         (lines (split-string (widget-get widget :value) "\n"))
+         (limit (max 1 fossil-ui-preview-lines))
+         (visible (seq-take lines limit)))
+    (concat
+     (propertize
+      (fossil-ui--fit (format "Diff preview · %s · P closes" (widget-get widget :path)) width) 'face 'fossil-ui-strong)
+     "\n"
+     (mapconcat
+      (lambda (line)
+        (propertize
+         (truncate-string-to-width (replace-regexp-in-string "\t" "    " line) width nil nil)
+         'face
+         (cond
+          ((string-prefix-p "@@" line)
+           'diff-hunk-header)
+          ((string-prefix-p "+" line)
+           'diff-added)
+          ((string-prefix-p "-" line)
+           'diff-removed)
+          (t 'default))))
+      visible "\n")
+     (when (> (length lines) limit)
+       (concat "\n" (fossil-ui--fit "… RET on file opens the complete diff" width))))))
+
+(defun fossil-ui--preview-attach (widget from to)
+  "Attach preview WIDGET to existing text between FROM and TO."
+  (widget-put widget :from (copy-marker from t))
+  (widget-put widget :to (copy-marker to nil))
+  (widget-put widget :delete #'widget-leave-text))
+
+(define-widget 'fossil-ui-preview 'item
+  "A width-aware TextUI 0.8 block widget for a read-only diff preview."
+  :textui-layout #'fossil-ui--preview-layout
+  :textui-attach #'fossil-ui--preview-attach)
+
+(defun fossil-ui--preview-data (root path)
+  "Read the internal unified diff for PATH under ROOT."
+  (let ((output (fossil-ui--require-success root "diff" "--internal" "--unified" "--" path)))
+    (if (string-empty-p output)
+        "No textual diff available."
+      output)))
+
+(defun fossil-ui-toggle-preview ()
+  "Toggle an inline diff preview for the tracked file at point."
+  (interactive)
+  (let ((path (fossil-ui--path-at-point))
+        (previous (plist-get textui-state :preview-path)))
+    (if (or (and path
+                 (equal path (plist-get textui-state :preview-path)))
+            (and (not path)
+                 (plist-get textui-state :preview-path)))
+        (textui-update
+         (current-buffer)
+         (lambda (state)
+           (plist-put (plist-put state :preview-path nil) :preview nil)))
+      (unless path
+        (user-error "No file at point"))
+      (when (equal (fossil-ui--status-at-point) "EXTRA")
+        (user-error "Add the file first to preview its Fossil diff"))
+      (let ((diff (fossil-ui--preview-data (plist-get textui-state :root) path)))
+        (textui-update
+         (current-buffer)
+         (lambda (state)
+           (plist-put (plist-put state :preview-path path) :preview diff)))))
+    (textui-refresh (current-buffer))
+    (if (plist-get textui-state :preview-path)
+        (progn
+          (goto-char (point-min))
+          (when (re-search-forward "^Diff preview" nil t)
+            (beginning-of-line)
+            (when (eq (window-buffer) (current-buffer))
+              (recenter 0))))
+      (when (or path
+                previous)
+        (fossil-ui--goto-path (or path
+                                  previous))))))
 
 (defface fossil-ui-strong '((t :inherit bold))
   "Structural text."
@@ -314,26 +457,34 @@ Paths may contain spaces.  A dash in either count denotes binary data."
          (branches (alist-get 'branches payload)))
     (sort (copy-sequence (or branches nil)) #'string-lessp)))
 
-(defun fossil-ui--snapshot (directory &optional selected)
+(defun fossil-ui--checkout-snapshot (directory &optional selected)
   "Collect dashboard state for DIRECTORY, retaining SELECTED paths."
   (let* ((info (fossil-ui--checkout-info directory))
          (root (plist-get info :root))
-         (changes (fossil-ui--attach-numstat
-                   (fossil-ui--changes root) (fossil-ui--numstat root)))
-         (paths (mapcar (lambda (change) (plist-get change :path)) changes)))
+         (changes
+          (fossil-ui--attach-numstat
+           (fossil-ui--changes root) (fossil-ui--numstat root)))
+         (paths (mapcar (lambda (change)
+                          (plist-get change :path)) changes)))
     (list :root root
           :repository (plist-get info :repository)
           :checkout (plist-get info :checkout)
-          :branch (or (plist-get info :tags) "trunk")
+          :branch (or (plist-get info :tags)
+                      "trunk")
           :user (plist-get info :user)
           :remote (fossil-ui--remote root)
           :autosync (fossil-ui--setting root "autosync")
           :changes changes
-          :selected (cl-remove-if-not (lambda (path) (member path paths)) selected)
+          :selected (cl-remove-if-not
+                     (lambda (path)
+                       (member path paths))
+                     selected)
           :timeline (condition-case err
                         (fossil-ui--timeline root)
-                      (error (list (list (cons 'comment
-                                              (error-message-string err))))))
+                      (error
+                       (list
+                        (list (cons 'comment
+                                    (error-message-string err))))))
           :branches (condition-case nil (fossil-ui--branches root) (error nil))
           :height fossil-ui--window-height
           :busy nil
@@ -424,21 +575,33 @@ When NARROW is non-nil return a primary row without trailing metadata."
          (metadata (format "%s  %s" status (fossil-ui--change-stat change)))
          (meta-width (string-width metadata))
          (path-width (max 10 (- width meta-width 9)))
-         (line (concat (propertize "▎" 'face (fossil-ui--status-face status))
-                       (if marked "[x] " "[ ] ")
-                       (propertize (concat (fossil-ui--status-icon status) " ")
-                                   'face (fossil-ui--status-face status))
-                       (fossil-ui--fit path (if narrow (- width 7) path-width)
-                                       (if marked 'fossil-ui-salient 'default))
-                       (unless narrow
-                         (propertize metadata 'face
-                                     (fossil-ui--status-face status))))))
+         (line
+          (concat
+           (propertize "▎" 'face (fossil-ui--status-face status))
+           (if marked
+               "[x] "
+             "[ ] ")
+           (propertize
+            (concat (fossil-ui--status-icon status) " ")
+            'face
+            (fossil-ui--status-face status))
+           (fossil-ui--fit path
+                           (if narrow
+                               (- width 7)
+                             path-width)
+                           (if marked
+                               'fossil-ui-salient
+                             'default))
+           (unless narrow
+             (propertize metadata 'face
+                         (fossil-ui--status-face status))))))
     `(:type fossil-ui-row
       :value ,line
       :fossil-ui-path ,path
       :fossil-ui-status ,status
-      :layout (:focus-id ,(list 'file path))
-      :action ,(lambda (&rest _) (fossil-ui-diff)))))
+      :layout (:focus-id ,(list 'file path (equal status "STAGED")))
+      :action ,(lambda (&rest _)
+                 (fossil-ui-visit-file)))))
 
 (defun fossil-ui--change-elements (change width selected)
   "Return responsive dashboard elements for CHANGE."
@@ -460,29 +623,39 @@ When NARROW is non-nil return a primary row without trailing metadata."
 
 (defun fossil-ui--timeline-elements (entry width)
   "Render timeline ENTRY at WIDTH as a two-line rail."
-  (let* ((uuid (or (alist-get 'uuid entry) ""))
+  (let* ((uuid (or (alist-get 'uuid entry)
+                   ""))
          (short (substring uuid 0 (min 10 (length uuid))))
          (timestamp (alist-get 'timestamp entry))
-         (date (if (numberp timestamp)
-                   (format-time-string "%b %d %H:%M" (seconds-to-time timestamp))
-                 "unknown time"))
-         (user (or (alist-get 'user entry) ""))
-         (comment (or (alist-get 'comment entry) ""))
-         (tags (or (alist-get 'tags entry) (alist-get 'branch entry)))
-         (tag-text (cond ((listp tags) (mapconcat (lambda (tag) (format "%s" tag))
-                                                   tags ", "))
-                         (tags (format "%s" tags)) (t "")))
+         (date
+          (if (numberp timestamp)
+              (format-time-string "%b %d %H:%M" (seconds-to-time timestamp))
+            "unknown time"))
+         (user (or (alist-get 'user entry)
+                   ""))
+         (comment (or (alist-get 'comment entry)
+                      ""))
+         (tags (or (alist-get 'tags entry)
+                   (alist-get 'branch entry)))
+         (tag-text
+          (cond
+           ((listp tags)
+            (mapconcat
+             (lambda (tag)
+               (format "%s" tag))
+             tags ", "))
+           (tags (format "%s" tags))
+           (t "")))
          (author (truncate-string-to-width user 18 nil nil "…")))
     (list
-     (fossil-ui--item
-      (concat (propertize "● " 'face 'fossil-ui-salient)
-              (fossil-ui--fit comment (max 12 (- width 16)))
-              "  "
-              (propertize date 'face 'fossil-ui-faded)))
+     (fossil-ui--text (concat "● " comment))
      (fossil-ui--item
       (fossil-ui--fit
-       (format "│  %s  %s%s" short author
-               (if (string-empty-p tag-text) "" (concat "  ·  " tag-text))) width)
+       (format "│  %s  %s  %s%s" short date author
+               (if (string-empty-p tag-text)
+                   ""
+                 (concat "  ·  " tag-text)))
+       width)
       'fossil-ui-faded))))
 
 (defun fossil-ui--timeline-count ()
@@ -508,11 +681,18 @@ When NARROW is non-nil return a primary row without trailing metadata."
 (defun fossil-ui--card (title children width &optional minimum grow)
   "Return a padded card named TITLE containing CHILDREN at WIDTH.
 MINIMUM and GROW are parent-facing Flex sizing hints."
-  `(:type :flex :direction :column :gap 1 :padding 1 :border t
-    :layout (:width ,width :min-width ,(or minimum width) :grow ,(or grow 0))
+  `(:type :flex
+    :direction :column
+    :gap ,(if fossil-ui-compact-layout 0 1)
+    :padding ,(if fossil-ui-compact-layout 0 1)
+    :border t
+    :layout (:width ,width
+             :min-width ,(or minimum width)
+             :grow ,(or grow 0))
     :children (,(fossil-ui--item
-                 title (unless (get-text-property 0 'face title)
-                         'fossil-ui-strong))
+                 title
+                 (unless (get-text-property 0 'face title)
+                   'fossil-ui-strong))
                ,(fossil-ui--column children))))
 
 (defun fossil-ui--metadata-columns (width)
@@ -619,7 +799,7 @@ MINIMUM and GROW are parent-facing Flex sizing hints."
   "Return a full-width status banner with TITLE, MESSAGE and FACE."
   (fossil-ui--card
    (propertize title 'face face)
-   (list (fossil-ui--item (fossil-ui--fit message (max 8 (- width 4))) face))
+   (list (fossil-ui--text message face))
    width width 0))
 
 (defun fossil-ui--screen-elements (width)
@@ -631,60 +811,83 @@ MINIMUM and GROW are parent-facing Flex sizing hints."
          (error-text (plist-get textui-state :error))
          (remote-value (plist-get textui-state :remote))
          (project (file-name-nondirectory (directory-file-name root)))
-         (timeline (seq-take (plist-get textui-state :timeline)
-                             (fossil-ui--timeline-count)))
-         (chips (concat
-                 (fossil-ui--chip (if changes (format "%d changed" (length changes))
-                                    "clean")
-                                  (if changes 'warning 'success))
-                 " "
-                 (when selected
-                   (concat (fossil-ui--chip (format "%d selected" (length selected))
-                                            'highlight) " "))
-                 (when busy (fossil-ui--chip (format "running: %s" busy) 'warning))
-                 (when error-text (fossil-ui--chip "error" 'error)))))
+         (timeline
+          (seq-take
+           (plist-get textui-state :timeline)
+           (fossil-ui--timeline-count)))
+         (chips
+          (concat
+           (fossil-ui--chip
+            (if changes
+                (format "%d changed" (length changes))
+              "clean")
+            (if changes
+                'warning
+              'success))
+           " "
+           (when selected
+             (concat
+              (fossil-ui--chip
+               (format "%d selected" (length selected))
+               'highlight)
+              " "))
+           (when busy
+             (fossil-ui--chip (format "running: %s" busy) 'warning))
+           (when error-text
+             (fossil-ui--chip "error" 'error)))))
     (append
      (list
-      (fossil-ui--item
-       (fossil-ui--fit
-        (format "%s  %s" (fossil-ui--icon 'repository) project) width)
-       'fossil-ui-strong)
-      `(:type :flex :direction :row :gap 1
+      (fossil-ui--text
+       (format "%s  %s" (fossil-ui--icon 'repository) project)
+       'fossil-ui-strong fossil-ui-title-alignment)
+      `(:type :flex
+        :direction :row
+        :gap 1
         :children
-        (,(fossil-ui--keycap "g" "Refresh" #'fossil-ui-refresh 'refresh)
-         ,(fossil-ui--keycap "c" "Commit" #'fossil-ui-commit 'commit)
-         ,(fossil-ui--keycap "u" "Update" #'fossil-ui-update 'update)
-         ,(fossil-ui--keycap "s" "Sync" #'fossil-ui-sync 'sync (not remote-value))
+        (,(fossil-ui--keycap "r" "Refresh" #'fossil-ui-refresh 'refresh)
+         ,(fossil-ui--keycap "c c" "Commit" #'fossil-ui-commit 'commit)
+         ,(fossil-ui--keycap "F" "Update" #'fossil-ui-update 'update)
+         ,(fossil-ui--keycap "S" "Sync" #'fossil-ui-sync 'sync (not remote-value))
          ,(fossil-ui--keycap "b" "Branch" #'fossil-ui-switch-branch 'branch)))
       (fossil-ui--metadata-grid width chips))
      (when busy
-       (list (fossil-ui--banner "Running" (format "%s is running…" busy)
-                                width 'fossil-ui-warning)))
+       (list
+        (fossil-ui--banner "Running"
+                           (format "%s is running…" busy)
+                           width 'fossil-ui-warning)))
      (when error-text
        (list (fossil-ui--banner "Error" error-text width 'fossil-ui-critical)))
      (list
       (fossil-ui--main-panels width changes selected timeline)
-      (fossil-ui--item "? Help · q Close" 'fossil-ui-faded)))))
-
-(defun fossil-ui--frame (width)
-  "Render the Fossil dashboard at WIDTH."
-  (let ((content-width
-         (max 1 (if fossil-ui-content-width
-                    (min width fossil-ui-content-width)
-                  width))))
-    (list `(:type :flex :direction :column :gap 1
-            :layout (:width ,content-width)
-            :children ,(fossil-ui--screen-elements content-width)))))
+      (fossil-ui--item "P Diff preview · ? Help · q Close" 'fossil-ui-faded)))))
 
 (defun fossil-ui--path-at-point ()
-  "Return the Fossil path at point."
+  "Return the file path anywhere on the current dashboard row."
   (or (get-text-property (point) 'fossil-ui-path)
-      (get-text-property (line-beginning-position) 'fossil-ui-path)))
+      (save-excursion
+        (goto-char (line-beginning-position))
+        (let ((end (line-end-position))
+              path)
+          (while (and (< (point) end)
+                      (not path))
+            (setq path (get-text-property (point) 'fossil-ui-path))
+            (unless path
+              (goto-char (next-single-property-change (point) 'fossil-ui-path nil end))))
+          path))))
 
 (defun fossil-ui--status-at-point ()
-  "Return the Fossil status at point."
+  "Return the Fossil status anywhere on the current dashboard row."
   (or (get-text-property (point) 'fossil-ui-status)
-      (get-text-property (line-beginning-position) 'fossil-ui-status)))
+      (save-excursion
+        (goto-char (line-beginning-position))
+        (let ((end (line-end-position))
+              status)
+          (while (and (< (point) end)
+                      (not status))
+            (setq status (get-text-property (point) 'fossil-ui-status))
+            (unless status
+              (goto-char (next-single-property-change (point) 'fossil-ui-status nil end))))
+          status))))
 
 (defun fossil-ui--goto-path (path)
   "Move point to PATH when it is visible."
@@ -726,34 +929,162 @@ MINIMUM and GROW are parent-facing Flex sizing hints."
         (goto-char target)
       (message "No changed files"))))
 
+(defun fossil-ui--file-positions (staged)
+  "Return file positions in the STAGED or unstaged section in display order."
+  (save-excursion
+    (goto-char (point-min))
+    (let (rows seen)
+      (while-let
+          ((match
+            (text-property-search-forward 'fossil-ui-path nil nil
+                                          t)))
+        (let* ((start (prop-match-beginning match))
+               (path (prop-match-value match))
+               (is-staged
+                (equal (get-text-property start 'fossil-ui-status)
+                       "STAGED")))
+          (when (and (eq is-staged staged)
+                     (not (member path seen)))
+            (push path seen)
+            (push (cons path start) rows))))
+      (nreverse rows))))
+
+(defun fossil-ui--dashboard-position ()
+  "Capture the dashboard row and its position within the visible window."
+  (let ((window (get-buffer-window (current-buffer))))
+    (save-excursion
+      (when window
+        (goto-char (window-point window)))
+      (let* ((path (fossil-ui--path-at-point))
+             (staged (equal (fossil-ui--status-at-point) "STAGED"))
+             (line (line-number-at-pos)))
+        (list :path path
+              :staged staged
+              :index
+              (and path
+                   (cl-position path
+                                (fossil-ui--file-positions staged)
+                                :key #'car
+                                :test #'equal))
+              :line line
+              :column (current-column)
+              :window window
+              :offset (and window
+                           (- line
+                              (line-number-at-pos (window-start window)))))))))
+
+(defun fossil-ui--restore-dashboard-position (position)
+  "Restore POSITION without following a file into another staging section."
+  (let* ((rows
+          (and (plist-get position :path)
+               (fossil-ui--file-positions (plist-get position :staged))))
+         (target
+          (or (assoc (plist-get position :path) rows)
+              (and rows
+                   (nth
+                    (min (or (plist-get position :index)
+                             0)
+                         (1- (length rows)))
+                    rows))))
+         (window (plist-get position :window)))
+    (if target
+        (goto-char (cdr target))
+      (goto-char (point-min))
+      (forward-line (1- (plist-get position :line))))
+    (move-to-column (plist-get position :column))
+    (when (and (window-live-p window)
+               (eq (window-buffer window) (current-buffer)))
+      (set-window-point window (point))
+      (save-excursion
+        (forward-line (- (or (plist-get position :offset)
+                             0)))
+        (set-window-start window (line-beginning-position) t)))))
+
+(defun fossil-ui--preserve-dashboard-position (original buffer &rest args)
+  "Keep file-list position when ORIGINAL redraws dashboard BUFFER with ARGS."
+  (if (not
+       (and (buffer-live-p buffer)
+            (with-current-buffer buffer
+              (derived-mode-p 'fossil-ui-mode))))
+      (apply original buffer args)
+    (with-current-buffer buffer
+      (let ((position (fossil-ui--dashboard-position)))
+        (prog1 (apply original buffer args)
+          (fossil-ui--restore-dashboard-position position))))))
+
 (defun fossil-ui-refresh ()
   "Refresh the current Fossil dashboard."
   (interactive)
   (when (plist-get textui-state :busy)
     (user-error "Fossil is busy: %s" (plist-get textui-state :busy)))
-  (let ((path (fossil-ui--path-at-point))
-        (selected (plist-get textui-state :selected))
+  (let ((selected (plist-get textui-state :selected))
         (root (plist-get textui-state :root)))
     (condition-case err
-        (let ((next (fossil-ui--snapshot root selected)))
-          (textui-update (current-buffer) (lambda (_) next))
-          (when path (fossil-ui--goto-path path)))
+        (let ((next (fossil-ui--snapshot root selected))
+              (preview-path (plist-get textui-state :preview-path)))
+          (when (and preview-path
+                     (cl-find preview-path
+                              (plist-get next :changes)
+                              :key (lambda (change)
+                                     (plist-get change :path))
+                              :test #'equal))
+            (setq next (plist-put next :preview-path preview-path))
+            (setq next (plist-put next :preview (fossil-ui--preview-data root preview-path))))
+          (setq textui-state next)
+          (textui-refresh (current-buffer))
+          (run-hooks 'fossil-ui-post-refresh-hook))
       (error
        (textui-set-state (current-buffer) :error (error-message-string err))))))
+
+(defun fossil-ui-diff-hl-refresh ()
+  "Refresh VC state and diff-hl in file buffers belonging to this checkout."
+  (when (featurep 'diff-hl)
+    (let ((root (plist-get textui-state :root)))
+      (when (and root
+                 (not (file-remote-p root)))
+        (dolist (buffer (buffer-list))
+          (with-current-buffer buffer
+            (when (and (bound-and-true-p diff-hl-mode)
+                       buffer-file-name
+                       (not (file-remote-p buffer-file-name))
+                       (file-in-directory-p buffer-file-name root))
+              (condition-case err
+                  (progn
+                    (when (and (file-exists-p buffer-file-name)
+                               (not (buffer-modified-p))
+                               (not
+                                (verify-visited-file-modtime (current-buffer))))
+                      (revert-buffer t t t))
+                    (vc-file-clearprops buffer-file-name)
+                    (if (file-exists-p buffer-file-name)
+                        (progn
+                          (when (eq (vc-backend buffer-file-name) 'Fossil)
+                            (vc-state-refresh buffer-file-name 'Fossil))
+                          (diff-hl-update))
+                      (diff-hl-remove-overlays)))
+                (error
+                 (message "Fossil diff-hl (%s): %s"
+                          (buffer-name)
+                          (error-message-string err)))))))))))
 
 (defun fossil-ui-toggle-mark ()
   "Toggle the commit mark on the file at point."
   (interactive)
-  (let ((path (or (fossil-ui--path-at-point) (user-error "No file at point")))
+  (let ((path (or (fossil-ui--path-at-point)
+                  (user-error "No file at point")))
         (status (fossil-ui--status-at-point)))
     (when (string= status "EXTRA")
-      (user-error "Add this file before selecting it for a commit"))
+      (let ((root (plist-get textui-state :root)))
+        (fossil-ui--clean-buffer (expand-file-name path root))
+        (fossil-ui--require-success root "add" "--" path)
+        (fossil-ui-refresh)))
     (textui-update
      (current-buffer)
      (lambda (state)
        (let* ((next (copy-sequence state))
               (selected (copy-sequence (plist-get state :selected))))
-         (plist-put next :selected
+         (plist-put next
+                    :selected
                     (if (member path selected)
                         (delete path selected)
                       (append selected (list path)))))))
@@ -792,14 +1123,24 @@ MINIMUM and GROW are parent-facing Flex sizing hints."
     (define-key map (kbd "]c") #'diff-hunk-next)
     (define-key map (kbd "[c") #'diff-hunk-prev)
     (define-key map (kbd "TAB") #'outline-toggle-children)
-    (define-key map (kbd "q") #'quit-window)
+    (define-key map (kbd "q") #'fossil-ui-quit)
+    (define-key map (kbd "s") #'fossil-ui-stage)
+    (define-key map (kbd "u") #'fossil-ui-unstage)
+    (define-key map (kbd "x") #'fossil-ui-discard)
+    (define-key map (kbd "r") #'fossil-ui-diff-refresh)
+    (define-key map (kbd "D") #'fossil-ui-diff-toggle)
     map))
 
 (defconst fossil-ui--diff-evil-bindings
-  '(("]c" . diff-hunk-next)
+  '(("D" . fossil-ui-diff-toggle)
+    ("r" . fossil-ui-diff-refresh)
+    ("x" . fossil-ui-discard)
+    ("u" . fossil-ui-unstage)
+    ("s" . fossil-ui-stage)
+    ("]c" . diff-hunk-next)
     ("[c" . diff-hunk-prev)
     ("TAB" . outline-toggle-children)
-    ("q" . quit-window))
+    ("q" . fossil-ui-quit))
   "Bindings which a Fossil diff buffer owns in modal states.")
 
 (define-derived-mode fossil-ui-diff-mode diff-mode "Fossil-Diff"
@@ -807,10 +1148,17 @@ MINIMUM and GROW are parent-facing Flex sizing hints."
   (setq-local outline-regexp "^@@ ")
   (outline-minor-mode 1)
   (setq buffer-read-only t)
-  (when (fboundp 'general-define-key)
-    (fossil-ui--install-general-local-map fossil-ui--diff-evil-bindings))
   (when (fboundp 'evil-normalize-keymaps)
     (evil-normalize-keymaps)))
+
+(defun fossil-ui--own-diff-bindings ()
+  "Keep the generic Diff minor-mode bindings from shadowing Fossil commands."
+  (when (fboundp 'evil-collection-diff-mode)
+    (evil-collection-diff-mode -1))
+  (when (fboundp 'evil-normalize-keymaps)
+    (evil-normalize-keymaps)))
+
+(add-hook 'fossil-ui-diff-mode-hook #'fossil-ui--own-diff-bindings t)
 
 (defun fossil-ui--delta-render (diff)
   "Render unified DIFF through Delta and return propertized Emacs text.
@@ -857,26 +1205,6 @@ Return nil when Delta exits unsuccessfully."
     (_ (user-error "Unknown Fossil diff renderer: %S"
                    fossil-ui-diff-renderer))))
 
-(defun fossil-ui-diff ()
-  "Show the diff for the file at point."
-  (interactive)
-  (let* ((path (or (fossil-ui--path-at-point) (user-error "No file at point")))
-         (status (fossil-ui--status-at-point))
-         (root (plist-get textui-state :root))
-         (result (if (string= status "EXTRA")
-                     (fossil-ui--call-in root "xdiff" path)
-                   (fossil-ui--call-in root "diff" "--internal" "--unified" "--" path)))
-         (code (car result))
-         (output (cadr result)))
-    (unless (zerop code)
-      (user-error "%s" output))
-    (fossil-ui--show-output
-     (format "*fossil diff: %s*" path)
-     (if (string-empty-p output)
-         "No textual diff available.\n"
-       (fossil-ui--render-diff output))
-     #'fossil-ui-diff-mode)))
-
 (defun fossil-ui-visit-file ()
   "Visit the file at point."
   (interactive)
@@ -906,6 +1234,57 @@ Return nil when Delta exits unsuccessfully."
       (fossil-ui-refresh)
       (message "Stopped tracking %s" path))))
 
+(defun fossil-ui-delete ()
+  "Delete selected tracked files and stage their removal after confirmation."
+  (interactive)
+  (let* ((root (fossil-ui--root))
+         (paths (fossil-ui--selected-file-paths))
+         (index (fossil-ui--index root))
+         (changes (fossil-ui--changes root)))
+    (fossil-ui--validate-index root index)
+    (dolist (path paths)
+      (when (cl-find path
+                     (plist-get index :entries)
+                     :key
+                     (lambda (e)
+                       (plist-get e :path))
+                     :test #'equal)
+        (user-error "Unstage %s with u before deleting it" path))
+      (when (equal
+             (plist-get
+              (cl-find path changes
+                       :key
+                       (lambda (c)
+                         (plist-get c :path))
+                       :test
+                       #'equal)
+              :status)
+             "EXTRA")
+        (user-error "Use x to delete untracked file %s" path))
+      (when (file-directory-p (expand-file-name path root))
+        (user-error "Select files, not directories"))
+      (fossil-ui--clean-buffer (expand-file-name path root)))
+    (when (yes-or-no-p
+           (format "Delete from disk and stage removal: %s? "
+                   (string-join paths ", ")))
+      (unwind-protect
+          (dolist (path paths)
+            (fossil-ui--require-success root "rm" "--hard" "--" path)
+            (when (cl-find-if
+                   (lambda (c)
+                     (and (equal (plist-get c :path) path)
+                          (equal (plist-get c :status) "DELETED")))
+                   (fossil-ui--changes root))
+              (fossil-ui--put-entry root index
+                                    (list :path path :base "" :staged ""
+                                          :deleted t))
+              (setq index (fossil-ui--index root))))
+        (when (and (boundp 'evil-state)
+                   (eq evil-state 'visual))
+          (evil-exit-visual-state))
+        (deactivate-mark)
+        (fossil-ui-refresh)))))
+
 (defun fossil-ui--selected-or-current ()
   "Return selected paths, or the path at point when none are selected."
   (or (copy-sequence (plist-get textui-state :selected))
@@ -913,16 +1292,49 @@ Return nil when Delta exits unsuccessfully."
       (user-error "No files selected")))
 
 (defun fossil-ui-revert ()
-  "Revert selected files, or the file at point."
+  "Revert tracked paths and delete untracked files after confirmation."
   (interactive)
-  (let ((paths (fossil-ui--selected-or-current)))
+  (let* ((paths (fossil-ui--selected-or-current))
+         (root (plist-get textui-state :root))
+         (changes (fossil-ui--changes root))
+         (extras
+          (seq-filter
+           (lambda (path)
+             (equal
+              (plist-get
+               (cl-find path changes
+                        :key
+                        (lambda (change)
+                          (plist-get change :path))
+                        :test
+                        #'equal)
+               :status)
+              "EXTRA"))
+           paths))
+         (tracked (seq-difference paths extras #'equal)))
+    (dolist (path paths)
+      (fossil-ui--clean-buffer (expand-file-name path root)))
     (when (yes-or-no-p
-           (format "Revert %d file%s? Fossil undo can restore this once. "
-                   (length paths) (if (= (length paths) 1) "" "s")))
-      (apply #'fossil-ui--require-success
-             (plist-get textui-state :root) "revert" "--" paths)
-      (fossil-ui-refresh)
-      (message "Reverted %d file(s)" (length paths)))))
+           (if extras
+               (format "Delete untracked %s%s? "
+                       (string-join extras ", ")
+                       (if tracked
+                           (format " and revert %d tracked file(s)"
+                                   (length tracked))
+                         ""))
+             (format "Revert %d file(s)? Fossil undo can restore this once. "
+                     (length tracked))))
+      (unwind-protect
+          (progn
+            (when tracked
+              (apply #'fossil-ui--require-success root "revert" "--"
+                     tracked))
+            (dolist (path extras)
+              (delete-file (expand-file-name path root) t))
+            (message "Reverted %d tracked file(s), deleted %d untracked file(s)"
+                     (length tracked)
+                     (length extras)))
+        (fossil-ui-refresh)))))
 
 (defun fossil-ui-undo ()
   "Preview and run Fossil's one-level undo."
@@ -989,7 +1401,7 @@ Return nil when Delta exits unsuccessfully."
                           (format "*fossil error: %s*" label)
                           (concat output "\n")))))))))))))
 
-(defun fossil-ui--commit-with-message (message paths)
+(defun fossil-ui--commit-marked-files (message paths)
   "Commit PATHS with MESSAGE from the current Fossil dashboard."
   (when (string-empty-p (string-trim message))
     (user-error "Commit message cannot be empty"))
@@ -999,18 +1411,6 @@ Return nil when Delta exits unsuccessfully."
    (lambda (_)
      (when (buffer-live-p (current-buffer))
        (textui-set-state (current-buffer) :selected nil)))))
-
-(defun fossil-ui-commit (&optional edit)
-  "Commit selected files; with prefix EDIT, use a multiline buffer."
-  (interactive "P")
-  (let ((paths (copy-sequence (plist-get textui-state :selected))))
-    (unless paths
-      (user-error "Select files with SPC before committing"))
-    (if edit
-        (fossil-ui--open-commit-buffer paths)
-      (let ((message (read-string "Commit message: " nil
-                                  'fossil-ui--commit-history)))
-        (fossil-ui--commit-with-message message paths)))))
 
 (defvar fossil-ui-commit-mode-map
   (let ((map (make-sparse-keymap)))
@@ -1025,24 +1425,54 @@ Return nil when Delta exits unsuccessfully."
               "Write a check-in comment · C-c C-c commit · C-c C-k cancel"))
 
 (defun fossil-ui--open-commit-buffer (paths)
-  "Open a multiline commit buffer for PATHS."
-  (let ((owner (current-buffer))
-        (buffer (get-buffer-create
-                 (format "*fossil commit: %s*"
-                         (file-name-nondirectory
-                          (directory-file-name (plist-get textui-state :root)))))))
+  "Open or resume the commit message for PATHS below the dashboard."
+  (let* ((owner (current-buffer))
+         (name
+          (format "*fossil commit: %s*"
+                  (file-name-nondirectory
+                   (directory-file-name (plist-get textui-state :root)))))
+         (existing (get-buffer name))
+         (buffer (get-buffer-create name))
+         (window
+          (or (get-buffer-window buffer)
+              (split-window
+               (or (get-buffer-window owner)
+                   (selected-window)) nil
+               'below))))
     (with-current-buffer buffer
-      (fossil-ui-commit-mode)
-      (setq-local fossil-ui--commit-owner owner
-                  fossil-ui--commit-paths paths)
-      (erase-buffer))
-    (pop-to-buffer buffer)))
+      (unless (derived-mode-p 'fossil-ui-commit-mode)
+        (fossil-ui-commit-mode))
+      (setq-local default-directory
+                  (buffer-local-value 'default-directory owner)
+                  fossil-ui--commit-owner owner fossil-ui--commit-paths paths)
+      (unless existing
+        (erase-buffer)))
+    (set-window-buffer window buffer)
+    (select-window window)
+    (when (fboundp 'evil-insert-state)
+      (evil-insert-state))
+    buffer))
+
+(defun fossil-ui--close-commit-buffer (buffer owner)
+  "Close commit BUFFER and its windows, returning to OWNER."
+  (let ((owner-window (and (buffer-live-p owner)
+                           (get-buffer-window owner))))
+    (dolist (window (get-buffer-window-list buffer nil t))
+      (if (one-window-p t (window-frame window))
+          (when (buffer-live-p owner)
+            (set-window-buffer window owner))
+        (delete-window window)))
+    (kill-buffer buffer)
+    (when (window-live-p owner-window)
+      (select-window owner-window))))
 
 (defun fossil-ui-commit-submit ()
-  "Submit the current multiline Fossil commit message."
+  "Submit the commit message, retaining the editor if submission fails."
   (interactive)
-  (let ((message (string-trim-right (buffer-substring-no-properties
-                                     (point-min) (point-max))))
+  (fossil-ui--check-message-stage)
+  (let ((message
+         (string-trim-right
+          (buffer-substring-no-properties (point-min) (point-max))))
         (owner fossil-ui--commit-owner)
         (paths fossil-ui--commit-paths)
         (buffer (current-buffer)))
@@ -1050,22 +1480,20 @@ Return nil when Delta exits unsuccessfully."
       (user-error "The Fossil dashboard was closed"))
     (when (string-empty-p (string-trim message))
       (user-error "Commit message cannot be empty"))
-    (kill-buffer buffer)
-    (pop-to-buffer owner)
     (with-current-buffer owner
-      (fossil-ui--commit-with-message message paths))))
+      (fossil-ui--commit-with-message message paths))
+    (fossil-ui--close-commit-buffer buffer owner)))
 
 (defun fossil-ui-commit-cancel ()
-  "Cancel the current multiline Fossil commit."
+  "Cancel the message and close its split, retaining staged changes."
   (interactive)
-  (let ((owner fossil-ui--commit-owner))
-    (kill-buffer (current-buffer))
-    (when (buffer-live-p owner) (pop-to-buffer owner))
-    (message "Commit cancelled")))
+  (fossil-ui--close-commit-buffer (current-buffer) fossil-ui--commit-owner)
+  (message "Commit cancelled; staged changes retained"))
 
 (defun fossil-ui-update ()
   "Update the current Fossil branch."
   (interactive)
+  (fossil-ui--guard-checkout-change)
   (fossil-ui--async "update" '("update")))
 
 (defun fossil-ui-sync ()
@@ -1078,8 +1506,10 @@ Return nil when Delta exits unsuccessfully."
 (defun fossil-ui-switch-branch ()
   "Update the checkout to an existing branch."
   (interactive)
-  (let* ((branches (or (plist-get textui-state :branches)
-                       (user-error "No branches found")))
+  (fossil-ui--guard-checkout-change)
+  (let* ((branches
+          (or (plist-get textui-state :branches)
+              (user-error "No branches found")))
          (current (plist-get textui-state :branch))
          (branch (completing-read "Update to branch: " branches nil t nil nil current)))
     (unless (string= branch current)
@@ -1087,25 +1517,6 @@ Return nil when Delta exits unsuccessfully."
                 (yes-or-no-p
                  (format "Update to %s and merge your local changes into it? " branch)))
         (fossil-ui--async (format "update %s" branch) (list "update" branch))))))
-
-(defun fossil-ui-help ()
-  "Show the compact Fossil UI key reference."
-  (interactive)
-  (fossil-ui--show-output
-   "*fossil-ui help*"
-   (concat
-    "Fossil UI\n\n"
-    "There is no staging area. [x] only means that the file will be passed\n"
-    "to the next commit from this buffer. Fossil itself is unchanged.\n\n"
-    "SPC       toggle commit selection     A / X     select all / none\n"
-    "RET       show file diff              o         visit file\n"
-    "a         add an unversioned file     f         stop tracking file\n"
-    "r         revert selected/current     U         preview and run undo\n"
-    "c         commit selected files       C-u c     multiline comment\n"
-    "u / s     update / sync               b         switch branch\n"
-    "g         refresh                     j/k,n/p   move between files\n"
-    "q         close\n\n"
-    "In a diff: [c and ]c move between hunks; TAB folds a hunk.\n")))
 
 (defun fossil-ui--card-range ()
   "Return only the current changed-file widget span for hl-line."
@@ -1140,24 +1551,30 @@ Return nil when Delta exits unsuccessfully."
     (define-key map (kbd "SPC") #'fossil-ui-toggle-mark)
     (define-key map (kbd "A") #'fossil-ui-mark-all)
     (define-key map (kbd "X") #'fossil-ui-unmark-all)
-    (define-key map (kbd "RET") #'fossil-ui-diff)
-    (define-key map (kbd "<return>") #'fossil-ui-diff)
+    (define-key map (kbd "RET") #'fossil-ui-visit-file)
+    (define-key map (kbd "<return>") #'fossil-ui-visit-file)
+    (define-key map (kbd "P") #'fossil-ui-toggle-preview)
     (define-key map (kbd "o") #'fossil-ui-visit-file)
     (define-key map (kbd "a") #'fossil-ui-add)
     (define-key map (kbd "f") #'fossil-ui-forget)
-    (define-key map (kbd "r") #'fossil-ui-revert)
+    (define-key map (kbd "r") #'fossil-ui-refresh)
     (define-key map (kbd "U") #'fossil-ui-undo)
-    (define-key map (kbd "c") #'fossil-ui-commit)
-    (define-key map (kbd "u") #'fossil-ui-update)
-    (define-key map (kbd "s") #'fossil-ui-sync)
+    (define-key map (kbd "c c") #'fossil-ui-commit)
+    (define-key map (kbd "u") #'fossil-ui-unstage)
+    (define-key map (kbd "s") #'fossil-ui-stage)
     (define-key map (kbd "b") #'fossil-ui-switch-branch)
-    (define-key map (kbd "g") #'fossil-ui-refresh)
     (define-key map (kbd "?") #'fossil-ui-help)
     (define-key map (kbd "j") #'fossil-ui-next-file)
     (define-key map (kbd "n") #'fossil-ui-next-file)
     (define-key map (kbd "k") #'fossil-ui-previous-file)
     (define-key map (kbd "p") #'fossil-ui-previous-file)
-    (define-key map (kbd "q") #'quit-window)
+    (define-key map (kbd "q") #'fossil-ui-quit)
+    (define-key map (kbd "x") #'fossil-ui-discard)
+    (define-key map (kbd "TAB") #'fossil-ui-diff)
+    (define-key map (kbd "<tab>") #'fossil-ui-diff)
+    (define-key map (kbd "S") #'fossil-ui-sync)
+    (define-key map (kbd "F") #'fossil-ui-update)
+    (define-key map (kbd "D") #'fossil-ui-staged-diff)
     map))
 
 (define-derived-mode fossil-ui-mode textui-mode "Fossil"
@@ -1169,72 +1586,53 @@ Return nil when Delta exits unsuccessfully."
   (face-remap-set-base 'hl-line 'fossil-ui-selected)
   (hl-line-mode 1)
   (add-hook 'window-size-change-functions #'fossil-ui--window-size-changed nil t)
-  (when (fboundp 'general-define-key)
-    (fossil-ui--install-general-local-bindings))
   (when (fboundp 'evil-normalize-keymaps)
     (evil-normalize-keymaps)))
 
 (defconst fossil-ui--evil-bindings
-  '(("SPC" . fossil-ui-toggle-mark)
+  '(("D" . fossil-ui-staged-diff)
+    ("F" . fossil-ui-update)
+    ("S" . fossil-ui-sync)
+    ("TAB" . fossil-ui-diff)
+    ("<tab>" . fossil-ui-diff)
+    ("x" . fossil-ui-discard)
+    ("SPC" . fossil-ui-toggle-mark)
     ("A" . fossil-ui-mark-all)
     ("X" . fossil-ui-unmark-all)
-    ("RET" . fossil-ui-diff)
-    ("<return>" . fossil-ui-diff)
+    ("RET" . fossil-ui-visit-file)
+    ("<return>" . fossil-ui-visit-file)
+    ("P" . fossil-ui-toggle-preview)
     ("o" . fossil-ui-visit-file)
     ("a" . fossil-ui-add)
     ("f" . fossil-ui-forget)
-    ("r" . fossil-ui-revert)
+    ("r" . fossil-ui-refresh)
     ("U" . fossil-ui-undo)
-    ("c" . fossil-ui-commit)
-    ("u" . fossil-ui-update)
-    ("s" . fossil-ui-sync)
+    ("c c" . fossil-ui-commit)
+    ("u" . fossil-ui-unstage)
+    ("s" . fossil-ui-stage)
     ("b" . fossil-ui-switch-branch)
-    ("g" . fossil-ui-refresh)
     ("?" . fossil-ui-help)
     ("j" . fossil-ui-next-file)
     ("n" . fossil-ui-next-file)
     ("k" . fossil-ui-previous-file)
     ("p" . fossil-ui-previous-file)
-    ("q" . quit-window))
+    ("q" . fossil-ui-quit))
   "Bindings which the Fossil dashboard owns in modal states.")
 
-(defun fossil-ui--install-general-local-bindings ()
-  "Install buffer-local General overrides for the Fossil dashboard."
-  (fossil-ui--install-general-local-map fossil-ui--evil-bindings))
-
-(defun fossil-ui--install-general-local-map (bindings)
-  "Install buffer-local General overrides from BINDINGS."
-  (general-local-map)
-  (dolist (binding bindings)
-    (general-define-key
-     :states '(normal motion)
-     :keymaps 'general-override-local-mode-map
-     (car binding) (cdr binding)))
-  ;; General marks its global override auxiliaries as Evil intercept maps, but
-  ;; not its buffer-local override auxiliaries.  Promote the latter as well so
-  ;; the local dashboard bindings precede General's global ones.
-  (when (fboundp 'evil-get-auxiliary-keymap)
-    (dolist (state '(normal motion))
-      (evil-make-intercept-map
-       (evil-get-auxiliary-keymap general-override-local-mode-map
-                                  state t t)
-       state))))
-
 (defun fossil-ui--install-evil-bindings ()
-  "Make the Fossil map win over global Evil and General maps."
+  "Give Fossil maps precedence over global Evil bindings."
   (evil-set-initial-state 'fossil-ui-mode 'normal)
   (evil-set-initial-state 'fossil-ui-diff-mode 'normal)
-  ;; An intercept map is deliberately used here.  A regular major-mode map is
-  ;; consulted after Evil's normal-state maps, where keys such as `g' and SPC
-  ;; are prefixes.  The dashboard must own its complete one-key vocabulary.
-  (evil-make-intercept-map fossil-ui-mode-map)
+  (evil-make-overriding-map fossil-ui-mode-map 'all)
   (dolist (binding fossil-ui--evil-bindings)
-    (evil-define-key* '(normal motion) fossil-ui-mode-map
-      (kbd (car binding)) (cdr binding)))
-  (evil-make-intercept-map fossil-ui-diff-mode-map)
+    (evil-define-key* '(normal motion visual) fossil-ui-mode-map
+                      (kbd (car binding))
+                      (cdr binding)))
+  (evil-make-overriding-map fossil-ui-diff-mode-map 'all)
   (dolist (binding fossil-ui--diff-evil-bindings)
-    (evil-define-key* '(normal motion) fossil-ui-diff-mode-map
-      (kbd (car binding)) (cdr binding)))
+    (evil-define-key* '(normal motion visual) fossil-ui-diff-mode-map
+                      (kbd (car binding))
+                      (cdr binding)))
   (dolist (buffer (buffer-list))
     (with-current-buffer buffer
       (when (derived-mode-p 'fossil-ui-mode 'fossil-ui-diff-mode)
@@ -1243,32 +1641,23 @@ Return nil when Delta exits unsuccessfully."
 (with-eval-after-load 'evil
   (fossil-ui--install-evil-bindings))
 
-(with-eval-after-load 'general
-  (dolist (buffer (buffer-list))
-    (with-current-buffer buffer
-      (when (derived-mode-p 'fossil-ui-mode 'fossil-ui-diff-mode)
-        (fossil-ui--install-general-local-map
-         (if (derived-mode-p 'fossil-ui-diff-mode)
-             fossil-ui--diff-evil-bindings
-           fossil-ui--evil-bindings))
-        (when (fboundp 'evil-normalize-keymaps)
-          (evil-normalize-keymaps))))))
-
 ;;;###autoload
-(defun fossil-ui-status (&optional directory)
+(defun fossil-ui--open-dashboard (&optional directory)
   "Open a Fossil dashboard for DIRECTORY or the current checkout."
   (interactive)
   (let* ((start (fossil-ui--input-directory directory))
          (snapshot (fossil-ui--snapshot start))
          (root (plist-get snapshot :root))
-         (name (format "*fossil: %s*"
-                       (file-name-nondirectory (directory-file-name root))))
+         (name
+          (format "*fossil: %s*"
+                  (file-name-nondirectory (directory-file-name root))))
          (existing (get-buffer name)))
     (when (and existing
                (with-current-buffer existing
                  (not (derived-mode-p 'fossil-ui-mode))))
       (user-error "A non-Fossil buffer already uses %s" name))
-    (let ((buffer (or existing (get-buffer-create name))))
+    (let ((buffer (or existing
+                      (get-buffer-create name))))
       (with-current-buffer buffer
         (unless (derived-mode-p 'fossil-ui-mode)
           (fossil-ui-mode))
@@ -1280,6 +1669,942 @@ Return nil when Delta exits unsuccessfully."
           (textui-set-state buffer :height height))
         (fossil-ui-next-file))
       buffer)))
+
+(defvar evil-visual-selection)
+
+(defun fossil-ui--directory (root)
+  "Return ROOT's private staging directory."
+  (expand-file-name (secure-hash 'sha256 (file-truename root)) fossil-ui-stage-directory))
+
+(defun fossil-ui--save (file data)
+  "Atomically save DATA to private FILE."
+  (make-directory (file-name-directory file) t)
+  (set-file-modes (file-name-directory file) #o700)
+  (let ((temporary (make-temp-file (concat file "."))))
+    (unwind-protect
+        (progn
+          (with-temp-file temporary
+            (let ((print-length nil)
+                  (print-level nil))
+              (prin1 data (current-buffer))))
+          (set-file-modes temporary #o600)
+          (rename-file temporary file t))
+      (when (file-exists-p temporary)
+        (delete-file temporary)))))
+
+(defun fossil-ui--read (file)
+  "Read saved data from FILE, if it exists."
+  (when (file-exists-p file)
+    (with-temp-buffer
+      (insert-file-contents file)
+      (read (current-buffer)))))
+
+(defun fossil-ui--revision (root)
+  "Return ROOT's exact checkout revision."
+  (car (split-string (plist-get (fossil-ui--checkout-info root) :checkout))))
+
+(defun fossil-ui--index (root)
+  "Read ROOT's index, refusing an outstanding commit recovery."
+  (let ((directory (fossil-ui--directory root)))
+    (when (file-exists-p (expand-file-name "transaction.eld" directory))
+      (user-error "Interrupted partial commit: run M-x fossil-ui-recover in this checkout"))
+    (let ((index (fossil-ui--read (expand-file-name "index.eld" directory))))
+      (if (plist-get index :entries)
+          index
+        (list :root root :revision (fossil-ui--revision root) :entries nil)))))
+
+(defun fossil-ui--ensure-idle (root)
+  "Refuse writes while a dashboard is running a Fossil operation in ROOT."
+  (dolist (buffer (buffer-list))
+    (with-current-buffer buffer
+      (when (and (derived-mode-p 'fossil-ui-mode)
+                 (equal (plist-get textui-state :root) root)
+                 (or (plist-get textui-state :busy)
+                     (and fossil-ui--process
+                          (process-live-p fossil-ui--process))))
+        (user-error "Fossil is busy; wait for the current operation")))))
+
+(defun fossil-ui--validate-index (root index)
+  "Refuse INDEX if ROOT's base revision changed."
+  (fossil-ui--ensure-idle root)
+  (unless (equal (plist-get index :revision) (fossil-ui--revision root))
+    (user-error "Checkout changed since staging; inspect staged changes, then clear staging with M-x fossil-ui-clear-stage")))
+
+(defun fossil-ui--save-index (root index)
+  "Persist INDEX for ROOT."
+  (fossil-ui--save (expand-file-name "index.eld" (fossil-ui--directory root)) index))
+
+(defun fossil-ui--text-file (file)
+  "Read regular UTF-8 FILE exactly, preserving its line endings."
+  (unless (and (file-regular-p file)
+               (not (file-symlink-p file)))
+    (user-error "Partial staging requires a regular file: %s" file))
+  (when (> (file-attribute-size (file-attributes file)) fossil-ui-max-stage-bytes)
+    (user-error "File exceeds fossil-ui-max-stage-bytes: %s" file))
+  (with-temp-buffer
+    (set-buffer-multibyte nil)
+    (insert-file-contents-literally file)
+    (let* ((bytes (buffer-string))
+           (text (decode-coding-string bytes 'utf-8-unix)))
+      (when (or (string-search (string 0) bytes)
+                (not (equal bytes (encode-coding-string text 'utf-8-unix))))
+        (user-error "Partial staging requires UTF-8 text: %s" file))
+      text)))
+
+(defun fossil-ui--write-text (file text)
+  "Write TEXT to FILE preserving UTF-8 bytes and line endings."
+  (let ((coding-system-for-write 'utf-8-unix))
+    (write-region text nil file nil 'silent)))
+
+(defun fossil-ui--clean-buffer (file)
+  "Protect unsaved edits and synchronize an unchanged visiting buffer for FILE."
+  (when-let* ((buffer (find-buffer-visiting file)))
+    (with-current-buffer buffer
+      (when (buffer-modified-p)
+        (user-error "Save the modified file buffer first: %s" file))
+      (when (and (file-exists-p file)
+                 (not (verify-visited-file-modtime buffer)))
+        (revert-buffer t t t)))))
+
+(defun fossil-ui--base (root path)
+  "Read exact committed text for PATH, or empty text for an added file."
+  (let* ((change
+          (cl-find path
+                   (fossil-ui--changes root)
+                   :key (lambda (c)
+                          (plist-get c :path))
+                   :test #'equal))
+         (status (plist-get change :status)))
+    (if (or (member status '("ADDED" "EXTRA"))
+            (and (equal status "MISSING")
+                 (string-empty-p
+                  (fossil-ui--require-success root "ls" "-r" "current" "--"
+                                              path))))
+        ""
+      (with-temp-buffer
+        (let ((default-directory root)
+              (coding-system-for-read 'utf-8-unix))
+          (unless (zerop (process-file fossil-ui-program nil t nil "cat" "-r" "current" "--" path))
+            (user-error "Cannot read baseline for %s" path)))
+        (buffer-string)))))
+
+(defun fossil-ui--entry (root path index)
+  "Return PATH's saved entry or its baseline in ROOT and INDEX."
+  (or (cl-find path
+               (plist-get index :entries)
+               :key (lambda (e)
+                      (plist-get e :path))
+               :test #'equal)
+      (let ((base (fossil-ui--base root path)))
+        (list :path path :base base :staged base))))
+
+(defun fossil-ui--put-entry (root index entry)
+  "Save ENTRY in INDEX for ROOT, dropping empty selections."
+  (let* ((path (plist-get entry :path))
+         (others
+          (cl-remove path
+                     (plist-get index :entries)
+                     :key (lambda (e)
+                            (plist-get e :path))
+                     :test #'equal)))
+    (unless (and (not (plist-get entry :deleted))
+                 (equal (plist-get entry :base) (plist-get entry :staged)))
+      (fossil-ui--validate-index root index)
+      (when (cl-find-if
+             (lambda (change)
+               (and (equal (plist-get change :path) path)
+                    (equal (plist-get change :status)
+                           "EXTRA")))
+             (fossil-ui--changes root))
+        (fossil-ui--require-success root "add" "--" path))
+      (push entry others))
+    (fossil-ui--save-index root (plist-put index :entries others))))
+
+(defun fossil-ui--diff (path left right)
+  "Return a unified diff from LEFT to RIGHT labeled with PATH."
+  (let ((a (make-temp-file "fossil-left-"))
+        (b (make-temp-file "fossil-right-")))
+    (unwind-protect
+        (progn
+          (fossil-ui--write-text a left)
+          (fossil-ui--write-text b right)
+          (with-temp-buffer
+            (let ((coding-system-for-read 'utf-8-unix))
+              (unless (memq (process-file "diff" nil t nil "-U3" "--label" path "--label" path a b) '(0 1))
+                (error "Cannot compute staging diff")))
+            (buffer-string)))
+      (delete-file a)
+      (delete-file b))))
+
+(defun fossil-ui--hunks (diff)
+  "Parse DIFF into hunks with source positions and exact line records."
+  (with-temp-buffer
+    (insert diff)
+    (goto-char (point-min))
+    (let (hunks)
+      (while (re-search-forward "^@@ -\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\)? +\\+\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\)? @@.*$" nil t)
+        (let ((hunk
+               (list :begin (line-beginning-position)
+                     :old (string-to-number (match-string 1))
+                     :old-count (if (match-string 2)
+                                    (string-to-number (match-string 2))
+                                  1)
+                     :new (string-to-number (match-string 3))
+                     :new-count (if (match-string 4)
+                                    (string-to-number (match-string 4))
+                                  1)))
+              lines)
+          (forward-line 1)
+          (while (and (not (eobp))
+                      (memq (char-after) '(?\s ?+ ?- ?\\)))
+            (if (eq (char-after) ?\\)
+                (when lines
+                  (setf (plist-get (car lines) :text) (string-remove-suffix "\n" (plist-get (car lines) :text))))
+              (push
+               (list :begin (point)
+                     :end (min (point-max) (1+ (line-end-position)))
+                     :kind (char-after)
+                     :text (buffer-substring-no-properties (1+ (point)) (min (point-max) (1+ (line-end-position)))))
+               lines))
+            (forward-line 1))
+          (push (append hunk (list :end (point) :lines (nreverse lines))) hunks)))
+      (nreverse hunks))))
+
+(defun fossil-ui--apply-selection (source diff begin end reverse)
+  "Apply selected changed lines of DIFF to SOURCE; REVERSE discards or unstages. BEGIN and END are positions in the unmodified diff string; nil selects the entire diff."
+  (let ((hunks (fossil-ui--hunks diff))
+        (changed nil))
+    (with-temp-buffer
+      (insert source)
+      (dolist (hunk (reverse hunks))
+        (let (before after selected)
+          (dolist (line (plist-get hunk :lines))
+            (let* ((kind (plist-get line :kind))
+                   (text (plist-get line :text))
+                   (choose
+                    (and (memq kind '(?+ ?-))
+                         (or (not begin)
+                             (and (< (plist-get line :begin) end)
+                                  (> (plist-get line :end) begin)))))
+                   (remove (if reverse
+                               ?+
+                             ?-))
+                   (add (if reverse
+                            ?-
+                          ?+)))
+              (when choose
+                (setq selected t changed t))
+              (when (memq kind (list ?\s remove))
+                (push text before))
+              (when (or (eq kind ?\s)
+                        (and (eq kind remove)
+                             (not choose))
+                        (and (eq kind add)
+                             choose))
+                (push text after))))
+          (when selected
+            (let* ((line
+                    (plist-get hunk
+                               (if reverse
+                                   :new
+                                 :old)))
+                   (count
+                    (plist-get hunk
+                               (if reverse
+                                   :new-count
+                                 :old-count)))
+                   (old (apply #'concat (nreverse before)))
+                   (new (apply #'concat (nreverse after))))
+              (goto-char (point-min))
+              (forward-line
+               (if (zerop count)
+                   line
+                 (max 0 (1- line))))
+              (unless (and (<= (+ (point) (length old)) (point-max))
+                           (equal old (buffer-substring-no-properties (point) (+ (point) (length old)))))
+                (user-error "Diff no longer matches; refresh before changing it"))
+              (delete-region (point) (+ (point) (length old)))
+              (insert new)))))
+      (unless changed
+        (user-error "Select added or removed lines, or place point inside a hunk"))
+      (buffer-string))))
+
+(defun fossil-ui--root ()
+  "Return the current dashboard or diff root."
+  (or (plist-get fossil-ui-diff-context :root)
+      (plist-get textui-state :root)
+      (user-error "Not a Fossil working buffer")))
+
+(defun fossil-ui--bounds ()
+  "Return the visual/active line selection or the hunk at point."
+  (when (and (boundp 'evil-state)
+             (eq evil-state 'visual)
+             (eq evil-visual-selection 'block))
+    (user-error "Use v or V for staging lines; rectangular selections are not supported"))
+  (cond
+   ((and (boundp 'evil-state)
+         (eq evil-state 'visual)
+         (fboundp 'evil-visual-range))
+    (let ((range (evil-visual-range)))
+      (cons (nth 0 range) (nth 1 range))))
+   ((use-region-p)
+    (cons (region-beginning) (region-end)))
+   (t
+    (let ((hunk
+           (cl-find-if
+            (lambda (h)
+              (and (<= (plist-get h :begin) (point))
+                   (< (point) (plist-get h :end))))
+            (fossil-ui--hunks (plist-get fossil-ui-diff-context :diff)))))
+      (unless hunk
+        (user-error "Place point in a hunk"))
+      (cons (plist-get hunk :begin) (plist-get hunk :end))))))
+
+(defun fossil-ui--show-diff (root path &optional staged owner)
+  "Show PATH in ROOT as an actionable staged or unstaged diff owned by OWNER."
+  (let* ((previous-line
+          (when (and fossil-ui-diff-context
+                     (equal path
+                            (plist-get fossil-ui-diff-context
+                                       :path)))
+            (line-number-at-pos)))
+         (index (fossil-ui--index root))
+         (entry (fossil-ui--entry root path index))
+         (_
+          (when (or (plist-get entry :deleted)
+                    (cl-find-if
+                     (lambda (c)
+                       (and (equal (plist-get c :path) path)
+                            (equal (plist-get c :status) "DELETED")))
+                     (fossil-ui--changes root)))
+            (user-error "File removal is a whole-file change; use s/u in the dashboard")))
+         (work
+          (if (file-exists-p (expand-file-name path root))
+              (fossil-ui--text-file (expand-file-name path root))
+            ""))
+         (left
+          (plist-get entry
+                     (if staged
+                         :base
+                       :staged)))
+         (right (if staged
+                    (plist-get entry :staged)
+                  work))
+         (diff (fossil-ui--diff path left right))
+         (colored (fossil-ui--render-diff diff))
+         (display
+          (if (equal diff (substring-no-properties colored))
+              colored
+            diff))
+         (buffer
+          (get-buffer-create
+           (format "*fossil %s: %s/%s*"
+                   (if staged
+                       "staged"
+                     "unstaged")
+                   (file-name-nondirectory (directory-file-name root)) path))))
+    (with-current-buffer buffer
+      (fossil-ui-diff-mode)
+      (when (text-property-not-all 0 (length display) 'face nil display)
+        (font-lock-mode -1))
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert display))
+      (setq-local default-directory root
+                  fossil-ui-diff-context
+                  (list :root root
+                        :path path
+                        :staged staged
+                        :work work
+                        :left left
+                        :right right
+                        :diff diff
+                        :owner owner)
+                  header-line-format
+                  (format "%s · %s · s stage · u unstage · x discard · v/V select lines · D switch staged/unstaged · r refresh"
+                          (if staged
+                              "Staged"
+                            "Unstaged")
+                          path))
+      (goto-char (point-min))
+      (when previous-line
+        (forward-line (1- previous-line)))
+      (unless (cl-some
+               (lambda (hunk)
+                 (and (<= (plist-get hunk :begin) (point))
+                      (< (point) (plist-get hunk :end))))
+               (fossil-ui--hunks diff))
+        (goto-char (point-min))
+        (re-search-forward "^@@" nil t)
+        (beginning-of-line)))
+    (let* ((owner-window (and (buffer-live-p owner)
+                              (get-buffer-window owner)))
+           (existing
+            (cl-find-if
+             (lambda (window)
+               (and owner
+                    (eq (window-parameter window 'fossil-ui-diff-owner)
+                        owner)
+                    (with-current-buffer
+                        (window-buffer window)
+                      (derived-mode-p
+                       'fossil-ui-diff-mode))))
+             (window-list)))
+           (window
+            (or existing
+                (and owner-window
+                     (split-window owner-window nil 'right))
+                (selected-window))))
+      (set-window-buffer window buffer)
+      (when owner-window
+        (set-window-parameter window 'fossil-ui-diff-owner
+                              owner))
+      (select-window window))
+    buffer))
+
+(defun fossil-ui-diff (&optional staged)
+  "Open the file at point; prefix STAGED shows the selection to commit."
+  (interactive "P")
+  (let ((path
+         (or (fossil-ui--path-at-point)
+             (plist-get textui-state :preview-path)
+             (user-error "No file at point"))))
+    (fossil-ui--show-diff
+     (fossil-ui--root) path
+     (or staged
+         (equal (fossil-ui--status-at-point) "STAGED"))
+     (current-buffer))))
+
+(defun fossil-ui-diff-refresh (&optional toggle)
+  "Refresh this diff; TOGGLE switches between staged and unstaged."
+  (interactive)
+  (let ((context fossil-ui-diff-context))
+    (fossil-ui--show-diff
+     (plist-get context :root)
+     (plist-get context :path)
+     (if toggle
+         (not (plist-get context :staged))
+       (plist-get context :staged))
+     (plist-get context :owner))))
+
+(defun fossil-ui-diff-toggle ()
+  "Switch between staged and unstaged changes."
+  (interactive)
+  (fossil-ui-diff-refresh t))
+
+(defun fossil-ui--refresh-owner (owner)
+  "Refresh dashboard OWNER if it still exists."
+  (when (buffer-live-p owner)
+    (with-current-buffer owner
+      (fossil-ui-refresh))))
+
+(defun fossil-ui--change-selection (action)
+  "Perform stage, unstage or discard ACTION in an actionable diff."
+  (unless fossil-ui-diff-context
+    (user-error "Open an actionable file diff with TAB first"))
+  (let* ((context fossil-ui-diff-context)
+         (root (plist-get context :root))
+         (path (plist-get context :path))
+         (file (expand-file-name path root))
+         (index (fossil-ui--index root))
+         (entry (copy-sequence (fossil-ui--entry root path index)))
+         (staged (plist-get context :staged))
+         (bounds (fossil-ui--bounds))
+         (diff (plist-get context :diff)))
+    (fossil-ui--validate-index root index)
+    (fossil-ui--clean-buffer file)
+    (unless (and (equal (plist-get context :work) (fossil-ui--text-file file))
+                 (equal
+                  (plist-get entry
+                             (if staged
+                                 :base
+                               :staged))
+                  (plist-get context :left))
+                 (or (not staged)
+                     (equal (plist-get entry :staged) (plist-get context :right))))
+      (user-error "File or staging changed; press r to refresh"))
+    (when (or (and (eq action 'stage)
+                   staged)
+              (and (eq action 'unstage)
+                   (not staged)))
+      (user-error "Press D to switch to %s changes first"
+                  (if staged
+                      "unstaged"
+                    "staged")))
+    (when (and staged
+               (eq action 'discard))
+      (user-error "Unstage with u first, then discard in the unstaged diff"))
+    (let ((result
+           (fossil-ui--apply-selection
+            (plist-get context
+                       (if (eq action 'stage)
+                           :left
+                         :right))
+            diff
+            (car bounds)
+            (cdr bounds)
+            (not (eq action 'stage)))))
+      (if (eq action 'discard)
+          (when (or (not fossil-ui-confirm-revert)
+                    (yes-or-no-p (format "Discard selected working changes in %s? " path)))
+            (let ((buffer (find-file-noselect file)))
+              (with-current-buffer buffer
+                (undo-boundary)
+                (atomic-change-group
+                  (erase-buffer)
+                  (insert (decode-coding-string (encode-coding-string result 'utf-8-unix) buffer-file-coding-system)))
+                (fossil-ui--write-text file result)
+                (set-visited-file-modtime)
+                (set-buffer-modified-p nil)
+                (undo-boundary))))
+        (fossil-ui--put-entry root index (plist-put entry :staged result))))
+    (when (and (fboundp 'evil-exit-visual-state)
+               (boundp 'evil-state)
+               (eq evil-state 'visual))
+      (evil-exit-visual-state))
+    (deactivate-mark)
+    (fossil-ui--refresh-owner (plist-get context :owner))
+    (fossil-ui-diff-refresh)
+    (when (and (eq action 'stage)
+               (string-empty-p (plist-get fossil-ui-diff-context :diff)))
+      (fossil-ui-quit))))
+
+(defun fossil-ui--selected-file-paths ()
+  "Return unique file paths in the visual region or at point."
+  (let ((range
+         (cond
+          ((and (boundp 'evil-state)
+                (eq evil-state 'visual))
+           (when (eq evil-visual-selection 'block)
+             (user-error "Use V to select file rows"))
+           (evil-visual-range))
+          ((use-region-p)
+           (list (region-beginning) (region-end))))))
+    (if (not range)
+        (list (or (fossil-ui--path-at-point)
+                  (user-error "No file at point")))
+      (let ((pos (car range))
+            (end (cadr range))
+            paths)
+        (while (< pos end)
+          (when-let* ((path (get-text-property pos 'fossil-ui-path)))
+            (unless (member path paths)
+              (push path paths)))
+          (setq pos (next-single-property-change pos 'fossil-ui-path nil end)))
+        (or (nreverse paths)
+            (user-error "No files in selection"))))))
+
+(defun fossil-ui--change-files (stage)
+  "Stage selected files when STAGE is non-nil; otherwise unstage them."
+  (let* ((root (fossil-ui--root))
+         (paths (fossil-ui--selected-file-paths))
+         (index (fossil-ui--index root))
+         (changes (fossil-ui--changes root))
+         (entries
+          (mapcar
+           (lambda (path)
+             (let* ((file (expand-file-name path root))
+                    (deleted
+                     (equal
+                      (plist-get
+                       (cl-find path changes
+                                :key
+                                (lambda (c)
+                                  (plist-get c :path))
+                                :test #'equal)
+                       :status)
+                      "DELETED"))
+                    (entry
+                     (if deleted
+                         (list :path path :base "" :staged "")
+                       (copy-sequence
+                        (fossil-ui--entry root path
+                                          index)))))
+               (when stage
+                 (fossil-ui--clean-buffer file))
+               (if deleted
+                   (plist-put entry :deleted stage)
+                 (plist-put entry
+                            :staged
+                            (if stage
+                                (fossil-ui--text-file file)
+                              (plist-get entry :base))))))
+           paths)))
+    (fossil-ui--validate-index root index)
+    (dolist (entry entries)
+      (fossil-ui--put-entry root index entry)
+      (setq index (fossil-ui--index root)))
+    (when (and (boundp 'evil-state)
+               (eq evil-state 'visual))
+      (evil-exit-visual-state))
+    (deactivate-mark)
+    (fossil-ui-refresh)))
+
+(defun fossil-ui-stage ()
+  "Stage selected file rows, or selected hunks and lines in a diff."
+  (interactive)
+  (if fossil-ui-diff-context
+      (fossil-ui--change-selection 'stage)
+    (fossil-ui--change-files t)))
+
+(defun fossil-ui-unstage ()
+  "Unstage selected file rows, or selected hunks and lines in a diff."
+  (interactive)
+  (if fossil-ui-diff-context
+      (fossil-ui--change-selection 'unstage)
+    (fossil-ui--change-files nil)))
+
+(defun fossil-ui-discard ()
+  "Discard the hunk/visual lines, or unstaged dashboard files after confirmation."
+  (interactive)
+  (fossil-ui--ensure-idle (fossil-ui--root))
+  (cond
+   (fossil-ui-diff-context (fossil-ui--change-selection 'discard))
+   ((equal (fossil-ui--status-at-point) "STAGED")
+    (user-error "Unstage with u before discarding"))
+   (t (fossil-ui-revert))))
+
+(defun fossil-ui-clear-stage ()
+  "Clear this checkout's staging snapshots after confirmation."
+  (interactive)
+  (let ((root (fossil-ui--root)))
+    (when (yes-or-no-p "Clear all staged selections? Working files stay unchanged. ")
+      (let ((index (fossil-ui--index root)))
+        (fossil-ui--save-index root
+                               (plist-put (plist-put index :revision (fossil-ui--revision root)) :entries nil)))
+      (when (derived-mode-p 'fossil-ui-mode)
+        (fossil-ui-refresh)))))
+
+(defun fossil-ui--restore-transaction (root transaction)
+  "Restore working files from TRANSACTION in ROOT without overwriting intervening edits."
+  (dolist (item (plist-get transaction :files))
+    (let* ((file (expand-file-name (plist-get item :path) root))
+           (original (fossil-ui--text-file (plist-get item :backup)))
+           (current (fossil-ui--text-file file)))
+      (unless (or (equal current original)
+                  (equal current (plist-get item :staged)))
+        (user-error "File changed during commit: %s; recovery copies retained in %s" file
+                    (fossil-ui--directory root)))
+      (unless (equal current original)
+        (copy-file (plist-get item :backup) file t t t)
+        (set-file-modes file (plist-get item :mode)))
+      (when-let* ((buffer (find-buffer-visiting file)))
+        (with-current-buffer buffer
+          (set-visited-file-modtime)))))
+  (let ((revision (fossil-ui--revision root)))
+    (unless (equal revision (plist-get transaction :revision))
+      (fossil-ui--save-index root (list :root root :revision revision :entries nil))))
+  (delete-file (expand-file-name "transaction.eld" (fossil-ui--directory root)))
+  (dolist (item (plist-get transaction :files))
+    (delete-file (plist-get item :backup))))
+
+(defun fossil-ui-recover ()
+  "Restore working files after an interrupted partial commit, retaining ambiguous edits."
+  (interactive)
+  (let* ((root
+          (or (ignore-errors (fossil-ui--root))
+              (plist-get (fossil-ui--checkout-info default-directory) :root)))
+         (transaction (fossil-ui--read (expand-file-name "transaction.eld" (fossil-ui--directory root)))))
+    (unless transaction
+      (user-error "No interrupted partial commit for this checkout"))
+    (fossil-ui--restore-transaction root transaction)
+    (message "Working files restored; inspect Fossil status before committing again")))
+
+(defun fossil-ui--commit-staged (root message)
+  "Commit ROOT's staged snapshots with MESSAGE and restore all remaining edits."
+  (let* ((index (fossil-ui--index root))
+         (entries (plist-get index :entries))
+         (directory (fossil-ui--directory root))
+         (transaction-file (expand-file-name "transaction.eld" directory))
+         (transaction (list :revision (fossil-ui--revision root) :files nil))
+         (inhibit-quit t))
+    (fossil-ui--validate-index root index)
+    (unless entries
+      (user-error "Nothing staged; use s first"))
+    (when (string-empty-p (string-trim message))
+      (user-error "Commit message cannot be empty"))
+    (when (string-match-p "^\\(?:MERGED\\|CONFLICT\\)"
+                          (fossil-ui--require-success root "changes" "--classify"))
+      (user-error "Resolve/commit the pending merge before partial commits"))
+    (make-directory directory t)
+    ;; Prepare every durable backup before touching any working file.
+    (dolist (entry entries)
+      (when (plist-get entry :deleted)
+        (fossil-ui--clean-buffer
+         (expand-file-name (plist-get entry :path) root))
+        (when (or (file-exists-p
+                   (expand-file-name (plist-get entry :path) root))
+                  (not
+                   (cl-find-if
+                    (lambda (c)
+                      (and (equal (plist-get c :path)
+                                  (plist-get entry :path))
+                           (equal (plist-get c :status) "DELETED")))
+                    (fossil-ui--changes root))))
+          (user-error "Deletion changed; unstage and review %s"
+                      (plist-get entry :path)))))
+    (dolist (entry (seq-remove (lambda (e)
+                                 (plist-get e :deleted)) entries))
+      (let* ((path (plist-get entry :path))
+             (file (expand-file-name path root))
+             (backup (make-temp-file (expand-file-name "working-" directory))))
+        (fossil-ui--clean-buffer file)
+        (fossil-ui--text-file file)
+        (copy-file file backup t t t)
+        (set-file-modes backup #o600)
+        (push
+         (list :path path :backup backup :mode (file-modes file) :staged (plist-get entry :staged))
+         (plist-get transaction :files))))
+    (fossil-ui--save transaction-file transaction)
+    (unwind-protect
+        (progn
+          (dolist (entry
+                   (seq-remove
+                    (lambda (e)
+                      (plist-get e :deleted))
+                    entries))
+            (fossil-ui--write-text (expand-file-name (plist-get entry :path) root) (plist-get entry :staged)))
+          (apply #'fossil-ui--require-success root "commit" "--hash" "--nosync" "--no-prompt" "--comment" message "--"
+                 (mapcar (lambda (e)
+                           (plist-get e :path)) entries)))
+      (fossil-ui--restore-transaction root transaction))))
+
+(defun fossil-ui--commit-with-message (message paths)
+  "Commit staged snapshots or marked PATHS with MESSAGE."
+  (let* ((root (fossil-ui--root))
+         (index (fossil-ui--index root)))
+    (if (not (plist-get index :entries))
+        (fossil-ui--commit-marked-files message paths)
+      (when (plist-get textui-state :busy)
+        (user-error "Fossil is busy"))
+      (fossil-ui--commit-staged root message)
+      (textui-set-state (current-buffer) :selected nil)
+      (fossil-ui-refresh)
+      (message "Staged changes committed locally; remaining edits restored. S synchronizes."))))
+
+(defun fossil-ui-commit (&optional _edit)
+  "Open the commit-message split for staged snapshots or marked files."
+  (interactive "P")
+  (let* ((index (fossil-ui--index (fossil-ui--root)))
+         (entries (plist-get index :entries))
+         (paths
+          (if entries
+              (mapcar
+               (lambda (entry)
+                 (plist-get entry :path))
+               entries)
+            (plist-get textui-state :selected))))
+    (unless paths
+      (user-error "Stage changes with s first"))
+    (when (and entries
+               (plist-get textui-state :selected))
+      (user-error "Clear old file marks with X before committing staged changes"))
+    (fossil-ui--open-commit-buffer paths)
+    (setq-local fossil-ui-commit-index (and entries
+                                            index))))
+
+(defun fossil-ui--check-message-stage (&rest _)
+  "Keep an open staged-commit message from committing a changed selection."
+  (when fossil-ui-commit-index
+    (unless (and (buffer-live-p fossil-ui--commit-owner)
+                 (equal fossil-ui-commit-index
+                        (fossil-ui--index (buffer-local-value 'default-directory fossil-ui--commit-owner))))
+      (user-error "Staging changed while writing the message; cancel and review the selection before committing"))))
+
+(defun fossil-ui--guard-checkout-change (&rest _)
+  "Require staged selections to be committed or cleared before changing the checkout."
+  (when (plist-get (fossil-ui--index (fossil-ui--root)) :entries)
+    (user-error "Commit or clear staged selections before updating or switching branches")))
+
+(defun fossil-ui--snapshot (directory &optional selected)
+  "Collect checkout and staging state for DIRECTORY and SELECTED."
+  (let* ((state (fossil-ui--checkout-snapshot directory selected))
+         (root (plist-get state :root))
+         (index (condition-case err (fossil-ui--index root) (error (list :error (error-message-string err)))))
+         (entries (plist-get index :entries)))
+    (when-let* ((error-text (plist-get index :error)))
+      (setq state (plist-put state :error error-text)))
+    (when (and entries
+               (not (equal (plist-get index :revision) (car (split-string (plist-get state :checkout))))))
+      (setq state
+            (plist-put state
+                       :error "Staging belongs to an older checkout; inspect and clear it before continuing.")))
+    (setq state (plist-put state :stage-entries entries))
+    (let ((changes (copy-tree (plist-get state :changes))))
+      (dolist (entry entries)
+        (let* ((path (plist-get entry :path))
+               (file (expand-file-name path root))
+               (change
+                (cl-find path changes
+                         :key (lambda (c)
+                                (plist-get c :path))
+                         :test #'equal)))
+          (when (plist-get entry :deleted)
+            (setq changes
+                  (cl-remove path changes
+                             :key
+                             (lambda (c)
+                               (plist-get c :path))
+                             :test
+                             #'equal)))
+          (when (and (file-regular-p file)
+                     (not (file-symlink-p file)))
+            (let ((work (condition-case nil (fossil-ui--text-file file) (error nil))))
+              (if (equal work (plist-get entry :staged))
+                  (setq changes
+                        (cl-remove path changes
+                                   :key (lambda (c)
+                                          (plist-get c :path))
+                                   :test #'equal))
+                (unless change
+                  (push (list :path path :status "EDITED") changes)))))))
+      (plist-put state :unstaged changes))))
+
+(defun fossil-ui--stage-panel (width)
+  "Render the persistent staging selection and remaining changes at WIDTH."
+  (let ((entries (plist-get textui-state :stage-entries)))
+    (fossil-ui--card
+     (format "Staged changes · %d files" (length entries))
+     (if entries
+         (mapcar
+          (lambda (entry)
+            (fossil-ui--change-row
+             (list :path (plist-get entry :path) :status "STAGED")
+             (max 8 (- width 4))
+             (list (plist-get entry :path))))
+          entries)
+       (list
+        (fossil-ui--text "Nothing staged. s selects a file; TAB opens hunks, v/V selects changed lines, and s stages that selection." 'fossil-ui-faded)))
+     width)))
+
+(defun fossil-ui--unstaged-panel (width state)
+  "Show remaining working changes at WIDTH from STATE."
+  (let* ((changes
+          (if (plist-member state :unstaged)
+              (plist-get state :unstaged)
+            (plist-get state :changes)))
+         (card (fossil-ui--changes-panel width changes (plist-get state :selected))))
+    (setf
+     (car (plist-get card :children))
+     (fossil-ui--text (format "Unstaged changes · %d files" (length changes)) 'fossil-ui-strong))
+    (unless changes
+      (setf
+       (cadr (plist-get card :children))
+       (fossil-ui--column (list (fossil-ui--text "No unstaged changes." 'success)))))
+    card))
+
+(defun fossil-ui-refresh-timeline ()
+  "Refresh only recent commits while preserving unchanged timeline entries."
+  (interactive)
+  (setq textui-state (plist-put textui-state :timeline (fossil-ui--timeline (fossil-ui--root))))
+  (if fossil-ui-keyed-timeline
+      (textui-reconcile-keyed-region (current-buffer) 'fossil-timeline #'fossil-ui--timeline-entries)
+    (textui-refresh (current-buffer))))
+
+(defun fossil-ui--timeline-entries (width)
+  "Return stable keyed timeline entries at WIDTH."
+  (mapcar
+   (lambda (entry)
+     (list
+      (or (alist-get 'uuid entry)
+          (format "%S" entry))
+      (fossil-ui--column (fossil-ui--timeline-elements entry width))))
+   (seq-take (plist-get textui-state :timeline) (fossil-ui--timeline-count))))
+
+(defun fossil-ui--frame (width)
+  "Render the working dashboard with full-width stable timeline and staging sections."
+  (let* ((width
+          (max 1
+               (if fossil-ui-content-width
+                   (min width fossil-ui-content-width)
+                 width)))
+         (state textui-state)
+         (elements (fossil-ui--screen-elements width))
+         (prefix (butlast elements 2))
+         (entries (fossil-ui--timeline-entries width)))
+    (let ((parts
+           (append
+            (list
+             (fossil-ui--column prefix)
+             (fossil-ui--stage-panel width)
+             (fossil-ui--unstaged-panel width state))
+            (when (plist-get state :preview-path)
+              (list `(:type fossil-ui-preview
+                      :path ,(plist-get state :preview-path)
+                      :value ,(plist-get state :preview))))
+            (list
+             (fossil-ui--text "Recent commits" 'fossil-ui-strong)
+             `(:type :flex
+               :direction :column
+               :gap 1
+               :layout (:refresh-id fossil-timeline)
+               :children ,(or (mapcar #'cadr entries)
+                              (list (fossil-ui--item "No commits available"))))
+             (fossil-ui--text "s Stage · u Unstage · x Discard · d Delete · c c Commit · S Sync · F Update · RET File · TAB Diff · D Staged diff · P Preview · q Back" 'fossil-ui-faded)))))
+      (cl-loop for part in parts for first = t then nil
+               unless first collect '(:type :text :value "\n\n" :align left :wrap greedy)
+               collect part))))
+
+(defun fossil-ui--after-refresh (&optional buffer &rest _)
+  "Install or reconcile the full-width timeline after BUFFER's dashboard refresh."
+  (with-current-buffer (or buffer
+                           (current-buffer))
+    (when (and fossil-ui-keyed-timeline
+               (derived-mode-p 'fossil-ui-mode)
+               (assq 'fossil-timeline textui--refresh-regions))
+      (textui-reconcile-keyed-region (current-buffer) 'fossil-timeline #'fossil-ui--timeline-entries))))
+
+(defun fossil-ui-status (&optional directory)
+  "Open DIRECTORY's Fossil dashboard full-frame, remembering the previous windows."
+  (interactive)
+  (let* ((configuration (current-window-configuration))
+         (buffer (fossil-ui--open-dashboard directory)))
+    (when fossil-ui-full-frame
+      (switch-to-buffer buffer)
+      (delete-other-windows)
+      (with-current-buffer buffer
+        (unless fossil-ui-window-configuration
+          (setq fossil-ui-window-configuration configuration))
+        (textui-refresh buffer)))
+    buffer))
+
+(defun fossil-ui-quit ()
+  "Close this Fossil buffer and its diff window, or restore the previous layout."
+  (interactive)
+  (let ((buffer (current-buffer))
+        (owner (plist-get fossil-ui-diff-context :owner))
+        (configuration fossil-ui-window-configuration))
+    (cond
+     (fossil-ui-diff-context
+      (let ((owner-window (and (buffer-live-p owner)
+                               (get-buffer-window owner))))
+        (dolist (window (get-buffer-window-list buffer nil t))
+          (if (one-window-p t (window-frame window))
+              (when (buffer-live-p owner)
+                (set-window-buffer window owner))
+            (delete-window window)))
+        (kill-buffer buffer)
+        (when (window-live-p owner-window)
+          (select-window owner-window))))
+     (configuration
+      (setq fossil-ui-window-configuration nil)
+      (set-window-configuration configuration)
+      (kill-buffer buffer))
+     (t (quit-window t)))))
+
+(defun fossil-ui-help ()
+  "Show the workflow's actual keybindings and selection semantics."
+  (interactive)
+  (fossil-ui--show-output "*fossil-ui help*"
+                          "Fossil workflow\n\ns / u  Stage / unstage file, hunk, or selected changed lines\nx      Discard working file or selected unstaged diff lines (asks first)\nv / V  Select changed lines in a diff; partial characters select their whole lines\nRET    Open file\nTAB    Open actionable diff in a split\nD      Open staged diff / switch staged and unstaged views\n[c ]c  Previous / next hunk; TAB folds a hunk\nr      Refresh; stale diffs refuse writes\nc c    Open commit editor; C-c C-c submits, C-c C-k cancels\nS      Synchronize; F updates the checkout; b switches branch\nP      Toggle read-only dashboard preview; use TAB for hunk actions\nq      Return to dashboard / restore previous window layout\n\nStaging persists locally across Emacs restarts. Partial staging supports regular UTF-8 text files, including added files, with original line endings preserved. Binary files, symlinks, renames/deletions, and pending merges require whole-file handling. Legacy SPC/A/X file marks remain available for that purpose; do not mix marks with staging.\n\nPartial commits run locally without autosync, restore remaining edits, and retain recovery data on interruption. Use S to synchronize. M-x fossil-ui-recover restores interrupted commits; M-x fossil-ui-clear-stage clears an outdated selection. Hunk discard uses the visiting file buffer, so Emacs undo can restore it.\n"))
+
+(defun fossil-ui-staged-diff ()
+  "Open staged changes of the dashboard file."
+  (interactive)
+  (fossil-ui-diff t))
+
+(advice-add 'textui-refresh :after #'fossil-ui--after-refresh)
+(advice-add 'textui-refresh :around #'fossil-ui--preserve-dashboard-position)
 
 ;;;###autoload
 (defalias 'fossil-ui #'fossil-ui-status)
