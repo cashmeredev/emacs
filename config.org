@@ -3303,7 +3303,6 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
          (eq evil-visual-selection 'block)))
 
   (defun my/evil-mc-visual-block-insert ()
-    "Erstellt Cursor am Anfang des Blocks und wechselt in Insert-Mode."
     (interactive)
     (if (my/evil-visual-block-p)
         (progn
@@ -3312,14 +3311,34 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
       (call-interactively 'evil-insert)))
 
   (defun my/evil-mc-visual-block-append ()
-    "Erstellt Cursor am Ende des Blocks und wechselt in Insert-Mode."
     (interactive)
     (if (my/evil-visual-block-p)
         (progn
           (evil-mc-make-cursor-in-visual-selection-end)
           (evil-append 1))
-      ;; Fallback: normales Verhalten
       (call-interactively 'evil-append))))
+#+end_src
+
+*** normal mode override
+
+#+begin_src emacs-lisp
+(with-eval-after-load 'evil-mc
+  (defun my/evil-mc-keep-visual-selection (original &rest args)
+    (if (and (evil-visual-state-p) (eq evil-visual-selection 'char))
+        (let* ((range (evil-visual-range))
+               (length (if (evil-mc-has-pattern-p) (evil-mc-get-pattern-length) (- (cadr range) (car range)))))
+          (prog1 (apply original args)
+            (setq evil-mc-cursor-list
+                  (mapcar (lambda (cursor)
+                            (save-excursion
+                              (goto-char (evil-mc-get-cursor-start cursor))
+                              (evil-mc-delete-region-overlay (evil-mc-get-cursor-region cursor))
+                              (evil-mc-put-cursor-region cursor (evil-mc-create-region (- (1+ (point)) length) (point) 'char))))
+                          evil-mc-cursor-list))
+            (evil-visual-char (- (1+ (point)) length) (point))))
+      (apply original args)))
+
+  (advice-add 'evil-mc-find-and-goto-match :around #'my/evil-mc-keep-visual-selection))
 #+end_src
 
 * flash
