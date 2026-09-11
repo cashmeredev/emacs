@@ -2696,7 +2696,6 @@ Auto switch silos (different workspaces/folders) based on preconfigured director
 
 * helm-mode
 
-
 #+begin_src emacs-lisp
 (use-package helm
   :ensure (:wait t)
@@ -2742,7 +2741,6 @@ Auto switch silos (different workspaces/folders) based on preconfigured director
 #+end_src
 
 * tags (citre)
-
 
 #+begin_src emacs-lisp
 (use-package citre
@@ -3217,7 +3215,6 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
   :ensure t
   :after magit)
 #+end_src
-
 
 * indent-guide
 
@@ -5406,7 +5403,6 @@ reset is unnecessary, so do the handler resolution ourselves and skip
 
 * mu4e
 
-
 #+begin_src emacs-lisp
 (use-package mu4e
   :ensure nil
@@ -6035,7 +6031,6 @@ Privileged ZFS operations stay non-interactive by default. Unlocking runs authen
   :custom
   (apheleia-mode-alist '((nix-ts-mode . nixfmt))))
 #+end_src
-
 
 * provide init
 
