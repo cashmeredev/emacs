@@ -129,6 +129,13 @@ runs an external renderer."
   :type '(repeat string)
   :group 'fossil-ui)
 
+(defcustom fossil-ui-delta-color-mode 'auto
+  "Color mode passed to Delta when no explicit color or syntax-theme argument is configured."
+  :type '(choice (const :tag "Follow the current Emacs theme" auto)
+                 (const :tag "Light backgrounds" light)
+                 (const :tag "Dark backgrounds" dark))
+  :group 'fossil-ui)
+
 (defcustom fossil-ui-title-alignment 'center
   "TextUI alignment of the project heading."
   :type '(choice (const left) (const center) (const right))
@@ -1160,7 +1167,27 @@ MINIMUM and GROW are parent-facing Flex sizing hints."
 
 (add-hook 'fossil-ui-diff-mode-hook #'fossil-ui--own-diff-bindings t)
 
-(defun fossil-ui--delta-render (diff)
+(defun fossil-ui--delta-color-argument (&optional frame)
+  "Return the Delta color argument for FRAME according to `fossil-ui-delta-color-mode'."
+  (pcase fossil-ui-delta-color-mode
+    ('auto (if (eq (frame-parameter frame 'background-mode) 'dark)
+               "--dark"
+             "--light"))
+    ('light "--light")
+    ('dark "--dark")
+    (_ (user-error "Unknown Fossil Delta color mode: %S" fossil-ui-delta-color-mode))))
+
+(defun fossil-ui--delta-color-argument-p (argument)
+  "Return non-nil when ARGUMENT explicitly controls Delta's color mode or syntax theme."
+  (string-match-p "\\`--\\(?:light\\|dark\\|syntax-theme\\)\\(?:=\\|\\'\\)" argument))
+
+(defun fossil-ui--effective-delta-arguments (&optional frame)
+  "Return Delta arguments for FRAME with an automatic color mode when needed."
+  (if (seq-some #'fossil-ui--delta-color-argument-p fossil-ui-delta-arguments)
+      fossil-ui-delta-arguments
+    (cons (fossil-ui--delta-color-argument frame) fossil-ui-delta-arguments)))
+
+(defun fossil-ui--delta-render (diff &optional frame)
   "Render unified DIFF through Delta and return propertized Emacs text.
 Return nil when Delta exits unsuccessfully."
   (with-temp-buffer
@@ -1169,7 +1196,7 @@ Return nil when Delta exits unsuccessfully."
                     (apply #'call-process-region
                            (point-min) (point-max)
                            fossil-ui-delta-program t t nil
-                           fossil-ui-delta-arguments)
+                           (fossil-ui--effective-delta-arguments frame))
                   (file-missing 127)
                   (error 1))))
       (when (zerop code)
@@ -1190,20 +1217,71 @@ Return nil when Delta exits unsuccessfully."
               (setq position next)))
           rendered)))))
 
-(defun fossil-ui--render-diff (diff)
-  "Render unified DIFF according to `fossil-ui-diff-renderer'."
+(defun fossil-ui--render-diff (diff &optional frame)
+  "Render unified DIFF for FRAME according to `fossil-ui-diff-renderer'."
   (pcase fossil-ui-diff-renderer
     ('plain diff)
     ('delta
      (or (and (executable-find fossil-ui-delta-program)
-              (fossil-ui--delta-render diff))
+              (fossil-ui--delta-render diff frame))
          (user-error "Delta could not render this diff")))
     ('auto
      (or (and (executable-find fossil-ui-delta-program)
-              (fossil-ui--delta-render diff))
+              (fossil-ui--delta-render diff frame))
          diff))
     (_ (user-error "Unknown Fossil diff renderer: %S"
                    fossil-ui-diff-renderer))))
+
+(defun fossil-ui--display-diff (diff &optional frame)
+  "Return an actionable rendering of DIFF for FRAME."
+  (let ((rendered (fossil-ui--render-diff diff frame)))
+    (if (equal diff (substring-no-properties rendered))
+        rendered
+      diff)))
+
+(defun fossil-ui--rerender-diff-buffer (&optional frame)
+  "Rerender the current Fossil diff buffer for FRAME without querying Fossil."
+  (when (and (derived-mode-p 'fossil-ui-diff-mode)
+             fossil-ui-diff-context)
+    (let* ((diff (plist-get fossil-ui-diff-context :diff))
+           (display (fossil-ui--display-diff diff frame))
+           (colored (text-property-not-all 0 (length display) 'face nil display))
+           (buffer-point (point))
+           (modified (buffer-modified-p))
+           (windows (mapcar (lambda (window)
+                              (list window (window-start window) (window-point window)))
+                            (get-buffer-window-list (current-buffer) nil t))))
+      (if colored
+          (font-lock-mode -1)
+        (font-lock-mode 1))
+      (let ((inhibit-read-only t)
+            (buffer-undo-list t))
+        (erase-buffer)
+        (insert display))
+      (set-buffer-modified-p modified)
+      (goto-char (min buffer-point (point-max)))
+      (dolist (state windows)
+        (pcase-let ((`(,window ,start ,window-point) state))
+          (when (window-live-p window)
+            (set-window-start window (min start (point-max)) t)
+            (set-window-point window (min window-point (point-max))))))
+      (unless colored
+        (font-lock-ensure)))))
+
+(defun fossil-ui--theme-enabled (_theme)
+  "Rerender live Fossil diff buffers after a theme has been enabled."
+  (dolist (buffer (buffer-list))
+    (with-current-buffer buffer
+      (when (and (derived-mode-p 'fossil-ui-diff-mode)
+                 fossil-ui-diff-context)
+        (let* ((window (get-buffer-window buffer t))
+               (frame (and window (window-frame window))))
+          (condition-case error
+              (fossil-ui--rerender-diff-buffer frame)
+            (error
+             (message "Could not recolor %s: %s" (buffer-name buffer) (error-message-string error)))))))))
+
+(add-hook 'enable-theme-functions #'fossil-ui--theme-enabled)
 
 (defun fossil-ui-visit-file ()
   "Visit the file at point."
@@ -1991,11 +2069,7 @@ Return nil when Delta exits unsuccessfully."
                     (plist-get entry :staged)
                   work))
          (diff (fossil-ui--diff path left right))
-         (colored (fossil-ui--render-diff diff))
-         (display
-          (if (equal diff (substring-no-properties colored))
-              colored
-            diff))
+         (display (fossil-ui--display-diff diff))
          (buffer
           (get-buffer-create
            (format "*fossil %s: %s/%s*"

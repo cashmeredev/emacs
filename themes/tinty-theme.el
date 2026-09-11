@@ -62,7 +62,10 @@
   :type 'boolean
   :group 'tinty)
 
-(deftheme tinty "Noctalia theme with proper color contrast.")
+(deftheme tinty
+  "Noctalia theme with proper color contrast."
+  :background-mode 'dark
+  :kind 'color-scheme)
 
 (let* (;; Tinted8 UI surface colors
        (ui-bg "#22212c")
@@ -96,9 +99,9 @@
        (ui-search-fg "#ededde")
 
        ;; Tinted8 syntax colors
-       ;; Comments use dim foreground instead of the raw syntax-comment gray,
-       ;; which becomes almost invisible in light variants.
-       (syntax-comment "#babaab")
+       ;; The builder already corrects syntax colors for text contrast, including light variants.
+       (syntax-comment "#8a83b4")
+       (syntax-documentation "#8a83b4")
        (syntax-constant "#ffca80")
        (syntax-function "#8aff80")
        (syntax-keyword "#ff80bf")
@@ -167,7 +170,7 @@
    `(font-lock-comment-face ((t (:foreground ,syntax-comment :slant ,comment-slant))))
    `(font-lock-comment-delimiter-face ((t (:foreground ,syntax-comment :slant ,comment-slant))))
    `(font-lock-constant-face ((t (:foreground ,syntax-constant :weight bold))))
-   `(font-lock-doc-face ((t (:foreground ,syntax-comment :slant ,comment-slant))))
+   `(font-lock-doc-face ((t (:foreground ,syntax-documentation :slant ,comment-slant))))
    `(font-lock-doc-markup-face ((t (:foreground ,syntax-annotation))))
    `(font-lock-function-name-face ((t (:foreground ,syntax-function :weight bold))))
    `(font-lock-function-call-face ((t (:foreground ,syntax-function))))

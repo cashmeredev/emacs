@@ -6,6 +6,7 @@ import functools
 import hashlib
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -35,6 +36,11 @@ IGNORED_DIRECTORIES = {
 }
 PYTHON_SUFFIXES = {".py", ".pyi"}
 RUST_SUFFIXES = {".rs"}
+GO_SUFFIXES = {".go", ".templ"}
+TEMPL_CTAGS_OPTIONS = [
+    "--map-Go=+.templ",
+    r"--regex-Go=/^[[:space:]]*(templ|css|script)[[:space:]]+([[:alpha:]_][[:alnum:]_]*)[[:space:]]*\(/\2/f/",
+]
 C_SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".m", ".mm"}
 C_HEADER_SUFFIXES = {".h", ".hh", ".hpp", ".hxx"}
 C3_SUFFIXES = {".c3", ".c3i", ".c3t"}
@@ -108,11 +114,13 @@ def parse_arguments():
     parser.add_argument("--python")
     parser.add_argument("--python-command")
     parser.add_argument("--cargo")
+    parser.add_argument("--go")
     parser.add_argument("--c3c")
     parser.add_argument("--c3-stdlib")
     parser.add_argument("--source", action="append", default=[])
     parser.add_argument("--no-python-deps", action="store_true")
     parser.add_argument("--no-rust-deps", action="store_true")
+    parser.add_argument("--no-go-deps", action="store_true")
     parser.add_argument("--no-c-deps", action="store_true")
     parser.add_argument("--no-c3-deps", action="store_true")
     parser.add_argument("--cache-dir", help="Maintain project and dependency indexes here")
@@ -342,6 +350,51 @@ def rust_dependency_files(args, root):
     return sorted(files), cargo
 
 
+def go_dependency_files(args, root, files):
+    """Resolve imported Go packages, including the standard library, from local sources."""
+    if args.no_go_deps or not any(path.suffix.lower() in GO_SUFFIXES for path in files):
+        return [], None
+    value = args.go or os.environ.get("PROJECT_CTAGS_GO") or shutil.which("go")
+    if not value:
+        print("Go dependencies skipped: go is unavailable in the project environment", file=sys.stderr)
+        return [], None
+    go = shutil.which(value) or str(resolved_path(value, root))
+    environment = dict(os.environ, GOPROXY="off", GOSUMDB="off", GOTOOLCHAIN="local")
+    result = subprocess.run(
+        [go, "list", "-e", "-deps", "-json", "-mod=readonly", "./..."],
+        cwd=root,
+        env=environment,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.stderr.strip():
+        print(result.stderr.rstrip(), file=sys.stderr)
+    dependencies = set()
+    decoder = json.JSONDecoder()
+    remaining = result.stdout.lstrip()
+    while remaining:
+        try:
+            package, end = decoder.raw_decode(remaining)
+        except json.JSONDecodeError:
+            print("Could not read Go package metadata", file=sys.stderr)
+            break
+        remaining = remaining[end:].lstrip()
+        if error := package.get("Error"):
+            print(f"go: {error.get('Err', error)}", file=sys.stderr)
+        if not package.get("Dir"):
+            continue
+        directory = Path(package["Dir"]).resolve()
+        if directory.is_relative_to(root):
+            continue
+        for name in package.get("GoFiles", []) + package.get("CgoFiles", []):
+            path = directory / name
+            if path.is_file():
+                dependencies.add(path.resolve())
+    return sorted(dependencies), go
+
+
 def compilation_database(root):
     path = root / "compile_commands.json"
     if not path.is_file():
@@ -494,6 +547,7 @@ def generate_tags(ctags, output, files, mappings=None):
             "--options=NONE",
             "--output-format=e-ctags",
             *NIX_CTAGS_OPTIONS,
+            *TEMPL_CTAGS_OPTIONS,
             *c3_ctags_options(ctags),
             "--languages=all",
             "--kinds-all=*",
@@ -580,8 +634,15 @@ def dependency_signature(args, root, files):
             "Cargo.toml", "Cargo.lock", "project.json", "pyproject.toml", "uv.lock",
             "poetry.lock", "pixi.lock", "pixi.toml", "requirements.txt",
             "compile_commands.json", "flake.lock", "flake.nix", ".envrc",
+            "go.mod", "go.sum", "go.work", "go.work.sum",
         }:
             declarations.append((str(path), file_stamp(path)))
+        elif path.suffix.lower() in GO_SUFFIXES:
+            try:
+                imports = re.findall(r'(?m)^\s*import\s*(?:\([^)]*\)|[^\n]+)', path.read_text(errors="replace"))
+                declarations.append((str(path), imports))
+            except OSError:
+                pass
         elif path.suffix.lower() in C_SOURCE_SUFFIXES | C_HEADER_SUFFIXES:
             try:
                 includes = [line.strip() for line in path.read_text(errors="replace").splitlines() if line.lstrip().startswith(("#include", "# include"))]
@@ -596,6 +657,8 @@ def dependency_signature(args, root, files):
                      "PATH", "VIRTUAL_ENV", "CC", "CFLAGS", "CPPFLAGS",
                      "PROJECT_CTAGS_PYTHON_COMMAND", "PROJECT_CTAGS_CARGO",
                      "PROJECT_CTAGS_C3C", "C3_STDLIB", "PROJECT_CTAGS_SOURCES",
+                     "PROJECT_CTAGS_GO", "GOROOT", "GOPATH", "GOMODCACHE",
+                     "GOWORK", "GOOS", "GOARCH", "CGO_ENABLED", "GOFLAGS",
                  )
              },
              [(str(root / name), file_stamp(root / name)) for name in (".venv", ".pixi/envs/default", ".devenv/state/venv")]]
@@ -634,6 +697,7 @@ def refresh_cache(args, root, ctags):
                 dependency_files.extend(python_dependency_files(args, root, files)[0])
             if not args.no_rust_deps:
                 dependency_files.extend(rust_dependency_files(args, root)[0])
+            dependency_files.extend(go_dependency_files(args, root, files)[0])
             if not args.no_c_deps:
                 dependency_files.extend(c_dependency_files(root, files))
             dependency_files.extend(extra_source_files(args, root))
@@ -692,8 +756,9 @@ def main():
         c_headers = c_dependency_files(root, local_files)
     extra_files = extra_source_files(args, root)
     c3_files = c3_dependency_files(args, root, local_files)
+    go_files, go = go_dependency_files(args, root, local_files)
     all_files = sorted(
-        set(local_files + python_files + rust_files + c_headers + c3_files + extra_files)
+        set(local_files + python_files + rust_files + go_files + c_headers + c3_files + extra_files)
     )
     if not all_files:
         raise SystemExit("No source files found")
@@ -708,6 +773,8 @@ def main():
         print(f"rust: {cargo}; {len(rust_files)} dependency files")
     if c_headers:
         print(f"c: {len(c_headers)} dependency headers")
+    if go:
+        print(f"go: {go}; {len(go_files)} dependency files")
     if c3_files:
         print(f"c3: {len(c3_files)} standard-library files")
     if extra_files:
