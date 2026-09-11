@@ -1,5 +1,5 @@
 ;;; config.el --- Emacs-Kick --- A feature rich Emacs config for (neo)vi(m)mers -*- lexical-binding: t; -*-
-(pixel-scroll-precision-mode 1)
+;; (pixel-scroll-precision-mode 1)
 (setq pgtk-wait-for-event-timeout 0.001)
 (setq package-enable-at-startup nil
       ;; Local modules are edited independently of their optional byte-code files, so never let an older .elc silently shadow newer source.
@@ -1074,6 +1074,23 @@ Temporarily disables notifications during the fetch."
 
 
 
+(use-package kitty-graphics
+  :ensure (:host github :repo "cashmeredev/kitty-graphics.el")
+  :demand t
+  :custom
+  (kitty-graphics-enable-video t)
+  (kitty-graphics-shr-scale 'fit)
+  (kitty-graphics-shr-fit-width 0.4)
+  (kitty-graphics-shr-fit-height 20)
+  (kitty-graphics-doc-view-resolution-scale 2.0)
+  :hook (dired-mode . kitty-graphics-dired-auto-preview-mode)
+  :config
+  (setq kitty-graphics-enable-browser t
+        kitty-graphics-casty-program "~/projects/casty/bin/casty.js"
+        kitty-graphics-casty-chrome "helium-browser")
+
+  (kitty-graphics-setup))
+
 (with-eval-after-load 'org
   (setq org-confirm-babel-evaluate nil)
   (org-babel-do-load-languages
@@ -1316,6 +1333,25 @@ Skips capture tasks and projects."
        ((and (member (org-get-todo-state) (list "ACTIVE"))
              (my/is-project-p))
         "TODO")))))
+
+(use-package org-clock-reminder
+  :ensure (:host github :repo "inickey/org-clock-reminder")
+  :after org
+  :demand t
+  :custom
+  (org-clock-reminder-interval 15)
+  (org-clock-reminder-inactive-notifications-p nil)
+  (org-clock-reminder-active-title "Org: current task")
+  (org-clock-reminder-active-text "%h\nClocked time: %c")
+  (org-clock-reminder-inactive-title "Org: no running clock")
+  (org-clock-reminder-inactive-text "No task is currently clocked in.")
+  (org-clock-reminder-icons nil)
+  (org-clock-reminder-notifiers '(org-clock-reminder-notify))
+  :config
+  (org-clock-reminder-mode 1)
+  ;; Synchronize when enabling reminders while a clock is already running.
+  (when (org-clocking-p)
+    (org-clock-reminder-on-clock-in)))
 
 (with-eval-after-load 'org
   (setq org-global-properties
@@ -2267,9 +2303,7 @@ Timers that expired while Emacs was closed fire immediately."
   :after evil-collection
   :hook
   (after-init . helm-mode)
-  (helm-minibuffer-set-up . (lambda ()
-                            (evil-insert-state)
-                            (add-hook 'minibuffer-exit-hook #'turn-off-evil-mode nil t)))
+  (helm-minibuffer-set-up . turn-off-evil-mode)
   :custom
   (helm-M-x-fuzzy-match t)
   (helm-occur-buffer-substring-default-mode 'buffer-substring)
@@ -2417,6 +2451,28 @@ Timers that expired while Emacs was closed fire immediately."
     (find-file path)
     (goto-char (point-min))
     (search-forward (car (last (split-string option "\\." t))))))
+
+(use-package go-mode
+  :ensure t
+  :mode (("\\.go\\'" . go-mode)
+         ("\\.templ\\'" . go-mode))
+  :hook (go-mode . (lambda () (setq-local tab-width 4))))
+
+(defun my/go-citre-bindings (&optional mode _maps &rest _)
+  "Apply Citre navigation after Go or Evil Collection loads."
+  (when (and (boundp 'go-mode-map) (or (null mode) (eq mode 'go-mode)))
+    (keymap-set go-mode-map "<remap> <godef-jump>" #'citre-jump)
+    (keymap-set go-mode-map "<remap> <godef-describe>" #'citre-peek)
+    (when (featurep 'evil)
+      (evil-define-key* 'normal go-mode-map
+        (kbd "g d") #'citre-jump
+        (kbd "K") #'citre-peek))))
+
+(with-eval-after-load 'go-mode
+  (my/go-citre-bindings))
+(with-eval-after-load 'evil
+  (my/go-citre-bindings))
+(add-hook 'evil-collection-setup-hook #'my/go-citre-bindings)
 
 (use-package c-ts-mode
   :ensure nil
@@ -2610,6 +2666,10 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
   (magit-reset-mixed "HEAD^")
   (message "Uncommitted HEAD^ — changes preserved, unstaged"))
 
+(use-package forge
+  :ensure t
+  :after magit)
+
 (use-package indent-guide
   :defer t
   :ensure t
@@ -2662,6 +2722,7 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
   :after evil
   :ensure (:wait t)
   :config
+  (setq evil-collection-mode-list (remq 'helm evil-collection-mode-list))
   (evil-collection-require 'minibuffer)
   (evil-collection-init))
 
@@ -2718,7 +2779,6 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
          (eq evil-visual-selection 'block)))
 
   (defun my/evil-mc-visual-block-insert ()
-    "Erstellt Cursor am Anfang des Blocks und wechselt in Insert-Mode."
     (interactive)
     (if (my/evil-visual-block-p)
         (progn
@@ -2727,14 +2787,30 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
       (call-interactively 'evil-insert)))
 
   (defun my/evil-mc-visual-block-append ()
-    "Erstellt Cursor am Ende des Blocks und wechselt in Insert-Mode."
     (interactive)
     (if (my/evil-visual-block-p)
         (progn
           (evil-mc-make-cursor-in-visual-selection-end)
           (evil-append 1))
-      ;; Fallback: normales Verhalten
       (call-interactively 'evil-append))))
+
+(with-eval-after-load 'evil-mc
+  (defun my/evil-mc-keep-visual-selection (original &rest args)
+    (if (and (evil-visual-state-p) (eq evil-visual-selection 'char))
+        (let* ((range (evil-visual-range))
+               (length (if (evil-mc-has-pattern-p) (evil-mc-get-pattern-length) (- (cadr range) (car range)))))
+          (prog1 (apply original args)
+            (setq evil-mc-cursor-list
+                  (mapcar (lambda (cursor)
+                            (save-excursion
+                              (goto-char (evil-mc-get-cursor-start cursor))
+                              (evil-mc-delete-region-overlay (evil-mc-get-cursor-region cursor))
+                              (evil-mc-put-cursor-region cursor (evil-mc-create-region (- (1+ (point)) length) (point) 'char))))
+                          evil-mc-cursor-list))
+            (evil-visual-char (- (1+ (point)) length) (point))))
+      (apply original args)))
+
+  (advice-add 'evil-mc-find-and-goto-match :around #'my/evil-mc-keep-visual-selection))
 
 (use-package flash
   :ensure (:host github :repo "Prgebish/flash")
@@ -3024,6 +3100,7 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
   (fossil-ui-text-wrap 'greedy)
   (fossil-ui-preview-lines 20)
   (fossil-ui-diff-renderer 'auto)
+  (fossil-ui-delta-color-mode 'auto)
   (fossil-ui-stage-directory (expand-file-name "fossil-stage/" user-emacs-directory))
   (fossil-ui-max-stage-bytes (* 5 1024 1024))
   (fossil-ui-keyed-timeline t)
@@ -4079,22 +4156,6 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
     (kbd "g n") #'ghostel
     (kbd "g b") #'ghostel-list-buffers))
 
-(evil-define-key '(normal insert) helm-map
-  (kbd "C-j") #'helm-next-line
-  (kbd "C-k") #'helm-previous-line
-  (kbd "C-z") #'helm-toggle-full-frame
-  (kbd "C-g") #'helm-keyboard-quit)
-(evil-define-key '(normal insert) helm-find-files-map
-  ;; Preserve Helm's directory-aware RET behavior instead of inheriting
-  ;; `helm-maybe-exit-minibuffer' from Evil Collection's generic Helm map.
-  (kbd "RET") #'helm-ff-RET)
-(evil-define-key '(normal insert) helm-read-file-map
-  (kbd "RET") #'helm-ff-RET)
-(evil-define-key 'normal helm-map
-  (kbd "<escape>") #'helm-keyboard-quit
-  (kbd "c") #'evil-collection-change-in-minibuffer
-  (kbd "M-SPC") my/leader-map)
-
 (evil-set-initial-state 'help-mode 'emacs)
 
 (evil-set-initial-state 'ibuffer-mode 'normal)
@@ -4180,6 +4241,7 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 (keymap-set my/org-command-map "," #'org-priority)
 (keymap-set my/org-command-map "I" #'org-clock-in)
 (keymap-set my/org-command-map "O" #'org-clock-out)
+(keymap-set my/org-command-map "R" #'org-clock-reminder-mode)
 (keymap-set my/org-leader-map "l" my/org-link-map)
 (keymap-set my/org-link-map "c" #'org-cliplink)
 (keymap-set my/org-link-map "i" #'org-download-clipboard)
@@ -4448,12 +4510,21 @@ opened directly with `mu4e-compose-new'."
   (setq mu4e-attachment-dir "~/Downloads")
   (setq mu4e-change-filenames-when-moving t)
 
-  (setq mu4e-user-mail-address-list
-        '("cashmeresamurai@autistici.org"
-          "cashmere@cashmere.rs"))
-
   (setq mu4e-contexts
         `(,(make-mu4e-context
+            :name "riseup"
+            :match-func
+            (lambda (msg)
+              (when msg
+                (string-prefix-p "/riseup/" (mu4e-message-field msg :maildir))))
+            :vars '((user-mail-address . "cashmere1337@riseup.net")
+                    (user-full-name . "cashmere")
+                    (mu4e-drafts-folder . "/riseup/Drafts")
+                    (mu4e-sent-folder . "/riseup/Sent")
+                    (mu4e-trash-folder . "/riseup/Trash")
+                    (mu4e-refile-folder . "/riseup/Archive")))
+
+          ,(make-mu4e-context
             :name "autistici"
             :match-func
             (lambda (msg)
@@ -4484,23 +4555,30 @@ opened directly with `mu4e-compose-new'."
 
   (setq sendmail-program (executable-find "msmtp"))
   (setq send-mail-function 'sendmail-send-it)
-  (setq message-send-mail-function 'sendmail-send-it)
+  (setq message-send-mail-function 'message-send-mail-with-sendmail)
   (setq message-sendmail-envelope-from 'header)
   (setq message-kill-buffer-on-exit t)
 
-  (defun mu4e-set-msmtp-account ()
-    (if (message-mail-p)
-        (save-excursion
-          (let* ((from (save-restriction
-                         (message-narrow-to-headers)
-                         (message-fetch-field "from")))
-                 (account
-                  (cond
-                   ((string-match "cashmeresamurai@autistici.org" from) "autistici")
-                   ((string-match "cashmere@cashmere.rs" from) "cashmere/cashmere"))))
-            (setq message-sendmail-extra-arguments (list '"-a" account))))))
+  (defun my/mu4e-set-msmtp-account ()
+    "Select the msmtp account matching the draft's From address."
+    (when (message-mail-p)
+      (save-restriction
+        (message-narrow-to-headers)
+        (let* ((from (message-fetch-field "from"))
+               (address (and from (cadr (mail-extract-address-components from))))
+               (account (cdr (assoc-string
+                              (or address "")
+                              '(("cashmere1337@riseup.net" . "riseup")
+                                ("cashmeresamurai@autistici.org" . "autistici")
+                                ("cashmere@cashmere.rs" . "cashmere-rs"))
+                              t))))
+          (setq-local message-sendmail-extra-arguments nil)
+          (unless account
+            (user-error "No email From: %s" (or from "<missing>")))
+          (setq-local message-sendmail-extra-arguments (list "-a" account))))))
 
-  (add-hook 'message-send-mail-hook 'mu4e-set-msmtp-account))
+  (remove-hook 'message-send-mail-hook 'mu4e-set-msmtp-account)
+  (add-hook 'message-send-mail-hook #'my/mu4e-set-msmtp-account))
 
 (use-package himalaya-ui
   :ensure nil
@@ -4518,6 +4596,7 @@ opened directly with `mu4e-compose-new'."
   ;; Interesting mail query: unread, exclude trash and sent folders
   (setq mu4e-alert-interesting-mail-query
         (concat "flag:unread AND NOT flag:trashed"
+                " AND NOT maildir:\"/riseup/Sent\""
                 " AND NOT maildir:\"/autistici/Sent\""
                 " AND NOT maildir:\"/cashmere/cashmere/Sent\""))
 
@@ -4556,6 +4635,13 @@ opened directly with `mu4e-compose-new'."
   :defer 1
   :init
   (require 'notifications)
+  (defun my/envrc-project-buffer ()
+    "Load the local project environment before terminal startup or task discovery."
+    (unless (file-remote-p default-directory)
+      (require 'envrc)
+      (envrc-mode 1)
+      (when (eq envrc--status 'error)
+        (user-error "Project environment failed; inspect M-x envrc-show-log"))))
   (defvar my/envrc-notified (make-hash-table :test 'equal)
     "Directories already notified about, to avoid spam.")
   (defun my/envrc-notify (dir status)
@@ -4598,7 +4684,9 @@ opening another file in same project does not re-notify."
                  (when status
                    (my/envrc-notify default-directory status))))))))))
   :hook ((find-file . my/envrc-maybe-async)
-         (dired-mode . my/envrc-maybe-async))
+         (dired-mode . my/envrc-project-buffer)
+         (projectile-dashboard-mode . my/envrc-project-buffer)
+         (ghostel-mode . my/envrc-project-buffer))
   :config
   (when (bound-and-true-p envrc-global-mode)
     (envrc-global-mode -1)))
@@ -4931,5 +5019,11 @@ opening another file in same project does not re-notify."
   (with-eval-after-load 'org
     (require 'clatter-org)
     (clatter-org-setup)))
+
+(use-package apheleia
+  :ensure t
+  :hook (nix-ts-mode . apheleia-mode)
+  :custom
+  (apheleia-mode-alist '((nix-ts-mode . nixfmt))))
 
 (provide 'init)

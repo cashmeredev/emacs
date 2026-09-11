@@ -3000,12 +3000,6 @@ Python-powered shell. Major mode for =.xsh= files.
 
 *** xonsh tree-sitter mode
 
-No dedicated xonsh grammar exists. Xonsh = python superset, so derive
-=xonsh-ts-mode= from =python-ts-mode= — get python font-lock, indent,
-imenu, navigation. Xonsh-specific syntax (=$()=, =@()=, =![]=,
-=$VAR=) shows as python parse errors but stays readable. Fallback to
-=xonsh-mode= when python grammar missing.
-
 #+begin_src emacs-lisp
 (define-derived-mode xonsh-ts-mode python-ts-mode "Xonsh[ts]"
   "Major mode for xonsh, derived from `python-ts-mode'.
@@ -3020,17 +3014,6 @@ Xonsh is a python superset; reuse python tree-sitter parser."
 #+end_src
 
 *** xonsh org babel
-
-Custom =org-babel-execute:xonsh= — writes block body to temp =.xsh= file
-and runs via the =xonsh= interpreter. Params:
-- =:dir= working directory (default: =default-directory=)
-- =:cmdline= extra args passed to =xonsh=
-
-The executor must also be installed inside the =ob-async= child
-process — it runs in a fresh Emacs that never loads this config, so a
-plain =defun= here would be void there. Stashing the installer in a
-variable lets both the parent and the =ob-async-pre-execute-src-block-hook=
-share one definition.
 
 #+begin_src emacs-lisp
 (defvar my/ob-xonsh-installer
@@ -5358,7 +5341,7 @@ reset is unnecessary, so do the handler resolution ourselves and skip
   (org-eww-copy-for-org-mode))
 #+end_src
 
-** shrface — org-like html rendering
+** shrface
 
 #+begin_src emacs-lisp
 (use-package shrface
@@ -5373,7 +5356,7 @@ reset is unnecessary, so do the handler resolution ourselves and skip
   (shrface-default-keybindings))
 #+end_src
 
-** shr-tag-pre-highlight — syntax-highlighted code blocks
+** shr-tag-pre-highlight
 
 #+begin_src emacs-lisp
 (use-package shr-tag-pre-highlight
@@ -5384,7 +5367,7 @@ reset is unnecessary, so do the handler resolution ourselves and skip
                '(pre . shr-tag-pre-highlight)))
 #+end_src
 
-** ace-link — avy-style link jumping
+** ace-link
 
 #+begin_src emacs-lisp
 (use-package ace-link
@@ -5393,7 +5376,7 @@ reset is unnecessary, so do the handler resolution ourselves and skip
   :config (ace-link-setup-default))
 #+end_src
 
-** link-hint — vimium-style hints
+** link-hint
 
 #+begin_src emacs-lisp
 (use-package link-hint
