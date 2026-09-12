@@ -3767,26 +3767,23 @@ moved to local.el
   :demand t
   :after textui
   :commands (fossil-ui fossil-ui-status)
-  :hook (fossil-ui-diff-mode . visual-line-mode)
   :custom
   (fossil-ui-title-alignment 'center)
   (fossil-ui-text-wrap 'greedy)
-  (fossil-ui-preview-lines 20)
   (fossil-ui-diff-renderer 'auto)
   (fossil-ui-delta-color-mode 'auto)
   (fossil-ui-stage-directory (expand-file-name "fossil-stage/" user-emacs-directory))
   (fossil-ui-max-stage-bytes (* 5 1024 1024))
+  (fossil-ui-allow-configured-binary-commits t)
   (fossil-ui-keyed-timeline t)
   (fossil-ui-full-frame t)
   (fossil-ui-confirm-revert t)
   (fossil-ui-compact-layout t)
   :config
   (with-eval-after-load 'zoom
-    (dolist (mode '(fossil-ui-mode fossil-ui-diff-mode))
-      (add-to-list 'zoom-ignored-major-modes mode)))
+    (add-to-list 'zoom-ignored-major-modes 'fossil-ui-mode))
   (with-eval-after-load 'golden-ratio
-    (dolist (mode '(fossil-ui-mode fossil-ui-diff-mode))
-      (add-to-list 'golden-ratio-exclude-modes mode))))
+    (add-to-list 'golden-ratio-exclude-modes 'fossil-ui-mode)))
 #+end_src
 
 * yggdrasil-ui
@@ -4933,23 +4930,15 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
     (kbd "F") #'fossil-ui-update
     (kbd "RET") #'fossil-ui-visit-file
     (kbd "<return>") #'fossil-ui-visit-file
-    (kbd "D") #'fossil-ui-staged-diff
+    (kbd "]c") #'fossil-ui-next-hunk
+    (kbd "[c") #'fossil-ui-previous-hunk
+    (kbd "j") #'evil-next-line
+    (kbd "k") #'evil-previous-line
+    (kbd "n") #'fossil-ui-next-file
+    (kbd "p") #'fossil-ui-previous-file
     (kbd "q") #'fossil-ui-quit
     (kbd "?") #'fossil-ui-help)
-  (evil-define-key '(normal motion visual) fossil-ui-diff-mode-map
-    (kbd "SPC") my/leader-map
-    (kbd "V") #'evil-visual-line
-    (kbd "G") #'evil-goto-line
-    (kbd "s") #'fossil-ui-stage
-    (kbd "u") #'fossil-ui-unstage
-    (kbd "x") #'fossil-ui-discard
-    (kbd "r") #'fossil-ui-diff-refresh
-    (kbd "D") #'fossil-ui-diff-toggle
-    (kbd "q") #'fossil-ui-quit)
   (evil-define-key 'visual fossil-ui-mode-map
-    (kbd "j") #'evil-next-line
-    (kbd "k") #'evil-previous-line)
-  (evil-define-key 'visual fossil-ui-diff-mode-map
     (kbd "j") #'evil-next-line
     (kbd "k") #'evil-previous-line)
   (evil-define-key '(normal insert visual motion) fossil-ui-commit-mode-map

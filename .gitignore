@@ -107,3 +107,4 @@ dirvish/thumbnails
 
 # Automatic Citre project indexes and session snapshots
 /citre-cache/
+*.sqlite
