@@ -31,6 +31,9 @@ Set per-host in the gitignored `local.el'.")
     "Per-host background-only opacity, or nil for the Emacs default.")
   (defvar cashmere/font-family "Maple Mono NF"
     "Per-host default monospace font family.")
+  (defvar cashmere/font-features
+    '("cv01" "cv32" "cv34" "cv36" "cv63" "cv64" "cv66")
+    "OpenType features enabled for the default monospace font.")
   (defvar cashmere/font-height 180
     "Per-host default font height in tenths of a point.")
   (defvar cashmere/theme nil
@@ -757,7 +760,7 @@ Temporarily disables notifications during the fetch."
   ;; Let the full markup toggle reveal link destinations as well.
   (markdown-hide-urls nil)
   (markdown-header-scaling t)
-  (markdown-header-scaling-values '(1.6 1.3 1.15 1.08 1.0 1.0))
+  (markdown-header-scaling-values '(1.65 1.40 1.22 1.10 1.00 0.92))
   (markdown-fontify-code-blocks-natively t)
   (markdown-asymmetric-header t)
   (markdown-indent-on-enter 'indent-and-new-item)
@@ -772,10 +775,10 @@ Temporarily disables notifications during the fetch."
     "Apply the quiet, theme-adaptive typography used by Org buffers."
     (let ((foreground (face-attribute 'default :foreground nil t))
           (muted (face-attribute 'shadow :foreground nil t)))
-      (dolist (spec '((markdown-header-face-1 1.60 medium)
-                      (markdown-header-face-2 1.30 semibold)
-                      (markdown-header-face-3 1.15 semibold)
-                      (markdown-header-face-4 1.08 semibold)
+      (dolist (spec '((markdown-header-face-1 1.65 bold)
+                      (markdown-header-face-2 1.40 bold)
+                      (markdown-header-face-3 1.22 semibold)
+                      (markdown-header-face-4 1.10 medium)
                       (markdown-header-face-5 1.00 medium)))
         (set-face-attribute (car spec) nil
                             :family "SF Pro Display"
@@ -783,7 +786,7 @@ Temporarily disables notifications during the fetch."
                             :weight (caddr spec)
                             :foreground foreground))
       (set-face-attribute 'markdown-header-face-6 nil
-                          :family "SF Pro Display" :height 1.0
+                          :family "SF Pro Display" :height 0.92
                           :weight 'regular :foreground muted)
       (set-face-attribute 'markdown-header-delimiter-face nil
                           :height 0.9 :weight 'normal :foreground muted)
@@ -937,21 +940,23 @@ Temporarily disables notifications during the fetch."
     (let ((foreground (face-attribute 'default :foreground nil t))
           (muted (face-attribute 'shadow :foreground nil t)))
       (set-face-attribute 'org-document-title nil
-                          :family "SF Pro Display" :height 1.6
-                          :weight 'medium :foreground foreground)
-      (dolist (spec '((org-level-1 1.30 semibold)
-                      (org-level-2 1.15 semibold)
-                      (org-level-3 1.08 semibold)
-                      (org-level-4 1.00 medium)
+                          :family "SF Pro Display" :height 1.80
+                          :weight 'bold :foreground foreground)
+      (dolist (spec '((org-level-1 1.55 bold)
+                      (org-level-2 1.35 semibold)
+                      (org-level-3 1.20 semibold)
+                      (org-level-4 1.10 medium)
                       (org-level-5 1.00 medium)))
         (set-face-attribute (car spec) nil
                             :family "SF Pro Display"
                             :height (cadr spec)
                             :weight (caddr spec)
                             :foreground foreground))
-      (dolist (face '(org-level-6 org-level-7 org-level-8))
-        (set-face-attribute face nil
-                            :family "SF Pro Display" :height 1.0
+      (dolist (spec '((org-level-6 0.95)
+                      (org-level-7 0.90)
+                      (org-level-8 0.85)))
+        (set-face-attribute (car spec) nil
+                            :family "SF Pro Display" :height (cadr spec)
                             :weight 'regular :foreground muted))))
 
   ;; Reapply the neutral heading palette after Tinty's or Fontaine's theme
@@ -2936,6 +2941,15 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
 (blink-cursor-mode 0)
 (setq-default cursor-type 'box)
 
+(defun my/fontconfig-name (&optional height)
+  "Return the configured monospace Fontconfig name at HEIGHT."
+  (concat cashmere/font-family
+          (when height
+            (format "-%g" (/ height 10.0)))
+          (when cashmere/font-features
+            (concat ":fontfeatures="
+                    (mapconcat #'identity cashmere/font-features ",")))))
+
 (use-package fontaine
   :ensure t
   :demand t
@@ -2993,7 +3007,16 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
                           :underline nil
                           :overline nil)))
 
+  (defun my/apply-font-features (&optional _preset)
+    "Apply `cashmere/font-features' without changing the current font size."
+    (dolist (frame (frame-list))
+      (when (display-graphic-p frame)
+        (set-frame-font
+         (my/fontconfig-name (face-attribute 'default :height frame))
+         t (list frame) t))))
+
   (add-hook 'fontaine-set-preset-hook #'my/apply-line-number-faces)
+  (add-hook 'fontaine-set-preset-hook #'my/apply-font-features)
   (add-hook 'enable-theme-functions #'my/apply-line-number-faces)
 
   ;; Fontaine 3 implements presets as a global theme, so applying the preset
@@ -3003,14 +3026,14 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
   (fontaine-set-preset
    (or (fontaine-restore-latest-preset) 'regular))
   (fontaine-mode 1)
-  (my/apply-line-number-faces))
+  (my/apply-line-number-faces)
+  (my/apply-font-features))
 
 ;; Give a daemon's first GUI frame the final base font before its first
 ;; redisplay.  This avoids fallback-font geometry and a visible layout jump;
 ;; Fontaine's global theme then supplies the remaining face attributes.
 (add-to-list 'default-frame-alist
-             `(font . ,(format "%s-%g" cashmere/font-family
-                               (/ cashmere/font-height 10.0))))
+             `(font . ,(my/fontconfig-name cashmere/font-height)))
 
 
 

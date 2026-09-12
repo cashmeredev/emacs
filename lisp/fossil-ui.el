@@ -2462,14 +2462,19 @@ when every content issue is covered by the checkout's effective glob settings."
           (fossil-ui--remove-entry root index path)
         (let* ((file (expand-file-name path root))
                (change (cl-find path changes :key (lambda (candidate) (plist-get candidate :path)) :test #'equal))
-               (deleted (equal (plist-get change :status) "DELETED")))
+               (status (plist-get change :status))
+               (missing (and (equal status "MISSING") (not (file-exists-p file))))
+               (deleted (or (equal status "DELETED") missing)))
           (fossil-ui--clean-buffer file)
           (if deleted
-              (condition-case nil
-                  (let ((base (fossil-ui--base root path)))
-                    (fossil-ui--put-entry root index (list :path path :base base :staged "" :deleted t)))
-                (error
-                 (fossil-ui--put-entry root index (list :path path :binary t :deleted t))))
+              (let ((entry
+                     (condition-case nil
+                         (let ((base (fossil-ui--base root path)))
+                           (list :path path :base base :staged "" :deleted t))
+                       (error (list :path path :binary t :deleted t)))))
+                (when missing
+                  (fossil-ui--require-success root "rm" "--soft" "--" path))
+                (fossil-ui--put-entry root index entry))
             (let ((content (fossil-ui--file-content root path t)))
               (if (plist-get content :binary)
                   (let ((snapshot (fossil-ui--save-binary-snapshot root path (plist-get content :bytes)))

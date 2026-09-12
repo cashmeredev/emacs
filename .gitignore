@@ -82,6 +82,9 @@ dirvish/thumbnails
 # Downloaded eca binary + archive (large, per-host)
 /eca/
 
+# Private Fossil UI staging snapshots and recovery state
+/fossil-stage/
+
 # persp-mode session autosave state
 /workspaces/
 

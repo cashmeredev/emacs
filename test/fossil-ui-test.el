@@ -218,6 +218,27 @@
                        :key (lambda (change) (plist-get change :path))
                        :test #'equal)))))
 
+(ert-deftest fossil-ui-missing-file-can-be-staged-unstaged-and-committed-as-deletion ()
+  (fossil-ui-test--with-checkout
+    (delete-file (expand-file-name "tracked.txt" root))
+    (let ((buffer (save-window-excursion (fossil-ui-status root))))
+      (unwind-protect
+          (with-current-buffer buffer
+            (fossil-ui--goto-path "tracked.txt")
+            (should (equal (fossil-ui--status-at-point) "MISSING"))
+            (fossil-ui-stage)
+            (should (plist-get (car (plist-get (fossil-ui--index root) :entries)) :deleted))
+            (should (equal (plist-get (car (fossil-ui--changes root)) :status) "DELETED"))
+            (fossil-ui--goto-path "tracked.txt" t)
+            (fossil-ui-unstage)
+            (should-not (plist-get (fossil-ui--index root) :entries))
+            (should (equal (plist-get (car (fossil-ui--changes root)) :status) "DELETED"))
+            (fossil-ui--goto-path "tracked.txt")
+            (fossil-ui-stage)
+            (fossil-ui--commit-staged root "remove tracked file")
+            (should-not (member "tracked.txt" (split-string (fossil-ui-test--call root "ls" "-r" "current") "\n" t))))
+        (when (buffer-live-p buffer) (kill-buffer buffer))))))
+
 (ert-deftest fossil-ui-staged-and-unstaged-inline-sections-are-independent ()
   (fossil-ui-test--with-checkout
     (fossil-ui-test--write (expand-file-name "tracked.txt" root) "staged version\n")
