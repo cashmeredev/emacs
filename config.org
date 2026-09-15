@@ -4506,26 +4506,17 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 (keymap-set my/leader-git-map "s" #'magit-file-stage)
 (keymap-set my/leader-git-map "u" #'my/magit-uncommit)
 (keymap-set my/leader-git-map "b" #'vc-annotate)
-(keymap-set my/leader-git-map "T" #'my/code-todos-harvest)
-
-(keymap-set my/leader-map "a" my/leader-agent-map)
-(keymap-set my/leader-agent-map "a" #'agent-shell)
-(keymap-set my/leader-agent-map "t" #'agent-shell-toggle)
-(keymap-set my/leader-agent-map "m" #'agent-shell-help-menu)
-(keymap-set my/leader-agent-map "r" #'agent-shell-send-region)
-(keymap-set my/leader-agent-map "c" #'agent-shell-send-clipboard-image)
 
 (keymap-set my/leader-map "o" my/leader-open-map)
-(keymap-set my/leader-open-map "a" #'my/app-launcher)
-(keymap-set my/leader-open-map "s" #'my/snip-upload)
-(keymap-set my/leader-open-map "S" #'my/snip-upload-file)
+;; (keymap-set my/leader-open-map "s" #'my/snip-upload)
+;; (keymap-set my/leader-open-map "S" #'my/snip-upload-file)
 (keymap-set my/leader-open-map "p" #'pass)
 (keymap-set my/leader-open-map "t" #'ghostel)
-(keymap-set my/leader-open-map "z" #'zfs)
-(keymap-set my/leader-open-map "c" #'croc-ui)
 (keymap-set my/leader-open-map "v" #'yggdrasil-ui)
-(keymap-set my/leader-open-map "y" #'sync-ui)
+(keymap-set my/leader-open-map "s" #'sync-ui)
 (keymap-set my/leader-open-map "r" #'rsync-ui)
+(keymap-set my/leader-open-map "z" #'zfs)
+;; (keymap-set my/leader-open-map "c" #'croc-ui)
 
 (keymap-set my/leader-map "h" my/leader-help-map)
 (keymap-set my/leader-help-map "m" #'describe-mode)
@@ -4556,6 +4547,7 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 (keymap-set my/leader-code-map "a" #'citre-query-jump)
 (keymap-set my/leader-code-map "r" #'query-replace)
 (keymap-set my/leader-code-map "f" #'my/format-buffer)
+(keymap-set my/leader-code-map "t" #'justl)
 (keymap-set my/leader-code-map "s" #'yas-insert-snippet)
 (keymap-set my/leader-code-map "l" #'flycheck-list-errors)
 
@@ -4592,6 +4584,7 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 
 (keymap-set my/local-leader-map "a" #'org-agenda)
 (keymap-set my/local-leader-map "c" #'my/centered-cursor)
+(keymap-set my/local-leader-map "d" #'minimal-dashboard)
 (keymap-set my/local-leader-map "f" #'dirvish)
 (keymap-set my/local-leader-map "m" #'mu4e)
 (keymap-set my/local-leader-map "i" #'clatter)
@@ -5017,6 +5010,33 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
 
 #+begin_src emacs-lisp
 (evil-set-initial-state 'messages-buffer-mode 'normal)
+#+end_src
+
+** justl-mode
+
+#+begin_src emacs-lisp
+(with-eval-after-load 'justl
+  (evil-set-initial-state 'justl-mode 'normal)
+  (evil-set-initial-state 'justl-module-mode 'normal)
+  (evil-set-initial-state 'justl-compile-mode 'normal)
+  (evil-define-key 'normal justl-mode-map
+    (kbd "q") #'quit-window
+    (kbd "r") #'justl--refresh-buffer
+    (kbd "e") #'justl-exec-recipe
+    (kbd "E") #'justl--exec-recipe-with-args
+    (kbd "m") #'justl--show-modules
+    (kbd "RET") #'justl-go-to-recipe
+    (kbd "?") #'justl-help-popup)
+  (evil-define-key 'normal justl-module-mode-map
+    (kbd "q") #'quit-window
+    (kbd "r") #'justl--module-refresh-buffer
+    (kbd "e") #'justl-exec-module
+    (kbd "o") #'justl--module-open-justl
+    (kbd "RET") #'justl--go-to-module
+    (kbd "?") #'justl-module-help-popup)
+  (evil-define-key 'normal justl-compile-mode-map
+    (kbd "q") #'quit-window
+    (kbd "r") #'justl-recompile))
 #+end_src
 
 ** magit-mode
@@ -5648,6 +5668,8 @@ opening another file in same project does not re-notify."
   :custom
   (ghostel-shell "xonsh")
   (ghostel-ssh-install-terminfo t)
+  (ghostel-timer-delay 0.01)
+  (ghostel-max-scrollback (* 1024 1024))
   :config
   ;; Ghostel's platform detector only knows darwin/linux; teach it FreeBSD
   ;; so it can download the x86_64-freebsd release asset when the user
@@ -6026,6 +6048,17 @@ Privileged ZFS operations stay non-interactive by default. Unlocking runs authen
   :hook (nix-ts-mode . apheleia-mode)
   :custom
   (apheleia-mode-alist '((nix-ts-mode . nixfmt))))
+#+end_src
+
+* justl
+
+#+begin_src emacs-lisp
+(use-package justl
+  :ensure t
+  :commands (justl justl-exec-recipe-in-dir justl-exec-default-recipe)
+  :custom
+  (justl-recipe-width 20)
+  (justl-per-recipe-buffer nil))
 #+end_src
 
 * provide init
