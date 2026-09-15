@@ -2778,6 +2778,39 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
   :after evil
   :config
   (global-evil-mc-mode 1)
+
+  (defvar my/evil-mc-visual-map nil)
+  (setq my/evil-mc-visual-map (make-sparse-keymap))
+  (keymap-set my/evil-mc-visual-map "a" #'evil-mc-make-all-cursors)
+  (keymap-set my/evil-mc-visual-map "q" #'my/evil-mc-quit)
+  (keymap-set my/evil-mc-visual-map "n" #'evil-mc-make-and-goto-next-match)
+  (keymap-set my/evil-mc-visual-map "p" #'evil-mc-make-and-goto-prev-match)
+  (keymap-set my/evil-mc-visual-map "C-n" #'my/evil-mc-skip-next-match)
+  (keymap-set my/evil-mc-visual-map "C-p" #'my/evil-mc-skip-prev-match)
+
+  (evil-define-command my/evil-mc-visual-block ()
+    :keep-visual t
+    (interactive)
+    (call-interactively #'evil-visual-block)
+    (when (evil-visual-state-p)
+      (set-transient-map my/evil-mc-visual-map #'evil-visual-state-p)))
+
+  (defun my/evil-mc-quit ()
+    (interactive)
+    (evil-mc-undo-all-cursors)
+    (evil-exit-visual-state))
+
+  (evil-define-command my/evil-mc-skip-next-match ()
+    :repeat ignore
+    :evil-mc t
+    (evil-mc-make-and-goto-next-match)
+    (evil-mc-skip-and-goto-next-match))
+
+  (evil-define-command my/evil-mc-skip-prev-match ()
+    :repeat ignore
+    :evil-mc t
+    (evil-mc-make-and-goto-prev-match)
+    (evil-mc-skip-and-goto-prev-match))
   
   (defun my/evil-visual-block-p ()
     (and (bound-and-true-p evil-visual-selection)
@@ -2801,7 +2834,7 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
 
 (with-eval-after-load 'evil-mc
   (defun my/evil-mc-keep-visual-selection (original &rest args)
-    (if (and (evil-visual-state-p) (eq evil-visual-selection 'char))
+    (if (evil-visual-state-p)
         (let* ((range (evil-visual-range))
                (length (if (evil-mc-has-pattern-p) (evil-mc-get-pattern-length) (- (cadr range) (car range)))))
           (prog1 (apply original args)
@@ -2815,7 +2848,8 @@ BODY is the xonsh script.  PARAMS may include :dir and :cmdline."
             (evil-visual-char (- (1+ (point)) length) (point))))
       (apply original args)))
 
-  (advice-add 'evil-mc-find-and-goto-match :around #'my/evil-mc-keep-visual-selection))
+  (advice-add 'evil-mc-find-and-goto-match :around #'my/evil-mc-keep-visual-selection)
+  (advice-add 'evil-mc-make-all-cursors :around #'my/evil-mc-keep-visual-selection))
 
 (use-package flash
   :ensure (:host github :repo "Prgebish/flash")
@@ -3893,6 +3927,7 @@ place. `C-c C-c' commits, `C-c C-k' aborts."
     (kbd "g S") #'evil-Surround-edit))
 
 (evil-define-key 'insert 'global (kbd "C-w") evil-window-map)
+(evil-define-key 'motion 'global (kbd "C-v") #'my/evil-mc-visual-block)
 
 (keymap-global-set "M-b" #'my/quick-access)
 (evil-define-key '(normal visual motion insert emacs) 'global
@@ -5059,8 +5094,12 @@ opening another file in same project does not re-notify."
 (use-package justl
   :ensure t
   :commands (justl justl-exec-recipe-in-dir justl-exec-default-recipe)
+  :hook ((justl-mode . my/envrc-project-buffer)
+         (justl-module-mode . my/envrc-project-buffer))
   :custom
   (justl-recipe-width 20)
-  (justl-per-recipe-buffer nil))
+  (justl-per-recipe-buffer nil)
+  :config
+  (inheritenv-add-advice 'justl--make-process))
 
 (provide 'init)
